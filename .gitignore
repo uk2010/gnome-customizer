@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+build/
+build-*/
+obj-*/
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/gnome-customizer/
+debian/*.debhelper*
+debian/*.substvars
+.build-tools/
+stage.*/
+verify.*/
+package-check.*/
+dist/

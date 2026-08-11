@@ -1,0 +1,137 @@
+gnome-customizer (0.3.5) resolute; urgency=high
+
+  * Use Ubuntu's native Show Applications icon unchanged in every color mode.
+  * Remove incorrect forced light/dark icon recoloring.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 19:15:00 -0500
+
+gnome-customizer (0.3.4) resolute; urgency=high
+
+  * Recolor the Show Applications icon immediately with GNOME light/dark mode.
+  * Remove dark Yaru GTK and icon names left pinned by legacy releases in light mode.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 19:05:00 -0500
+
+gnome-customizer (0.3.3) resolute; urgency=high
+
+  * Render visible high-contrast running indicators in the custom dock.
+  * Give dot, dash, and line indicators reliable minimum dimensions.
+  * Apply the selected dock corner radius whether or not Floating is enabled.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 18:50:00 -0500
+
+gnome-customizer (0.3.2) resolute; urgency=high
+
+  * Render zero dock opacity as explicitly transparent.
+  * Disable the dock background blur at zero opacity.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 18:35:00 -0500
+
+gnome-customizer (0.3.1) resolute; urgency=medium
+
+  * Allow custom dock opacity to reach fully transparent zero.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 18:20:00 -0500
+
+gnome-customizer (0.3.0) resolute; urgency=high
+
+  * Make GNOME Settings authoritative for native light/dark application appearance.
+  * Remove the application-theme CSS writer from all normal apply paths.
+  * Automatically remove legacy managed GTK CSS before the application starts.
+  * Require explicit opt-in before styling the panel, menus, dock, or overview.
+  * Restore native Shell surface styles whenever their customization is disabled.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 18:00:00 -0500
+
+gnome-customizer (0.2.7) resolute; urgency=high
+
+  * Never paint the transparent DING desktop window with application colors.
+  * Preserve the real desktop wallpaper while Windows & Files themes are active.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 17:12:00 -0500
+
+gnome-customizer (0.2.6) resolute; urgency=high
+
+  * Make Prefer Light and Prefer Dark switch matching GTK and icon themes.
+  * Switch an existing managed application palette with the appearance mode.
+  * Use real Ubuntu wallpaper URIs when profile schema defaults are empty.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 17:05:00 -0500
+
+gnome-customizer (0.2.5) resolute; urgency=high
+
+  * Automatically enable the Shell companion when the custom dock is enabled.
+  * Remove the companion from GNOME's disabled-extension list transactionally.
+  * Re-enable GNOME's master extension switch as part of dock activation.
+  * Ignore late dock callbacks safely while GNOME Shell is shutting down.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 16:50:00 -0500
+
+gnome-customizer (0.2.4) resolute; urgency=high
+
+  * Remove unsafe global Libadwaita semantic-color overrides.
+  * Exclude GNOME Customizer from managed application-theme selectors.
+  * Migrate existing managed GTK CSS before the application starts.
+  * Restore Ubuntu Yaru defaults even in sessions missing the Ubuntu profile.
+  * Synchronize Ubuntu and GNOME color-scheme keys in profile-less sessions.
+  * Reject unsafe text/background contrast before writing application CSS.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 16:30:00 -0500
+
+gnome-customizer (0.2.3) resolute; urgency=high
+
+  * Re-anchor the custom dock after GNOME Shell completes startup allocation.
+  * Keep every dock position clamped inside its assigned monitor.
+  * Reset every managed desktop, Shell, application, wallpaper, and GDM change.
+  * Clarify Windows & Files and add visible Light, Dark, and High Contrast presets.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 16:10:00 -0500
+
+gnome-customizer (0.2.2) resolute; urgency=high
+
+  * Match the session's native Show Applications icon.
+  * Toggle the app grid closed on a second click.
+  * Allow the Show Applications button at the first or last dock position.
+  * Render a wallpaper-backed overview blur with tint, brightness, and saturation.
+  * Display Night Light schedules in the user's 12- or 24-hour clock format.
+  * Apply opacity to surface colors and gradients without fading their contents.
+  * Replace hexadecimal color text fields with native GNOME color dialogs.
+  * Complete mouse and touchpad controls and verify every applied value.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 15:50:00 -0500
+
+gnome-customizer (0.2.1) resolute; urgency=high
+
+  * Keep a native Show Applications button in the custom dock.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 05:20:00 -0500
+
+gnome-customizer (0.2.0) resolute; urgency=medium
+
+  * Add complete controlled GTK3, GTK4, Libadwaita, and Files palettes.
+  * Preserve and restore unrelated user CSS transactionally.
+  * Suppress an existing Ubuntu Dock actor while the custom dock is active.
+  * Expand Theme Builder and sample themes with Files/application previews.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 05:05:00 -0500
+
+gnome-customizer (0.1.2) resolute; urgency=high
+
+  * Permit administrator authentication for remote and sessionless app launches.
+  * Stage wallpapers in immutable content-addressed files.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 04:50:00 -0500
+
+gnome-customizer (0.1.1) resolute; urgency=high
+
+  * Create managed helper paths before systemd sandbox activation.
+  * Apply the primary wallpaper to both light and dark desktop modes.
+  * Show privileged apply failures in a persistent dialog.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 04:40:00 -0500
+
+gnome-customizer (0.1.0) resolute; urgency=medium
+
+  * Initial release for GNOME 50.1 and Ubuntu 26.04 LTS.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 03:00:00 -0500

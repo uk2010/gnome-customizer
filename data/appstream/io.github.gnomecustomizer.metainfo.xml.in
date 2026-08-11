@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.gnomecustomizer</id>
+  <name>GNOME Customizer</name>
+  <summary>Safely personalize GNOME and its login screen</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.gnomecustomizer"><name>GNOME Customizer Contributors</name></developer>
+  <url type="homepage">https://github.com/uk2010/gnome-customizer</url>
+  <description>
+    <p>GNOME Customizer provides a native, staged interface for desktop, Shell, and GDM appearance settings while keeping GNOME Settings authoritative for application appearance. It includes safe appearance-only themes, previews, diagnostics, and scoped restore.</p>
+  </description>
+  <launchable type="desktop-id">io.github.gnomecustomizer.desktop</launchable>
+  <provides><binary>gnome-customizer</binary></provides>
+  <requires><display_length compare="ge">720</display_length></requires>
+  <supports><control>pointing</control><control>keyboard</control><control>touch</control></supports>
+  <content_rating type="oars-1.1"/>
+  <releases><release version="0.3.5" date="2026-08-11"/><release version="0.3.4" date="2026-08-11"/><release version="0.3.3" date="2026-08-11"/><release version="0.3.2" date="2026-08-11"/><release version="0.3.1" date="2026-08-11"/><release version="0.3.0" date="2026-08-11"/><release version="0.2.7" date="2026-08-11"/><release version="0.2.6" date="2026-08-11"/><release version="0.2.5" date="2026-08-11"/><release version="0.2.4" date="2026-08-11"/><release version="0.2.3" date="2026-08-11"/><release version="0.2.2" date="2026-08-11"/><release version="0.2.1" date="2026-08-11"/><release version="0.2.0" date="2026-08-11"/><release version="0.1.0" date="2026-08-11"/></releases>
+</component>

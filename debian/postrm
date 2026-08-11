@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+if [ "$1" = purge ]; then
+    rm -f /etc/dconf/db/gdm.d/99-gdm-customizer
+    if [ -f /usr/local/share/gnome-customizer/state/profile-created ] && [ "$(cat /etc/dconf/profile/gdm 2>/dev/null || true)" = "user-db:user
+system-db:gdm
+file-db:/usr/share/gdm/greeter-dconf-defaults" ]; then
+        rm -f /etc/dconf/profile/gdm
+    fi
+    if command -v dconf >/dev/null 2>&1; then dconf update || true; fi
+    rm -rf /usr/local/share/gnome-customizer
+fi
+#DEBHELPER#
+exit 0

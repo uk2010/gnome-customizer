@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=GNOME Customizer
+Comment=Personalize the GNOME desktop and login screen
+Exec=gnome-customizer
+Icon=io.github.gnomecustomizer
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Settings;DesktopSettings;
+Keywords=GNOME;theme;wallpaper;dock;blur;GDM;login;
+StartupNotify=true
+DBusActivatable=true

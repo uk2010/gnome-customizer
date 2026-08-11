@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.io/gnomecustomizer/theme-v1.schema.json",
+  "title": "GNOME Customizer appearance theme",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "name", "author"],
+  "properties": {
+    "format_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-zA-Z0-9._-]{1,100}$"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 100},
+    "author": {"type": "string", "minLength": 1, "maxLength": 100},
+    "description": {"type": "string", "maxLength": 1000},
+      "minimum_gnome": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+    "maximum_tested_gnome": {"type": "string", "pattern": "^[0-9]+\\.(x|[0-9]+)$"},
+    "preview": {"$ref": "#/$defs/asset"},
+    "desktop": {"$ref": "#/$defs/desktop"},
+    "applications": {"$ref": "#/$defs/applications"},
+    "shell": {"$ref": "#/$defs/shell"},
+    "login": {"$ref": "#/$defs/login"}
+  },
+  "$defs": {
+    "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"},
+    "asset": {"type": "string", "pattern": "^assets/[a-zA-Z0-9._-]+$", "maxLength": 150},
+    "surface": {"type": "object", "additionalProperties": false, "properties": {
+      "background_type": {"enum": ["solid", "gradient"]}, "color": {"$ref": "#/$defs/color"},
+      "color1": {"$ref": "#/$defs/color"}, "color2": {"$ref": "#/$defs/color"},
+      "gradient_angle": {"type": "integer", "minimum": 0, "maximum": 360},
+      "opacity": {"type": "number", "minimum": 0.1, "maximum": 1},
+      "blur": {"type": "integer", "minimum": 0, "maximum": 100},
+      "brightness": {"type": "number", "minimum": 0.2, "maximum": 1.5},
+      "saturation": {"type": "number", "minimum": 0, "maximum": 2},
+      "text_color": {"$ref": "#/$defs/color"}, "muted_text_color": {"$ref": "#/$defs/color"},
+      "selected_color": {"$ref": "#/$defs/color"}, "border_color": {"$ref": "#/$defs/color"},
+      "corner_radius": {"type": "integer", "minimum": 0, "maximum": 32},
+      "shadow_strength": {"type": "number", "minimum": 0, "maximum": 1},
+      "icon_size": {"type": "integer", "minimum": 24, "maximum": 96},
+      "spacing": {"type": "integer", "minimum": 0, "maximum": 24},
+      "indicator_style": {"enum": ["dot", "dash", "line"]}
+    }},
+    "dockSurface": {"type": "object", "additionalProperties": false, "properties": {
+      "background_type": {"enum": ["solid", "gradient"]}, "color": {"$ref": "#/$defs/color"},
+      "color1": {"$ref": "#/$defs/color"}, "color2": {"$ref": "#/$defs/color"},
+      "gradient_angle": {"type": "integer", "minimum": 0, "maximum": 360},
+      "opacity": {"type": "number", "minimum": 0, "maximum": 1},
+      "blur": {"type": "integer", "minimum": 0, "maximum": 100},
+      "brightness": {"type": "number", "minimum": 0.2, "maximum": 1.5},
+      "saturation": {"type": "number", "minimum": 0, "maximum": 2},
+      "text_color": {"$ref": "#/$defs/color"}, "muted_text_color": {"$ref": "#/$defs/color"},
+      "selected_color": {"$ref": "#/$defs/color"}, "border_color": {"$ref": "#/$defs/color"},
+      "corner_radius": {"type": "integer", "minimum": 0, "maximum": 32},
+      "shadow_strength": {"type": "number", "minimum": 0, "maximum": 1},
+      "icon_size": {"type": "integer", "minimum": 24, "maximum": 96},
+      "spacing": {"type": "integer", "minimum": 0, "maximum": 24},
+      "indicator_style": {"enum": ["dot", "dash", "line"]}
+    }},
+    "desktop": {"type": "object", "additionalProperties": false, "properties": {
+      "color_scheme": {"enum": ["default", "prefer-light", "prefer-dark"]},
+      "accent": {"enum": ["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate", "brown"]},
+      "wallpaper": {"$ref": "#/$defs/asset"}, "wallpaper_dark": {"$ref": "#/$defs/asset"},
+      "icons": {"type": "string", "maxLength": 100}, "cursor": {"type": "string", "maxLength": 100},
+      "gtk_theme": {"type": "string", "maxLength": 100}
+    }},
+    "applications": {"type": "object", "additionalProperties": false, "properties": {
+      "window_color": {"$ref": "#/$defs/color"}, "view_color": {"$ref": "#/$defs/color"},
+      "sidebar_color": {"$ref": "#/$defs/color"}, "headerbar_color": {"$ref": "#/$defs/color"},
+      "card_color": {"$ref": "#/$defs/color"}, "popover_color": {"$ref": "#/$defs/color"},
+      "dialog_color": {"$ref": "#/$defs/color"}, "text_color": {"$ref": "#/$defs/color"},
+      "muted_text_color": {"$ref": "#/$defs/color"}, "accent_color": {"$ref": "#/$defs/color"},
+      "accent_text_color": {"$ref": "#/$defs/color"}, "border_color": {"$ref": "#/$defs/color"},
+      "corner_radius": {"type": "integer", "minimum": 0, "maximum": 32},
+      "shadow_strength": {"type": "number", "minimum": 0, "maximum": 1}
+    }},
+    "shell": {"type": "object", "additionalProperties": false, "properties": {
+      "panel": {"$ref": "#/$defs/surface"}, "dock": {"$ref": "#/$defs/dockSurface"},
+      "menus": {"$ref": "#/$defs/surface"}, "overview": {"$ref": "#/$defs/surface"}
+    }},
+    "login": {"type": "object", "additionalProperties": false, "properties": {
+      "wallpaper": {"$ref": "#/$defs/asset"}, "background_color": {"$ref": "#/$defs/color"},
+      "accent": {"enum": ["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate", "brown"]},
+      "logo": {"$ref": "#/$defs/asset"}, "panel": {"$ref": "#/$defs/surface"}
+    }}
+  }
+}

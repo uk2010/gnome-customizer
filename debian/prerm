@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+if [ "$1" = remove ]; then
+    if [ -d /run/systemd/system ]; then
+        systemctl --system stop gnome-customizer-system-helper.service >/dev/null || true
+    fi
+    if [ -x /usr/libexec/gnome-customizer-system-helper ]; then
+        /usr/libexec/gnome-customizer-system-helper --prepare-uninstall
+    fi
+fi
+#DEBHELPER#
+exit 0

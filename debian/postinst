@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+# These paths must exist before systemd constructs the helper's strict mount
+# namespace.  Otherwise D-Bus activation fails before PolicyKit can prompt.
+install -d -o root -g root -m 0755 /usr/local/share/gnome-customizer
+install -d -o root -g root -m 0755 /usr/local/share/gnome-customizer/assets
+install -d -o root -g root -m 0700 /usr/local/share/gnome-customizer/state
+if command -v glib-compile-schemas >/dev/null 2>&1; then
+    glib-compile-schemas /usr/share/glib-2.0/schemas || true
+    glib-compile-schemas --strict /usr/share/gnome-shell/extensions/gnome-customizer@io.github.gnomecustomizer/schemas
+fi
+if [ -d /run/systemd/system ]; then
+    systemctl --system daemon-reload >/dev/null || true
+fi
+# Installation intentionally does not enable the companion or alter GNOME/GDM.
+#DEBHELPER#
+exit 0

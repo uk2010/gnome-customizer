@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "id": "aurora",
+  "name": "Aurora",
+  "author": "GNOME Customizer",
+  "description": "A calm dark blue sample appearance.",
+  "minimum_gnome": "50.1",
+  "maximum_tested_gnome": "50.x",
+  "desktop": {"color_scheme": "prefer-dark", "accent": "blue"},
+  "applications": {
+    "window_color": "#111827", "view_color": "#0B1220", "sidebar_color": "#172033",
+    "headerbar_color": "#18243A", "card_color": "#1D2A42", "popover_color": "#202D45",
+    "dialog_color": "#18243A", "text_color": "#F4F7FF", "muted_text_color": "#AFC0DE",
+    "accent_color": "#2563C7", "accent_text_color": "#FFFFFF", "border_color": "#34496D",
+    "corner_radius": 14, "shadow_strength": 0.4
+  },
+  "shell": {
+    "panel": {"background_type": "gradient", "color1": "#101828", "color2": "#243B68", "gradient_angle": 90, "opacity": 0.88, "blur": 20, "text_color": "#FFFFFF"},
+    "dock": {"color": "#151B28", "opacity": 0.82, "blur": 24, "corner_radius": 18, "indicator_style": "dot"},
+    "menus": {"color": "#171D29", "opacity": 0.94, "blur": 16, "corner_radius": 14},
+    "overview": {"color": "#182C50", "opacity": 0.25, "blur": 34, "brightness": 0.72, "saturation": 0.82}
+  },
+  "login": {"background_color": "#101828", "accent": "blue"}
+}

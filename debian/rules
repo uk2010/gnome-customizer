@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --buildsystem=meson
+
+override_dh_auto_configure:
+	if [ "$(DEB_BUILD_ARCH)" != "$(DEB_HOST_ARCH)" ]; then \
+		DH_MESON_CROSS_FILE=$(CURDIR)/debian/cross-arm64.ini dh_auto_configure -- --prefix=/usr; \
+	else \
+		dh_auto_configure -- --prefix=/usr; \
+	fi
+
+override_dh_auto_test:
+	if [ "$(DEB_BUILD_ARCH)" = "$(DEB_HOST_ARCH)" ]; then \
+		GSETTINGS_BACKEND=memory dh_auto_test; \
+	fi
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start

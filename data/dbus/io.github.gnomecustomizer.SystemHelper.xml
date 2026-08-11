@@ -1,0 +1,14 @@
+<node>
+  <interface name="io.github.gnomecustomizer.SystemHelper">
+    <method name="ApplyTransaction"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="ApplyGdmDconf"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="InstallGdmAssets"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="InstallGdmResource"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="ActivateGdmResource"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="RestoreGdmResource"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="ApplyMonitorConfiguration"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="RestoreMonitorConfiguration"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="RestoreGdmDefaults"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+    <method name="QueryStatus"><arg name="request" type="s" direction="in"/><arg name="response" type="s" direction="out"/></method>
+  </interface>
+</node>

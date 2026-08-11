@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="io.github.gnomecustomizer" path="/io/github/gnomecustomizer/">
+    <key name="last-mode" type="s"><default>'desktop'</default></key>
+    <key name="live-preview" type="b"><default>true</default></key>
+    <key name="last-apply" type="s"><default>''</default></key>
+  </schema>
+  <schema id="io.github.gnomecustomizer.shell" path="/io/github/gnomecustomizer/shell/">
+    <key name="enabled" type="b"><default>false</default></key>
+    <key name="dock-enabled" type="b"><default>false</default></key>
+    <key name="dock-position" type="s"><choices><choice value="bottom"/><choice value="left"/><choice value="right"/></choices><default>'bottom'</default></key>
+    <key name="dock-floating" type="b"><default>true</default></key>
+    <key name="dock-icon-size" type="i"><range min="24" max="96"/><default>48</default></key>
+    <key name="dock-spacing" type="i"><range min="0" max="24"/><default>8</default></key>
+    <key name="dock-indicator-style" type="s"><choices><choice value="dot"/><choice value="dash"/><choice value="line"/></choices><default>'dot'</default></key>
+    <key name="dock-opacity" type="d"><range min="0.0" max="1.0"/><default>0.82</default></key>
+    <key name="dock-color" type="s"><default>'#202026'</default></key>
+    <key name="dock-gradient-enabled" type="b"><default>false</default></key>
+    <key name="dock-color2" type="s"><default>'#303044'</default></key>
+    <key name="dock-gradient-direction" type="s"><choices><choice value="vertical"/><choice value="horizontal"/></choices><default>'vertical'</default></key>
+    <key name="dock-radius" type="i"><range min="0" max="32"/><default>18</default></key>
+    <key name="dock-autohide" type="b"><default>false</default></key>
+    <key name="dock-intellihide" type="b"><default>false</default></key>
+    <key name="dock-show-running" type="b"><default>true</default></key>
+    <key name="dock-show-favorites" type="b"><default>true</default></key>
+    <key name="dock-show-apps" type="b"><default>true</default></key>
+    <key name="dock-show-apps-position" type="s"><choices><choice value="first"/><choice value="last"/></choices><default>'last'</default></key>
+    <key name="panel-enabled" type="b"><default>false</default></key>
+    <key name="panel-color" type="s"><default>'#16161a'</default></key>
+    <key name="panel-gradient-enabled" type="b"><default>false</default></key>
+    <key name="panel-color2" type="s"><default>'#282840'</default></key>
+    <key name="panel-gradient-direction" type="s"><choices><choice value="vertical"/><choice value="horizontal"/></choices><default>'horizontal'</default></key>
+    <key name="panel-opacity" type="d"><range min="0.0" max="1.0"/><default>0.88</default></key>
+    <key name="panel-radius" type="i"><range min="0" max="32"/><default>0</default></key>
+    <key name="panel-text-color" type="s"><default>'#ffffff'</default></key>
+    <key name="panel-blur" type="i"><range min="0" max="100"/><default>20</default></key>
+    <key name="dock-blur" type="i"><range min="0" max="100"/><default>24</default></key>
+    <key name="overview-enabled" type="b"><default>false</default></key>
+    <key name="overview-blur" type="i"><range min="0" max="100"/><default>30</default></key>
+    <key name="overview-color" type="s"><default>'#18243A'</default></key>
+    <key name="overview-opacity" type="d"><range min="0.0" max="1.0"/><default>0.28</default></key>
+    <key name="overview-brightness" type="d"><range min="0.2" max="1.5"/><default>0.75</default></key>
+    <key name="overview-saturation" type="d"><range min="0.0" max="2.0"/><default>0.85</default></key>
+    <key name="menu-blur" type="i"><range min="0" max="100"/><default>16</default></key>
+    <key name="menu-enabled" type="b"><default>false</default></key>
+    <key name="menu-color" type="s"><default>'#202026'</default></key>
+    <key name="menu-gradient-enabled" type="b"><default>false</default></key>
+    <key name="menu-color2" type="s"><default>'#303044'</default></key>
+    <key name="menu-gradient-direction" type="s"><choices><choice value="vertical"/><choice value="horizontal"/></choices><default>'vertical'</default></key>
+    <key name="menu-opacity" type="d"><range min="0.2" max="1.0"/><default>0.94</default></key>
+    <key name="menu-radius" type="i"><range min="0" max="32"/><default>14</default></key>
+    <key name="menu-text-color" type="s"><default>'#FFFFFF'</default></key>
+    <key name="menu-border-color" type="s"><default>'#444452'</default></key>
+  </schema>
+</schemalist>

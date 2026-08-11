@@ -1,0 +1,23 @@
+[Unit]
+Description=GNOME Customizer privileged system helper
+
+[Service]
+Type=dbus
+BusName=io.github.gnomecustomizer.SystemHelper
+ExecStart=/usr/libexec/gnome-customizer-system-helper
+User=root
+Group=root
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/dconf /etc/xdg /usr/local/share/gnome-customizer /var/lib/dpkg/alternatives /etc/alternatives /usr/share/gnome-shell /var/log/alternatives.log
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

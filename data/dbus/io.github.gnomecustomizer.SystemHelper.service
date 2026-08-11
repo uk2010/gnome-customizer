@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=io.github.gnomecustomizer.SystemHelper
+Exec=/usr/libexec/gnome-customizer-system-helper
+User=root
+SystemdService=gnome-customizer-system-helper.service

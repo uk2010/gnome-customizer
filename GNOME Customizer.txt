@@ -1,0 +1,4069 @@
+CODEX MASTER BUILD BRIEF
+========================
+
+PROJECT NAME
+------------
+Working name: GNOME Customizer
+
+PURPOSE
+-------
+Build a complete, polished, native customization application for modern GNOME that unifies:
+
+1. GNOME desktop appearance customization
+2. GNOME Shell appearance and selected shell-behavior functions needed to provide an integrated dock/blur/panel experience
+3. GDM login-screen customization
+4. A safe visual Theme Builder
+5. Import/export/shareable appearance-only themes
+6. Diagnostics, status, safe apply, safe rollback, and safe restore
+
+This is not a mockup project.
+This is not a shell-script wrapper.
+This is not a clone of GNOME Tweaks.
+This is not a fork of GDM Settings.
+This is not a bundle of third-party extensions.
+
+The goal is a complete production-quality application.
+
+The application should feel like something the GNOME team could have shipped, but with the visual restraint, consistency, spacing, polish, preview quality, and attention to detail associated with excellent Apple software.
+
+Do not copy macOS.
+Do not reproduce Apple controls, traffic-light window buttons, Apple fonts, Apple icons, or proprietary visual assets.
+
+The visual direction is:
+
+"Native GNOME 50 design with Apple-level polish."
+
+It must not look like:
+- a generic web dashboard
+- a gamer utility
+- a purple neon control panel
+- a cheap preferences dialog
+- an old GTK3 application
+- a Windows utility
+- a fake macOS application
+
+============================================================
+HARD PLATFORM REQUIREMENTS
+============================================================
+
+MINIMUM SUPPORTED DESKTOP
+-------------------------
+GNOME Shell 50.1 or newer.
+
+PRIMARY TARGET OS
+-----------------
+Ubuntu 26.04 LTS.
+
+PRIMARY VERIFIED TARGET STACK
+-----------------------------
+GNOME Shell 50.1
+GDM 50.1
+Wayland
+
+DO NOT SUPPORT LEGACY GNOME / GTK THEMING
+-----------------------------------------
+Do not add compatibility code for old GNOME releases merely to widen support.
+
+Do not expose legacy GTK theme selectors.
+
+Do not attempt to globally skin arbitrary modern Libadwaita applications with unsupported GTK theme hacks.
+
+The product targets GNOME 50.1+ and should be designed around current GNOME APIs and current GNOME Shell behavior.
+
+SUPPORTED CPU ARCHITECTURES
+---------------------------
+Both are mandatory first-class release targets:
+
+- amd64 / x86_64
+- arm64 / aarch64
+
+ARM64 must not be treated as an afterthought.
+
+Every release must produce and test:
+
+gnome-customizer_VERSION_amd64.deb
+gnome-customizer_VERSION_arm64.deb
+
+Avoid architecture-specific assumptions wherever possible.
+
+Most of the implementation should remain architecture-neutral:
+- Python
+- PyGObject
+- GTK4
+- Libadwaita
+- GJS
+- GSettings
+- D-Bus
+- PolicyKit
+- CSS
+- GResource
+- JSON theme files
+
+PACKAGE FORMAT
+--------------
+Native Debian package only for the initial product.
+
+DO NOT BUILD:
+- Flatpak
+- Snap
+- AppImage
+
+The packages must install with:
+
+sudo apt install ./gnome-customizer_VERSION_amd64.deb
+
+or:
+
+sudo apt install ./gnome-customizer_VERSION_arm64.deb
+
+============================================================
+PRODUCT PHILOSOPHY
+============================================================
+
+GNOME Customizer should be a unified, polished customization product.
+
+It should solve the current fragmentation problem where users need:
+- GNOME Settings
+- GNOME Tweaks
+- multiple GNOME Shell extensions
+- command-line GSettings
+- manual CSS
+- manual GDM resource editing
+
+The user should instead have one coherent application.
+
+The app should clearly separate three technical domains:
+
+DESKTOP SETTINGS
+- normal logged-in user's settings
+- use supported GSettings / desktop APIs
+- normally no administrator authentication
+
+SHELL CUSTOMIZATION
+- appearance and shell-level functions that cannot be implemented with ordinary GSettings
+- handled by one GNOME Customizer companion GNOME Shell component
+- this component belongs to this project
+- do not bundle Dash to Dock
+- do not bundle Blur My Shell
+- do not require those extensions
+- reproduce only the desired functions in our own focused implementation
+
+GDM LOGIN SCREEN
+- system-level login-screen settings
+- use GDM dconf and carefully generated GResource changes
+- use a minimal PolicyKit-protected helper
+- GUI must never run as root
+
+============================================================
+DESKTOP / LOGIN SCREEN MODE
+============================================================
+
+The application should make the distinction between Desktop and Login Screen obvious.
+
+Preferred high-level UX:
+
+Desktop | Login Screen
+
+This may be a modern segmented control in the header or a clearly structured sidebar.
+
+Do not duplicate every page unnecessarily.
+
+Where the same concept exists for both Desktop and Login Screen, use consistent controls and previews.
+
+Examples:
+
+Desktop:
+- Appearance
+- Themes
+- Wallpaper
+- Dock
+- Blur
+- Top Bar
+- Fonts
+- Icons
+- Cursor
+- Mouse & Touchpad
+- Keyboard settings only where appropriate and supported
+- Power
+- Night Light
+- Displays
+- Sound
+
+Login Screen:
+- Appearance
+- Wallpaper
+- Accent
+- Fonts
+- Cursor
+- Icon theme where GDM honors it
+- Top Bar
+- Clock
+- Logo
+- Banner / welcome message
+- User list
+- Restart/shutdown controls
+- Accessibility
+- Sound where supported
+- Mouse
+- Touchpad
+- Power
+- Night Light where supported
+- Display layout
+
+System:
+- Status
+- Apply / Restore
+- Theme Builder
+- Import / Export
+- About
+
+============================================================
+VISUAL DESIGN
+============================================================
+
+The application must use:
+
+- GTK 4
+- Libadwaita
+- modern GNOME 50 layout conventions
+- GNOME symbolic icons
+- GNOME typography
+- adaptive layouts
+- accessible native controls
+
+Preferred main window:
+- AdwApplicationWindow
+- AdwNavigationSplitView or the most current appropriate Libadwaita navigation structure
+- AdwHeaderBar
+- AdwPreferencesPage / AdwPreferencesGroup where appropriate
+- AdwActionRow
+- AdwSwitchRow
+- AdwComboRow
+- AdwSpinRow
+- AdwEntryRow
+- AdwToastOverlay
+- current GNOME 50 equivalents if APIs have changed
+
+Initial window:
+approximately 950 x 700
+
+Minimum:
+approximately 720 x 520
+
+Must adapt gracefully to narrower windows.
+
+VISUAL PRINCIPLES
+-----------------
+Use:
+- generous whitespace
+- excellent alignment
+- restrained use of cards
+- subtle separators
+- strong typographic hierarchy
+- carefully spaced controls
+- large, useful visual previews
+- native GNOME switches/buttons
+- subtle animation
+- calm surfaces
+- consistent corner radius
+- excellent light and dark mode presentation
+
+Avoid:
+- excessive nested cards
+- fake glassmorphism everywhere
+- bright neon gradients in the application UI itself
+- huge colored buttons
+- too many borders
+- dense forms
+- tiny controls
+- web-app looking layouts
+- custom fake dropdowns
+- custom fake switches
+- macOS traffic light controls
+- skeuomorphism
+- random shadows
+
+The app UI itself should remain a native GNOME app even when it is editing a wild theme.
+
+============================================================
+STAGED CHANGE MODEL
+============================================================
+
+Do not immediately apply every potentially destructive or privileged change.
+
+Use a staged model.
+
+The user can change multiple values and see them in the preview.
+
+Show:
+- pending changes count
+- Apply
+- Discard
+
+Desktop-only changes that are safe and reversible may optionally support live preview, but there must still be a clear distinction between previewed and committed state where necessary.
+
+GDM changes must be staged.
+
+On Apply:
+1. Validate all values.
+2. Validate all selected assets.
+3. Prepare generated files.
+4. Validate generated resource structures.
+5. Request PolicyKit authorization once if privileged work is required.
+6. Apply the transaction.
+7. Verify success.
+8. Roll back where feasible if a critical stage fails.
+9. Show a subtle success toast.
+
+Do not show a password box inside the app.
+
+============================================================
+PRIVILEGE / SECURITY ARCHITECTURE
+============================================================
+
+THE GUI MUST NEVER RUN AS ROOT.
+
+Never require:
+sudo gnome-customizer
+
+Never run the GTK process through pkexec.
+
+Use:
+
+GTK4 / Libadwaita GUI
+      |
+      | Gio / GDBus
+      v
+PolicyKit protected helper
+      |
+      v
+narrow root-only system operations
+
+The helper must expose explicit methods such as:
+
+- ApplyGdmDconf
+- InstallGdmResource
+- ActivateGdmResource
+- RestoreGdmResource
+- InstallGdmAssets
+- ApplyMonitorConfiguration
+- RestoreMonitorConfiguration
+- RestoreGdmDefaults
+- QueryPrivilegedStatus if genuinely necessary
+
+DO NOT expose:
+- ExecuteCommand
+- RunShell
+- arbitrary paths
+- arbitrary scripts
+- arbitrary environment injection
+
+Validate all paths and values.
+
+Use fixed allowed locations.
+
+Avoid shell=True.
+
+Use argv arrays for subprocesses.
+
+Do not accept user-provided command lines.
+
+POLKIT
+------
+Install an action such as:
+
+io.github.gnomecustomizer.modify-system
+
+Description:
+Authentication is required to modify the GNOME login screen.
+
+Use the normal Ubuntu PolicyKit authentication agent.
+
+The intended UX:
+- user opens app normally
+- makes several changes
+- presses Apply
+- normal Ubuntu authentication dialog appears once
+- user authenticates
+- helper performs the allowed changes
+
+============================================================
+OWNED FILES AND SYSTEM SAFETY
+============================================================
+
+Use application-owned configuration.
+
+GDM dconf override:
+
+/etc/dconf/db/gdm.d/99-gdm-customizer
+
+Do not overwrite unrelated files such as:
+
+/etc/dconf/db/gdm.d/95-gdm-settings
+
+Do not delete unrelated files in:
+/etc/dconf/db/gdm.d/
+
+Ensure:
+/etc/dconf/db/gdm.d
+
+exists when required.
+
+GDM dconf profile:
+ /etc/dconf/profile/gdm
+
+If it does not exist, create the minimal correct profile.
+
+A known working profile on Ubuntu is:
+
+user-db:user
+system-db:gdm
+file-db:/usr/share/gdm/greeter-dconf-defaults
+
+Do not overwrite a valid existing profile unnecessarily.
+
+After changing GDM system dconf:
+dconf update
+
+Check return status.
+
+============================================================
+KNOWN VERIFIED TARGET DETAILS
+============================================================
+
+A target Ubuntu 26.04 system used during development reported:
+
+gdm:x:120:121:Gnome Display Manager:/var/lib/gdm3:/bin/false
+
+GDM 50.1
+GNOME Shell 50.1
+
+Do not assume the GDM account name is always the same.
+
+Detect:
+1. gdm
+2. Debian-gdm
+3. fail gracefully if neither is available
+
+For querying GDM settings, use the correct GDM profile.
+
+Example known-working concept:
+
+machinectl shell gdm@ /usr/bin/env \
+DCONF_PROFILE=gdm \
+gsettings get org.gnome.desktop.interface clock-format
+
+Do not confuse the regular user dconf database with the GDM profile.
+
+============================================================
+GDM GRESOURCE ARCHITECTURE
+============================================================
+
+On the verified Ubuntu 26.04 target:
+
+/usr/share/gnome-shell/gdm-theme.gresource
+
+is managed through update-alternatives.
+
+Known alternatives included:
+
+/usr/share/gnome-shell/gnome-shell-theme.gresource
+
+and:
+
+/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource
+
+The customizer must never blindly overwrite stock package-managed resources.
+
+Create an app-owned resource, for example:
+
+/usr/local/share/gnome-customizer/gnome-shell-theme.gresource
+
+Register/select it through update-alternatives.
+
+Before activation:
+- record the previous alternative
+- verify the custom resource exists
+- verify gresource list succeeds
+- verify required resource paths exist
+
+On restore/uninstall:
+- restore previous valid alternative if available
+- otherwise restore a valid stock Ubuntu/Yaru resource
+- never leave update-alternatives pointing to a deleted file
+
+============================================================
+GRESOURCE BUILD PIPELINE
+============================================================
+
+Use:
+- gresource
+- glib-compile-resources
+
+Known GNOME 50 resource namespace:
+
+/org/gnome/shell/theme/
+
+Known files may include:
+- gdm.css
+- gnome-shell-dark.css
+- gnome-shell-light.css
+- gnome-shell-high-contrast.css
+- other shell assets
+
+Safe workflow:
+1. Identify stock source resource.
+2. Extract it to a temporary workspace.
+3. Preserve the original tree.
+4. Add only intended custom assets.
+5. Generate the resource XML.
+6. Generate/append only our controlled CSS.
+7. Compile new GResource.
+8. Validate with gresource list.
+9. Validate expected CSS/resource paths.
+10. Only after successful validation install the resource.
+11. Only after installation activate with update-alternatives.
+
+Never activate partially generated resources.
+
+============================================================
+DESKTOP APPEARANCE
+============================================================
+
+Desktop appearance should use supported GNOME 50 mechanisms wherever possible.
+
+Support:
+- wallpaper
+- accent color
+- color scheme
+- icons
+- cursor
+- fonts
+- text scaling
+- appropriate shell visual settings
+- theme package application
+
+Do NOT expose legacy GTK application theme controls.
+
+Do not pretend modern Libadwaita apps can be arbitrarily reskinned globally.
+
+============================================================
+DESKTOP WALLPAPER
+============================================================
+
+Provide:
+- large preview
+- Choose Image
+- Remove / Default
+- Zoom / Fill behavior as supported
+- solid color option where supported
+- dark/light wallpaper handling if current GNOME supports separate images
+
+Supported image types:
+- PNG
+- JPEG
+- WebP
+
+Validate MIME type.
+
+If a theme imports a wallpaper, copy it into the theme-managed/app-managed location instead of referencing a removable or temporary source path.
+
+============================================================
+ACCENT COLOR
+============================================================
+
+Support current GNOME accent values detected from the installed schema.
+
+Do not hardcode only historical values if the current schema provides an enum.
+
+For GNOME 50 this is expected to include colors such as:
+- blue
+- teal
+- green
+- yellow
+- orange
+- red
+- pink
+- purple
+- slate
+
+Present as polished swatches plus accessible text/tooltip.
+
+============================================================
+COLOR SCHEME
+============================================================
+
+Support only values that current GNOME 50 exposes.
+
+Likely:
+- Default
+- Prefer Light
+- Prefer Dark
+
+Detect schema support.
+
+Do not expose nonexistent values.
+
+============================================================
+ICONS / CURSOR
+============================================================
+
+Support installed icon themes.
+
+Discover them from standard locations.
+
+Support cursor:
+- theme
+- size
+
+Do not make users type theme names.
+
+============================================================
+FONTS
+============================================================
+
+Support:
+- interface font where current GNOME schema exposes it
+- antialiasing
+- hinting
+- text scaling
+
+Use native font selection.
+
+Use sensible scaling bounds.
+
+============================================================
+TOP BAR
+============================================================
+
+Desktop and GDM top-bar capabilities differ.
+
+Desktop:
+- visual styling through the GNOME Customizer shell companion
+- clock-related supported GSettings where GNOME exposes them
+
+GDM:
+- clock format
+- date
+- weekday
+- seconds
+- battery percentage
+- controlled visual CSS generated into GDM resource
+
+Potential appearance settings:
+- background color
+- gradient
+- transparency
+- text color
+- blur if technically safe and implemented by our shell component on desktop
+- rounded treatment where appropriate
+
+Do not allow themes to inject arbitrary CSS.
+
+============================================================
+DOCK FUNCTIONALITY
+============================================================
+
+Do not bundle Dash to Dock.
+Do not require Dash to Dock.
+Do not copy its code unless explicitly audited and license obligations are accepted.
+
+Implement only the selected desired functions in GNOME Customizer's own GNOME Shell companion.
+
+Desired dock features:
+- enable / disable custom dock mode
+- position: bottom / left / right
+- floating vs edge-attached visual style
+- icon size
+- spacing
+- background color
+- gradient
+- transparency
+- corner radius
+- blur
+- auto-hide
+- intelligent hide
+- favorites
+- running apps
+- optionally trash
+- optionally mounted drives if implemented cleanly
+- multi-monitor handling
+- sensible animation
+- hover states
+
+Use GNOME Shell APIs appropriate for GNOME 50.1+.
+
+The shell companion must not become a giant extension platform.
+
+============================================================
+BLUR FUNCTIONALITY
+============================================================
+
+Do not bundle Blur My Shell.
+Do not require Blur My Shell.
+Do not copy it wholesale.
+
+Implement desired functions in our own shell companion.
+
+Target visual capabilities:
+- panel blur
+- dock blur
+- overview blur
+- app grid blur if technically stable
+- popup/menu blur where technically stable
+- brightness
+- saturation if supported/reasonable
+- blur strength / sigma
+- opacity interaction
+- enable / disable by surface
+
+If a blur target proves unstable on GNOME 50, disable that specific control and document it rather than shipping a fragile hack.
+
+============================================================
+GNOME SHELL COMPANION
+============================================================
+
+A small GNOME Shell extension-style component is technically acceptable and expected because GNOME Shell modifications require shell-side code.
+
+From the user's perspective this is part of GNOME Customizer.
+
+The Debian package should install it automatically.
+
+No separate settings app.
+
+No dependency on third-party extensions.
+
+Conceptual project component:
+
+shell/
+  metadata.json
+  extension.js
+  stylesheet.css
+  schemas/
+
+Responsibilities:
+- dock implementation
+- blur implementation
+- top bar / shell surface styling
+- menu/popup visual variables where safe
+- theme rendering for shell-level appearance properties
+- live preview/apply support where feasible
+
+Keep it focused.
+
+Do not:
+- add unrelated productivity features
+- add window tiling
+- add launchers unrelated to dock behavior
+- add custom keybindings unless strictly needed internally
+- add notification systems
+- alter application behavior
+
+============================================================
+THEME SYSTEM: CORE RULE
+============================================================
+
+Themes are APPEARANCE ONLY.
+
+A theme MUST NOT be able to:
+- execute commands
+- contain executable scripts
+- contain Python
+- contain JavaScript
+- contain shell code
+- install extensions
+- enable arbitrary extensions
+- change power behavior
+- change keyboard shortcuts
+- change login security policy
+- change user list behavior
+- add GNOME features
+- add dock functionality that isn't already built into GNOME Customizer
+- modify services
+- modify system packages
+- write arbitrary files
+- run post-install hooks
+- inject arbitrary raw Shell CSS in the standard theme format
+
+Themes only describe visual values and assets.
+
+The application owns the translation from theme properties to GNOME 50 implementation.
+
+This is critical for safety, compatibility, and supportability.
+
+============================================================
+THEME FILE FORMAT
+============================================================
+
+Define an open, documented, versioned package format.
+
+Recommended extension:
+
+.gctheme
+
+A .gctheme may be a ZIP-compatible archive with a controlled internal structure.
+
+Example:
+
+AuroraPurple.gctheme
+  manifest.json
+  assets/
+    desktop-wallpaper.webp
+    login-wallpaper.webp
+    preview.webp
+    optional-pattern.webp
+
+Do not require a shell.css file in standard themes.
+
+The application generates CSS from allowed manifest values.
+
+Example manifest concepts:
+
+{
+  "format_version": 1,
+  "name": "Aurora Purple",
+  "author": "Eric",
+  "description": "Dark purple and blue GNOME appearance.",
+  "minimum_gnome": "50.1",
+  "maximum_tested_gnome": "50.x",
+
+  "desktop": {
+    "color_scheme": "dark",
+    "accent": "purple",
+    "wallpaper": "assets/desktop-wallpaper.webp",
+    "icons": "Yaru-blue",
+    "cursor": "Yaru"
+  },
+
+  "shell": {
+    "panel": {
+      "background_type": "gradient",
+      "color1": "#171126",
+      "color2": "#3A1C71",
+      "gradient_angle": 90,
+      "opacity": 0.82,
+      "blur": 20,
+      "text_color": "#FFFFFF"
+    },
+    "menus": {
+      "surface_color": "#121218",
+      "opacity": 0.92,
+      "blur": 18,
+      "corner_radius": 14
+    },
+    "dock": {
+      "background_color": "#15131C",
+      "opacity": 0.75,
+      "blur": 24,
+      "corner_radius": 18
+    }
+  },
+
+  "login": {
+    "wallpaper": "assets/login-wallpaper.webp",
+    "accent": "purple"
+  }
+}
+
+The exact schema should be designed carefully and documented.
+
+Use JSON Schema if practical.
+
+Reject unknown dangerous fields.
+
+Support forward-compatible optional fields carefully.
+
+============================================================
+THEME ALLOWED VISUAL PROPERTIES
+============================================================
+
+Theme packages may control only approved appearance properties.
+
+Potential approved properties:
+
+GENERAL
+- light/dark preference
+- accent
+- wallpaper
+- login wallpaper
+- preview image
+- icon theme reference
+- cursor theme reference
+
+PANEL
+- background solid color
+- background gradient
+- gradient direction
+- opacity
+- blur
+- text color
+- border tint where supported
+- corner radius where applicable
+- shadow intensity within controlled bounds
+
+DOCK
+- background color
+- gradient
+- opacity
+- blur
+- corner radius
+- icon size preference if classified as visual
+- spacing
+- indicator visual style from a fixed enum
+
+MENUS / POPOVERS
+- surface color
+- gradient if supported safely
+- opacity
+- blur
+- text color
+- muted text color
+- selected item color
+- border color
+- corner radius
+- shadow strength
+
+OVERVIEW / APP GRID
+- backdrop tint
+- blur
+- brightness
+- surface transparency where stable
+
+LOGIN SCREEN
+- wallpaper
+- background color
+- top bar visual styling
+- accent color
+- logo image if the theme author chooses to include it and user explicitly allows it as appearance
+- login card/surface appearance only where safely supported
+
+IMPORTANT:
+Behavioral GDM options such as hiding users or power buttons are NOT theme properties.
+
+============================================================
+THEME BUILDER
+============================================================
+
+Build a polished visual Theme Builder inside GNOME Customizer.
+
+It should allow a normal user to create a theme without writing CSS or JSON.
+
+The Theme Builder should have:
+
+- live preview
+- editor
+- details
+- save draft
+- export theme
+- reset preview
+- reset section
+- import existing theme for editing when allowed
+
+Suggested builder sections:
+
+1. General
+2. Color Scheme
+3. Accent
+4. Background
+5. Top Bar
+6. Dock
+7. Menus & Popovers
+8. Overview
+9. Blur & Transparency
+10. Icons
+11. Cursor
+12. Login Screen
+13. Theme Details
+
+Controls:
+- graphical color pickers
+- gradient toggle
+- color stop pickers
+- gradient direction
+- opacity slider
+- blur slider
+- brightness slider
+- saturation slider if supported
+- corner radius slider from controlled safe bounds
+- wallpaper picker
+- login wallpaper picker
+- icon theme chooser
+- cursor theme chooser
+- preview mode
+
+Theme metadata:
+- name
+- author
+- description
+- theme format version
+- minimum GNOME version
+- generated preview
+
+The Theme Builder UI should be cleaner and more native than the earlier concept images.
+
+Do not create a dense three-column gamer-dashboard.
+
+Preferred layout:
+- GNOME-style left navigation or inspector list
+- large central live preview
+- one clean property panel or preferences section at a time
+- excellent whitespace
+- native rows/controls
+- minimal persistent chrome
+
+============================================================
+THEME PREVIEW
+============================================================
+
+This is a major feature.
+
+Provide a high-quality preview representing:
+- top bar
+- wallpaper
+- overview/menu surface
+- example app window
+- quick settings / popup
+- dock
+- selected/focused states
+
+Provide toggles/tabs for:
+- Desktop
+- Overview
+- Menus
+- Login Screen
+
+The preview does not need to run a second GNOME Shell instance.
+
+It must accurately communicate colors, gradients, transparency, blur approximation, radius, and wallpaper.
+
+Where preview cannot perfectly match the actual Shell, say so subtly.
+
+============================================================
+THEME IMPORT VALIDATION
+============================================================
+
+Never blindly trust imported themes.
+
+Validate:
+- archive structure
+- maximum uncompressed size
+- maximum number of files
+- path traversal attempts
+- symbolic links
+- file type
+- image MIME type
+- image dimensions
+- JSON schema
+- GNOME minimum version
+- enum values
+- opacity bounds
+- radius bounds
+- blur bounds
+- unsupported properties
+- malformed Unicode
+- duplicate conflicting entries
+
+Never extract with paths that can escape the destination.
+
+Do not execute any contents.
+
+============================================================
+THEME SHARING
+============================================================
+
+Version 1 must support local sharing:
+
+- Export .gctheme
+- Import .gctheme
+- Drag/drop import if easy and safe
+
+This alone lets users share themes through:
+- GitHub
+- Reddit
+- forums
+- Discord
+- websites
+- email
+
+Do NOT require a cloud service for version 1.
+
+DESIGN FOR A FUTURE GALLERY
+---------------------------
+Architect metadata so a future community gallery can support:
+- theme ID
+- author
+- screenshots
+- downloads
+- rating
+- featured
+- new
+- GNOME compatibility
+- verified status
+- report button
+
+But do not make the initial app depend on an online backend.
+
+A future gallery should distribute only validated appearance-only .gctheme packages.
+
+============================================================
+GNOME VERSION COMPATIBILITY
+============================================================
+
+Themes should carry:
+
+minimum_gnome
+maximum_tested_gnome
+
+Example:
+minimum_gnome: 50.1
+maximum_tested_gnome: 50.3
+
+If running on a newer untested GNOME release:
+- warn
+- allow if technically safe
+- do not silently claim compatibility
+
+The app itself should detect GNOME version.
+
+The internal translator should be version-aware where Shell CSS/API details change.
+
+============================================================
+GDM APPEARANCE PAGE
+============================================================
+
+Create a polished login-screen preview.
+
+Support:
+- custom wallpaper
+- solid background
+- wallpaper mode
+- accent
+- icon theme where honored
+- cursor theme
+- cursor size
+- font
+- text scaling
+- logo
+- banner
+- top bar styling
+- clock presentation
+
+Wallpaper:
+- PNG
+- JPEG
+- WebP
+- copy into app-owned system-readable directory
+- never reference a user-home file directly after apply
+
+============================================================
+GDM CLOCK / TOP BAR
+============================================================
+
+Support where schemas exist:
+
+org.gnome.desktop.interface:
+- clock-format
+- clock-show-date
+- clock-show-weekday
+- clock-show-seconds
+- show-battery-percentage
+
+Visual top-bar properties generated into controlled CSS:
+- text color
+- background color
+- gradient
+- opacity
+- selected safe radius behavior
+
+============================================================
+GDM LOGIN OPTIONS
+============================================================
+
+These are settings, NOT theme properties.
+
+Support:
+- logo on/off
+- logo image
+- banner enable
+- banner text
+- large banner style if implemented safely
+- show/hide user list
+- show/hide restart/shutdown buttons
+- fingerprint authentication only if schema/key exists and system supports it
+
+Use:
+org.gnome.login-screen
+
+Where keys differ or are absent:
+- detect
+- hide or disable the control
+- explain
+
+Do not invent unsupported settings.
+
+============================================================
+ACCESSIBILITY
+============================================================
+
+Support GDM accessibility setting where available:
+
+org.gnome.desktop.a11y
+always-show-universal-access-status
+
+Desktop accessibility should generally remain under supported GNOME settings; do not duplicate unrelated full accessibility configuration unless there is a clear reason.
+
+============================================================
+SOUND
+============================================================
+
+Support where schemas exist:
+
+org.gnome.desktop.sound
+- theme-name
+- event-sounds
+- input-feedback-sounds
+- allow-volume-above-100-percent
+
+Discover sound themes where practical.
+
+============================================================
+MOUSE
+============================================================
+
+Support:
+org.gnome.desktop.peripherals.mouse
+
+- accel-profile
+- natural-scroll
+- speed
+
+Use human-friendly controls.
+
+============================================================
+TOUCHPAD
+============================================================
+
+Support:
+org.gnome.desktop.peripherals.touchpad
+
+- send-events
+- speed
+- tap-to-click
+- natural-scroll
+- two-finger-scrolling-enabled
+- disable-while-typing
+
+Human-friendly modes:
+- Enabled
+- Disabled
+- Disabled on external mouse
+
+Only expose modes valid for the installed schema.
+
+============================================================
+POWER
+============================================================
+
+Support current GNOME 50 schemas.
+
+Known prototype keys included:
+
+org.gnome.settings-daemon.plugins.power
+- power-button-action
+- power-saver-profile-on-low-battery
+- dim-screen
+- sleep-inactive-ac-type
+- sleep-inactive-ac-timeout
+- sleep-inactive-battery-type
+- sleep-inactive-battery-timeout
+
+org.gnome.desktop.session
+- idle-delay
+
+Use minutes in UI.
+Convert internally as needed.
+
+Power settings are normal settings, not theme properties.
+
+============================================================
+NIGHT LIGHT
+============================================================
+
+Support current GNOME 50 keys.
+
+Prototype keys:
+
+org.gnome.settings-daemon.plugins.color
+- night-light-enabled
+- night-light-temperature
+- night-light-schedule-automatic
+- night-light-schedule-from
+- night-light-schedule-to
+
+Use:
+- temperature slider
+- real time controls
+- automatic/custom schedule
+
+Do not make users enter decimal hours.
+
+Night Light is not a theme property.
+
+============================================================
+DISPLAY
+============================================================
+
+Support applying the user's current display layout to GDM.
+
+Known GNOME 49+/50 approach:
+- user config: ~/.config/monitors.xml
+- GDM system config: /etc/xdg/monitors.xml
+
+Provide:
+- Apply My Current Display Layout To Login Screen
+- Restore Previous Login Screen Display Layout
+
+Before replacement:
+- backup existing /etc/xdg/monitors.xml once
+- record whether it existed
+- never overwrite the backup repeatedly
+- restore only what this application owns/manages
+
+Where required for GDM:
+org.gnome.mutter
+experimental-features
+['scale-monitor-framebuffer']
+
+Detect and preserve unrelated existing Mutter experimental features if modifying this key.
+
+============================================================
+STATUS / DIAGNOSTICS
+============================================================
+
+Build a clean status page.
+
+Show:
+- Ubuntu version
+- GNOME Shell version
+- GDM version
+- CPU architecture
+- detected GDM account
+- active gdm-theme.gresource
+- whether GNOME Customizer GDM resource is active
+- GDM dconf override path
+- shell companion status
+- installed theme format version
+- desktop setting status
+- monitor layout status
+- last successful apply if tracked
+- pending changes
+
+Show effective important values:
+- accent
+- color scheme
+- clock
+- font
+- icon theme
+- cursor theme
+- wallpaper
+- GDM wallpaper state
+- GDM logo
+- banner
+- user list
+- power buttons
+
+Provide:
+Copy Diagnostic Information
+
+Do not include:
+- passwords
+- tokens
+- personal documents
+- exact private filenames beyond necessary app config
+- unrelated user information
+
+============================================================
+RESTORE
+============================================================
+
+Provide separate restore scopes:
+
+- Restore Desktop Appearance
+- Restore Shell Appearance
+- Restore Login Screen Appearance
+- Restore All GNOME Customizer Changes
+
+Restore must remove/undo only this application's owned changes.
+
+Do not reset the user's entire GNOME profile.
+
+For desktop:
+- remember original values only when first changing a setting, or offer "GNOME defaults" separately from "restore pre-customizer state"
+- distinguish these concepts clearly
+
+For GDM:
+- remove /etc/dconf/db/gdm.d/99-gdm-customizer
+- dconf update
+- restore previous resource alternative
+- remove app-owned wallpaper/logo/resource assets
+- restore monitors.xml only if managed by this app and backup state exists
+
+For Shell companion:
+- reset its own schema values
+- disable custom appearance features
+- do not remove unrelated GNOME extensions
+
+============================================================
+UNINSTALL SAFETY
+============================================================
+
+Package removal must not leave the system broken.
+
+Before removing application-owned GDM resource:
+- check if active
+- restore previous valid alternative
+- or stock Ubuntu/Yaru alternative
+- remove our alternative entry safely
+
+Do not delete unrelated GDM dconf.
+
+Do not reset the user's whole desktop on ordinary package removal unless explicitly required and clearly documented.
+
+If conffiles/state need cleanup, separate package removal from purge appropriately.
+
+============================================================
+ERROR HANDLING
+============================================================
+
+Never silently fail.
+
+Use modern Libadwaita dialogs/toasts.
+
+Examples:
+- Could not compile the login-screen theme.
+- The selected wallpaper no longer exists.
+- Administrator authentication was cancelled.
+- The GNOME Shell companion could not be enabled.
+- The imported theme is invalid.
+- This theme requires GNOME 51.
+- This property is not supported on GNOME 50.1.
+- The current display configuration could not be copied.
+
+Provide expandable technical details when useful.
+
+============================================================
+SUCCESS FEEDBACK
+============================================================
+
+Prefer:
+AdwToastOverlay
+
+Examples:
+- Desktop appearance applied
+- Login screen updated
+- Theme imported
+- Theme exported
+- Restored successfully
+
+Avoid success modal dialogs for routine operations.
+
+============================================================
+GDM RESTART POLICY
+============================================================
+
+NEVER automatically restart GDM.
+
+Restarting GDM can terminate the active graphical session.
+
+After changes:
+"Login-screen changes have been applied. Log out or reboot to see all changes."
+
+Do not force logout.
+
+============================================================
+PROJECT LANGUAGE / ARCHITECTURE
+============================================================
+
+Preferred main implementation:
+
+Python 3
+PyGObject
+GTK4
+Libadwaita
+Gio / GDBus
+
+Shell companion:
+GJS / GNOME Shell extension APIs
+
+Privileged helper:
+Python is acceptable if carefully installed and audited.
+A small compiled helper is also acceptable if it materially improves safety/reliability.
+
+Keep architecture modular.
+
+Suggested tree:
+
+gnome-customizer/
+  meson.build
+  meson_options.txt
+
+  data/
+    desktop/
+    appstream/
+    icons/
+    schemas/
+    polkit/
+    dbus/
+
+  src/
+    main.py
+    application.py
+    window.py
+
+    pages/
+      overview.py
+      appearance.py
+      themes.py
+      theme_builder.py
+      dock.py
+      blur.py
+      topbar.py
+      fonts.py
+      cursor.py
+      login_screen.py
+      mouse_touchpad.py
+      power.py
+      night_light.py
+      displays.py
+      sound.py
+      status.py
+
+    backend/
+      desktop_settings.py
+      gdm_settings.py
+      gresource.py
+      theme_format.py
+      theme_validator.py
+      theme_renderer.py
+      diagnostics.py
+      transactions.py
+      models.py
+
+  shell/
+    metadata.json
+    extension.js
+    stylesheet.css
+    schemas/
+
+  helper/
+    system_helper.py
+    io.github.gnomecustomizer.SystemHelper.service
+    interface.xml
+
+  debian/
+    control
+    rules
+    changelog
+    copyright
+    install
+    postinst
+    prerm
+    postrm
+    source/format
+
+  tests/
+    unit/
+    integration/
+    theme-fixtures/
+
+============================================================
+DEBIAN PACKAGING
+============================================================
+
+Audit actual dependencies.
+
+Likely runtime dependencies may include equivalents of:
+- python3
+- python3-gi
+- gir1.2-gtk-4.0
+- gir1.2-adw-1
+- libglib2.0-bin
+- dconf-cli
+- policykit-1
+- systemd-container
+- gnome-shell
+
+Do not blindly copy this dependency list.
+
+Determine the real package names on Ubuntu 26.04.
+
+Package must install:
+- application
+- Python modules
+- desktop launcher
+- AppStream metadata
+- icons
+- user-level GSettings schemas
+- Shell companion
+- Shell companion schemas
+- D-Bus definitions
+- PolicyKit action
+- privileged helper
+- licenses
+- documentation
+
+Installation must not automatically change the desktop or GDM appearance.
+
+Changes occur only through explicit user actions.
+
+============================================================
+BUILD BOTH ARCHITECTURES
+============================================================
+
+Provide reproducible instructions for:
+
+amd64 build
+arm64 build
+
+Use native builds where practical.
+
+If cross-building is used:
+- document it
+- do not ship untested cross-built binaries blindly
+
+CI should build both.
+
+The project should avoid compiled architecture-specific code unless necessary.
+
+============================================================
+TESTING REQUIREMENTS
+============================================================
+
+A feature is not complete because a file was written.
+
+Test real behavior on Ubuntu 26.04 / GNOME 50.1+.
+
+TEST DESKTOP:
+- wallpaper
+- accent
+- color scheme
+- icon theme
+- cursor
+- fonts
+- dock
+- auto-hide
+- intelligent hide
+- multi-monitor dock
+- top bar styling
+- panel transparency
+- panel gradient
+- panel blur
+- menu styling
+- overview blur
+- restore
+
+TEST GDM:
+- wallpaper
+- solid color
+- accent
+- clock format
+- date
+- weekday
+- seconds
+- logo
+- banner
+- fonts
+- top-bar colors
+- user list
+- power buttons
+- cursor
+- icon theme if honored
+- display layout
+- restore
+
+TEST THEMES:
+- create theme
+- export .gctheme
+- import .gctheme
+- malformed archive
+- path traversal archive
+- oversized image
+- unsupported property
+- GNOME version mismatch
+- missing wallpaper
+- invalid JSON
+- Unicode theme/author names
+- theme preview
+- safe application
+- safe restore
+
+TEST AUTH:
+- cancelled PolicyKit prompt
+- wrong/failed auth
+- helper unavailable
+- partial apply failure
+- GResource compile failure
+
+TEST PACKAGING:
+- clean install amd64
+- clean install arm64
+- upgrade
+- remove
+- purge
+- uninstall while custom GDM resource is active
+
+============================================================
+PERFORMANCE
+============================================================
+
+The app should start quickly.
+
+Do not block the UI on:
+- theme scanning
+- GResource work
+- filesystem enumeration
+- helper calls
+
+Use async Gio APIs / worker tasks appropriately.
+
+Do not make the app feel sluggish.
+
+Live previews should remain responsive.
+
+============================================================
+ACCESSIBILITY
+============================================================
+
+Use:
+- keyboard navigation
+- correct accessible labels
+- logical focus order
+- adequate contrast
+- visible focus
+- sufficient hit targets
+- text labels in addition to color swatches
+- reduced-motion respect where possible
+
+============================================================
+LICENSING
+============================================================
+
+This project is independent.
+
+Do not copy code from GDM Settings, Dash to Dock, Blur My Shell, Open Bar, or any other extension unless:
+1. it is genuinely necessary,
+2. its license is reviewed,
+3. attribution/copy-left obligations are accepted,
+4. the copied code is clearly documented.
+
+Prefer clean independent implementation based on documented behavior/APIs.
+
+The working shell prototype appended below is our own project baseline and may be reused/refactored.
+
+============================================================
+IMPLEMENTATION PRIORITY
+============================================================
+
+Build in phases, but continue through the entire requested implementation.
+
+PHASE 1
+- application shell
+- GNOME 50-native UI
+- desktop GSettings backend
+- status
+- basic theme data model
+
+PHASE 2
+- PolicyKit + D-Bus helper
+- GDM dconf
+- GDM wallpaper GResource
+- safe restore
+
+PHASE 3
+- Shell companion
+- top bar
+- dock
+- blur
+- menu appearance
+
+PHASE 4
+- Theme Builder
+- .gctheme import/export
+- validation
+- live preview
+
+PHASE 5
+- display layout
+- diagnostics
+- packaging
+- amd64 + arm64
+- integration tests
+- polish
+
+Do not stop after Phase 1.
+Do not stop at a mockup.
+Do not stop because the app launches.
+Do not stop because packaging builds.
+
+============================================================
+FINAL ACCEPTANCE CRITERIA
+============================================================
+
+The project is complete when:
+
+1. It is a native GTK4/Libadwaita GNOME 50.1+ application.
+2. It looks genuinely native to GNOME 50.
+3. It has Apple-level restraint/polish without copying macOS.
+4. It supports both Desktop and Login Screen customization.
+5. It has no legacy GTK application theme selector.
+6. It provides its own focused shell companion.
+7. It does not depend on Dash to Dock.
+8. It does not depend on Blur My Shell.
+9. Its dock functionality works on GNOME 50.1+.
+10. Its blur functionality works on supported GNOME 50.1+ surfaces.
+11. Desktop wallpaper works.
+12. Desktop accent/color scheme works.
+13. Icons/cursor/fonts work where GNOME supports them.
+14. GDM wallpaper works using the proven resource strategy.
+15. GDM clock/logo/banner/settings work where schemas support them.
+16. GDM changes use PolicyKit instead of running the GUI as root.
+17. Multiple GDM changes can be applied with one auth operation where practical.
+18. It includes a live Theme Builder.
+19. Themes are appearance-only.
+20. Standard themes cannot execute code or inject arbitrary raw CSS.
+21. Themes can be exported/imported as .gctheme.
+22. Imported themes are validated safely.
+23. Desktop/GDM preview exists.
+24. Restore is safe and scoped to application-owned changes.
+25. Uninstall cannot leave GDM pointing to a removed resource.
+26. No automatic GDM restart.
+27. amd64 .deb builds.
+28. arm64 .deb builds.
+29. Both architectures are documented/tested.
+30. Final README includes architecture, build, install, uninstall, theme format, theme creation, troubleshooting, and known limitations.
+
+============================================================
+IMPORTANT CODING BEHAVIOR
+============================================================
+
+Do not assume an API exists.
+
+Before implementing GNOME Shell 50 behavior:
+- inspect installed GNOME 50 APIs/source where needed
+- use current GNOME 50 patterns
+- do not cargo-cult GNOME 42/45-era extension code
+
+Before writing GSettings:
+- check schema exists
+- check key exists
+- check enum/range
+- preserve unrelated values
+
+Before writing system files:
+- validate path ownership
+- use atomic replacement
+- backup app-managed prior state
+- check return values
+
+If a requested visual effect cannot be made reliable on GNOME 50.1:
+- disable it
+- document it
+- do not fake functionality
+
+============================================================
+REFERENCE IMPLEMENTATION
+============================================================
+
+The shell script below is the working backend prototype created before this GUI project.
+
+IMPORTANT:
+- It is not the final architecture.
+- Do not simply run this entire script with sudo from the GUI.
+- Refactor its proven mechanisms into clean backend/helper components.
+- Preserve its safe behaviors.
+- Improve its weak/error-prone parts.
+- The GDM wallpaper mechanism in this prototype was successfully tested on Ubuntu 26.04 with GNOME Shell 50.1 and GDM 50.1.
+- The script also contains the expanded setting set and restore logic developed for this project.
+- Treat it as a behavioral reference and known-working baseline, not as a reason to keep a monolithic shell implementation.
+
+BEGIN WORKING GDM CUSTOMIZER PROTOTYPE
+======================================
+
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# GDM Customizer
+# Target: Ubuntu 26.04 / GNOME 50 / GDM 50
+#
+# Terminal-based GDM customization utility.
+# It keeps its own dconf override file and its own custom GResource alternative.
+# It does NOT remove or overwrite unrelated /etc/dconf/db/gdm.d/*. files.
+
+APP_NAME="gdm-customizer"
+APP_DIR="/usr/local/share/${APP_NAME}"
+STATE_DIR="${APP_DIR}/state"
+
+CUSTOM_RESOURCE="${APP_DIR}/gnome-shell-theme.gresource"
+PREVIOUS_THEME="${APP_DIR}/previous-theme"
+PREVIOUS_MONITORS="${APP_DIR}/monitors.xml.previous"
+MONITORS_MARKER="${APP_DIR}/monitors-created"
+
+GDM_LINK="/usr/share/gnome-shell/gdm-theme.gresource"
+ALT_NAME="gdm-theme.gresource"
+YARU_RESOURCE="/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"
+SHELL_RESOURCE="/usr/share/gnome-shell/gnome-shell-theme.gresource"
+
+DCONF_DIR="/etc/dconf/db/gdm.d"
+DCONF_FILE="${DCONF_DIR}/99-gdm-customizer"
+DCONF_PROFILE="/etc/dconf/profile/gdm"
+
+# ------------------------------------------------------------
+# Generic helpers
+# ------------------------------------------------------------
+
+die() {
+    printf '\nERROR: %s\n\n' "$*" >&2
+    exit 1
+}
+
+info() {
+    printf '\n==> %s\n' "$*"
+}
+
+pause() {
+    echo
+    read -r -p "Press Enter to continue..." _
+}
+
+require_root() {
+    if [[ ${EUID} -ne 0 ]]; then
+        echo
+        echo "Run this program with:"
+        echo
+        echo "  sudo $0"
+        echo
+        exit 1
+    fi
+}
+
+check_commands() {
+    local commands=(
+        gresource glib-compile-resources update-alternatives dconf gsettings
+        machinectl install mktemp readlink file find sed grep getent awk
+        sort cp rm mkdir
+    )
+    local missing=()
+    local cmd
+
+    for cmd in "${commands[@]}"; do
+        command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
+    done
+
+    if (( ${#missing[@]} > 0 )); then
+        echo
+        echo "Missing required commands:"
+        printf '  %s\n' "${missing[@]}"
+        echo
+        echo "Install the main dependencies with:"
+        echo
+        echo "  sudo apt install libglib2.0-bin libglib2.0-dev-bin dconf-cli systemd-container"
+        echo
+        exit 1
+    fi
+}
+
+ensure_dirs() {
+    install -d -m 0755 "$APP_DIR" "$STATE_DIR"
+}
+
+ensure_gdm_dconf() {
+    install -d -m 0755 "$DCONF_DIR"
+    install -d -m 0755 /etc/dconf/profile
+
+    if [[ ! -f "$DCONF_PROFILE" ]]; then
+        cat > "$DCONF_PROFILE" <<'EOF'
+user-db:user
+system-db:gdm
+file-db:/usr/share/gdm/greeter-dconf-defaults
+EOF
+        chmod 0644 "$DCONF_PROFILE"
+    fi
+}
+
+calling_user() {
+    if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+        printf '%s\n' "$SUDO_USER"
+    else
+        id -un
+    fi
+}
+
+calling_user_home() {
+    local user
+    user="$(calling_user)"
+    getent passwd "$user" | cut -d: -f6
+}
+
+normalize_path() {
+    local path="$1"
+    local home
+    home="$(calling_user_home)"
+
+    case "$path" in
+        "~") path="$home" ;;
+        "~/"*) path="${home}/${path#~/}" ;;
+    esac
+
+    readlink -f "$path" 2>/dev/null || true
+}
+
+validate_image() {
+    local image="$1"
+    [[ -n "$image" ]] || return 1
+    [[ -f "$image" ]] || return 1
+    [[ -r "$image" ]] || return 1
+
+    case "$(file --brief --mime-type "$image")" in
+        image/jpeg|image/png|image/webp) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+image_extension() {
+    case "$(file --brief --mime-type "$1")" in
+        image/jpeg) echo jpg ;;
+        image/png) echo png ;;
+        image/webp) echo webp ;;
+        *) return 1 ;;
+    esac
+}
+
+valid_hex_color() {
+    [[ "$1" =~ ^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$ ]]
+}
+
+valid_number() {
+    [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]
+}
+
+valid_integer() {
+    [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+state_path() {
+    printf '%s/%s\n' "$STATE_DIR" "$1"
+}
+
+state_has() {
+    [[ -f "$(state_path "$1")" ]]
+}
+
+state_get() {
+    local p
+    p="$(state_path "$1")"
+    [[ -f "$p" ]] && cat "$p"
+}
+
+state_get_or() {
+    local key="$1"
+    local fallback="$2"
+    if state_has "$key"; then
+        state_get "$key"
+    else
+        printf '%s\n' "$fallback"
+    fi
+}
+
+state_set() {
+    ensure_dirs
+    printf '%s\n' "$2" > "$(state_path "$1")"
+    chmod 0644 "$(state_path "$1")"
+}
+
+state_unset() {
+    rm -f "$(state_path "$1")"
+}
+
+dconf_string() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\'/\\\'}"
+    printf "'%s'" "$s"
+}
+
+ask_back_path() {
+    local title="$1"
+    local kind="${2:-file}"
+    local input resolved
+
+    while true; do
+        clear
+        echo "========================================"
+        printf "          %s\n" "$title"
+        echo "========================================"
+        echo
+        echo "Enter the full path."
+        echo
+        echo "Examples:"
+        echo "  /home/$(calling_user)/Pictures/image.jpg"
+        echo "  ~/Pictures/image.png"
+        echo
+        echo "B) Back"
+        echo
+        read -r -e -p "Path: " input
+
+        case "$input" in
+            b|B|back|BACK)
+                return 1
+                ;;
+        esac
+
+        resolved="$(normalize_path "$input")"
+
+        if [[ "$kind" == "image" ]]; then
+            if validate_image "$resolved"; then
+                printf '%s\n' "$resolved"
+                return 0
+            fi
+            echo
+            echo "That is not a readable JPEG, PNG or WebP image."
+        elif [[ "$kind" == "dir" ]]; then
+            if [[ -d "$resolved" ]]; then
+                printf '%s\n' "$resolved"
+                return 0
+            fi
+            echo
+            echo "That directory does not exist."
+        else
+            if [[ -f "$resolved" ]]; then
+                printf '%s\n' "$resolved"
+                return 0
+            fi
+            echo
+            echo "That file does not exist."
+        fi
+
+        sleep 2
+    done
+}
+
+ask_hex_color() {
+    local title="$1"
+    local input
+
+    while true; do
+        clear
+        echo "========================================"
+        printf "          %s\n" "$title"
+        echo "========================================"
+        echo
+        echo "Enter a CSS hex color such as:"
+        echo "  #000000"
+        echo "  #3584e4"
+        echo "  #ff7800"
+        echo
+        echo "B) Back"
+        echo
+        read -r -p "Color: " input
+
+        case "$input" in
+            b|B|back|BACK) return 1 ;;
+        esac
+
+        if valid_hex_color "$input"; then
+            printf '%s\n' "$input"
+            return 0
+        fi
+
+        echo
+        echo "Invalid color. Use #RRGGBB or #RRGGBBAA."
+        sleep 2
+    done
+}
+
+ask_text() {
+    local title="$1"
+    local input
+
+    clear
+    echo "========================================"
+    printf "          %s\n" "$title"
+    echo "========================================"
+    echo
+    echo "B) Back"
+    echo
+    read -r -p "Value: " input
+
+    case "$input" in
+        b|B|back|BACK) return 1 ;;
+    esac
+
+    printf '%s\n' "$input"
+}
+
+ask_number_range() {
+    local title="$1"
+    local min="$2"
+    local max="$3"
+    local input
+
+    while true; do
+        clear
+        echo "========================================"
+        printf "          %s\n" "$title"
+        echo "========================================"
+        echo
+        echo "Allowed range: $min to $max"
+        echo
+        echo "B) Back"
+        echo
+        read -r -p "Value: " input
+
+        case "$input" in
+            b|B|back|BACK) return 1 ;;
+        esac
+
+        if valid_number "$input" && awk -v x="$input" -v a="$min" -v b="$max" 'BEGIN { exit !(x>=a && x<=b) }'; then
+            printf '%s\n' "$input"
+            return 0
+        fi
+
+        echo
+        echo "Invalid value."
+        sleep 2
+    done
+}
+
+ask_integer_range() {
+    local title="$1"
+    local min="$2"
+    local max="$3"
+    local input
+
+    while true; do
+        clear
+        echo "========================================"
+        printf "          %s\n" "$title"
+        echo "========================================"
+        echo
+        echo "Allowed range: $min to $max"
+        echo
+        echo "B) Back"
+        echo
+        read -r -p "Value: " input
+
+        case "$input" in
+            b|B|back|BACK) return 1 ;;
+        esac
+
+        if valid_integer "$input" && (( input >= min && input <= max )); then
+            printf '%s\n' "$input"
+            return 0
+        fi
+
+        echo
+        echo "Invalid value."
+        sleep 2
+    done
+}
+
+toggle_menu() {
+    local title="$1"
+    local key="$2"
+    local apply_kind="${3:-dconf}"
+
+    while true; do
+        clear
+        echo "========================================"
+        printf "          %s\n" "$title"
+        echo "========================================"
+        echo
+        echo "Current override: $(state_get_or "$key" "Ubuntu default")"
+        echo
+        echo "1) On"
+        echo "2) Off"
+        echo "3) Use Ubuntu Default"
+        echo "B) Back"
+        echo
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1) state_set "$key" true ;;
+            2) state_set "$key" false ;;
+            3) state_unset "$key" ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+
+        if [[ "$apply_kind" == "resource" ]]; then
+            apply_resource_state
+        else
+            rebuild_dconf
+        fi
+        echo
+        echo "Updated."
+        pause
+    done
+}
+
+# ------------------------------------------------------------
+# GDM runtime helpers
+# ------------------------------------------------------------
+
+detect_gdm_user() {
+    if getent passwd gdm >/dev/null 2>&1; then
+        echo gdm
+    elif getent passwd Debian-gdm >/dev/null 2>&1; then
+        echo Debian-gdm
+    else
+        echo gdm
+    fi
+}
+
+GDM_USER="$(detect_gdm_user)"
+
+gdm_get() {
+    local schema="$1"
+    local key="$2"
+
+    machinectl shell "${GDM_USER}@" /usr/bin/env \
+        DCONF_PROFILE=gdm \
+        gsettings get "$schema" "$key" 2>/dev/null |
+        grep -v '^Connected to ' |
+        grep -v '^Connection to ' |
+        tail -n1 || true
+}
+
+# ------------------------------------------------------------
+# Dconf generation
+# ------------------------------------------------------------
+
+emit_section_if_needed() {
+    :
+}
+
+rebuild_dconf() {
+    ensure_dirs
+    ensure_gdm_dconf
+
+    local tmp
+    tmp="$(mktemp)"
+    : > "$tmp"
+
+    # org.gnome.desktop.interface
+    if state_has accent_color || state_has color_scheme || state_has cursor_theme ||
+       state_has cursor_size || state_has icon_theme || state_has show_battery ||
+       state_has clock_date || state_has clock_seconds || state_has clock_weekday ||
+       state_has clock_format || state_has font_name || state_has font_antialias ||
+       state_has font_hinting || state_has text_scale; then
+
+        echo "[org/gnome/desktop/interface]" >> "$tmp"
+        state_has accent_color   && printf "accent-color=%s\n" "$(dconf_string "$(state_get accent_color)")" >> "$tmp"
+        state_has color_scheme   && printf "color-scheme=%s\n" "$(dconf_string "$(state_get color_scheme)")" >> "$tmp"
+        state_has cursor_theme   && printf "cursor-theme=%s\n" "$(dconf_string "$(state_get cursor_theme)")" >> "$tmp"
+        state_has cursor_size    && printf "cursor-size=%s\n" "$(state_get cursor_size)" >> "$tmp"
+        state_has icon_theme     && printf "icon-theme=%s\n" "$(dconf_string "$(state_get icon_theme)")" >> "$tmp"
+        state_has show_battery   && printf "show-battery-percentage=%s\n" "$(state_get show_battery)" >> "$tmp"
+        state_has clock_date     && printf "clock-show-date=%s\n" "$(state_get clock_date)" >> "$tmp"
+        state_has clock_seconds  && printf "clock-show-seconds=%s\n" "$(state_get clock_seconds)" >> "$tmp"
+        state_has clock_weekday  && printf "clock-show-weekday=%s\n" "$(state_get clock_weekday)" >> "$tmp"
+        state_has clock_format   && printf "clock-format=%s\n" "$(dconf_string "$(state_get clock_format)")" >> "$tmp"
+        state_has font_name      && printf "font-name=%s\n" "$(dconf_string "$(state_get font_name)")" >> "$tmp"
+        state_has font_antialias && printf "font-antialiasing=%s\n" "$(dconf_string "$(state_get font_antialias)")" >> "$tmp"
+        state_has font_hinting   && printf "font-hinting=%s\n" "$(dconf_string "$(state_get font_hinting)")" >> "$tmp"
+        state_has text_scale     && printf "text-scaling-factor=%s\n" "$(state_get text_scale)" >> "$tmp"
+        echo >> "$tmp"
+    fi
+
+    # Accessibility
+    if state_has a11y_always; then
+        echo "[org/gnome/desktop/a11y]" >> "$tmp"
+        printf "always-show-universal-access-status=%s\n\n" "$(state_get a11y_always)" >> "$tmp"
+    fi
+
+    # Sound
+    if state_has sound_theme || state_has event_sounds || state_has feedback_sounds || state_has over_amplification; then
+        echo "[org/gnome/desktop/sound]" >> "$tmp"
+        state_has sound_theme        && printf "theme-name=%s\n" "$(dconf_string "$(state_get sound_theme)")" >> "$tmp"
+        state_has event_sounds       && printf "event-sounds=%s\n" "$(state_get event_sounds)" >> "$tmp"
+        state_has feedback_sounds    && printf "input-feedback-sounds=%s\n" "$(state_get feedback_sounds)" >> "$tmp"
+        state_has over_amplification && printf "allow-volume-above-100-percent=%s\n" "$(state_get over_amplification)" >> "$tmp"
+        echo >> "$tmp"
+    fi
+
+    # Mouse
+    if state_has mouse_accel || state_has mouse_natural || state_has mouse_speed; then
+        echo "[org/gnome/desktop/peripherals/mouse]" >> "$tmp"
+        state_has mouse_accel   && printf "accel-profile=%s\n" "$(dconf_string "$(state_get mouse_accel)")" >> "$tmp"
+        state_has mouse_natural && printf "natural-scroll=%s\n" "$(state_get mouse_natural)" >> "$tmp"
+        state_has mouse_speed   && printf "speed=%s\n" "$(state_get mouse_speed)" >> "$tmp"
+        echo >> "$tmp"
+    fi
+
+    # Touchpad
+    if state_has touchpad_send_events || state_has touchpad_speed || state_has touchpad_tap ||
+       state_has touchpad_natural || state_has touchpad_twofinger || state_has touchpad_disable_typing; then
+        echo "[org/gnome/desktop/peripherals/touchpad]" >> "$tmp"
+        state_has touchpad_send_events    && printf "send-events=%s\n" "$(dconf_string "$(state_get touchpad_send_events)")" >> "$tmp"
+        state_has touchpad_speed          && printf "speed=%s\n" "$(state_get touchpad_speed)" >> "$tmp"
+        state_has touchpad_tap            && printf "tap-to-click=%s\n" "$(state_get touchpad_tap)" >> "$tmp"
+        state_has touchpad_natural        && printf "natural-scroll=%s\n" "$(state_get touchpad_natural)" >> "$tmp"
+        state_has touchpad_twofinger      && printf "two-finger-scrolling-enabled=%s\n" "$(state_get touchpad_twofinger)" >> "$tmp"
+        state_has touchpad_disable_typing && printf "disable-while-typing=%s\n" "$(state_get touchpad_disable_typing)" >> "$tmp"
+        echo >> "$tmp"
+    fi
+
+    # Power
+    if state_has power_button || state_has auto_power_saver || state_has dim_screen ||
+       state_has sleep_ac_type || state_has sleep_ac_timeout ||
+       state_has sleep_battery_type || state_has sleep_battery_timeout; then
+        echo "[org/gnome/settings-daemon/plugins/power]" >> "$tmp"
+        state_has power_button          && printf "power-button-action=%s\n" "$(dconf_string "$(state_get power_button)")" >> "$tmp"
+        state_has auto_power_saver      && printf "power-saver-profile-on-low-battery=%s\n" "$(state_get auto_power_saver)" >> "$tmp"
+        state_has dim_screen            && printf "dim-screen=%s\n" "$(state_get dim_screen)" >> "$tmp"
+        state_has sleep_ac_type         && printf "sleep-inactive-ac-type=%s\n" "$(dconf_string "$(state_get sleep_ac_type)")" >> "$tmp"
+        state_has sleep_ac_timeout      && printf "sleep-inactive-ac-timeout=%s\n" "$(state_get sleep_ac_timeout)" >> "$tmp"
+        state_has sleep_battery_type    && printf "sleep-inactive-battery-type=%s\n" "$(dconf_string "$(state_get sleep_battery_type)")" >> "$tmp"
+        state_has sleep_battery_timeout && printf "sleep-inactive-battery-timeout=%s\n" "$(state_get sleep_battery_timeout)" >> "$tmp"
+        echo >> "$tmp"
+    fi
+
+    # Session / blank screen
+    if state_has idle_delay; then
+        echo "[org/gnome/desktop/session]" >> "$tmp"
+        printf "idle-delay=%s\n\n" "$(state_get idle_delay)" >> "$tmp"
+    fi
+
+    # Night Light
+    if state_has night_enabled || state_has night_temp || state_has night_auto ||
+       state_has night_from || state_has night_to; then
+        echo "[org/gnome/settings-daemon/plugins/color]" >> "$tmp"
+        state_has night_enabled && printf "night-light-enabled=%s\n" "$(state_get night_enabled)" >> "$tmp"
+        state_has night_temp    && printf "night-light-temperature=uint32 %s\n" "$(state_get night_temp)" >> "$tmp"
+        state_has night_auto    && printf "night-light-schedule-automatic=%s\n" "$(state_get night_auto)" >> "$tmp"
+        state_has night_from    && printf "night-light-schedule-from=%s\n" "$(state_get night_from)" >> "$tmp"
+        state_has night_to      && printf "night-light-schedule-to=%s\n" "$(state_get night_to)" >> "$tmp"
+        echo >> "$tmp"
+    fi
+
+    # Login screen
+    if state_has logo_enabled || state_has banner_enabled || state_has banner_text ||
+       state_has disable_restart || state_has disable_user_list || state_has fingerprint; then
+        echo "[org/gnome/login-screen]" >> "$tmp"
+
+        if state_has logo_enabled; then
+            if [[ "$(state_get logo_enabled)" == "true" ]]; then
+                local logo_file
+                logo_file="$(find "$APP_DIR" -maxdepth 1 -type f \
+                    \( -name 'logo.jpg' -o -name 'logo.png' -o -name 'logo.webp' \) \
+                    -print 2>/dev/null | head -n1)"
+                if [[ -n "$logo_file" && -f "$logo_file" ]]; then
+                    printf "logo=%s\n" "$(dconf_string "$logo_file")" >> "$tmp"
+                else
+                    printf "logo=''\n" >> "$tmp"
+                fi
+            else
+                printf "logo=''\n" >> "$tmp"
+            fi
+        fi
+
+        state_has banner_enabled  && printf "banner-message-enable=%s\n" "$(state_get banner_enabled)" >> "$tmp"
+        state_has banner_text     && printf "banner-message-text=%s\n" "$(dconf_string "$(state_get banner_text)")" >> "$tmp"
+        state_has disable_restart && printf "disable-restart-buttons=%s\n" "$(state_get disable_restart)" >> "$tmp"
+        state_has disable_user_list && printf "disable-user-list=%s\n" "$(state_get disable_user_list)" >> "$tmp"
+        state_has fingerprint     && printf "enable-fingerprint-authentication=%s\n" "$(state_get fingerprint)" >> "$tmp"
+        echo >> "$tmp"
+    fi
+
+    if [[ -s "$tmp" ]]; then
+        install -m 0644 "$tmp" "$DCONF_FILE"
+    else
+        rm -f "$DCONF_FILE"
+    fi
+    rm -f "$tmp"
+
+    dconf update
+}
+
+# ------------------------------------------------------------
+# GResource / CSS generation
+# ------------------------------------------------------------
+
+current_resource() {
+    readlink -f "$GDM_LINK" 2>/dev/null || true
+}
+
+best_resource() {
+    update-alternatives --query "$ALT_NAME" 2>/dev/null |
+        sed -n 's/^Best: //p' |
+        head -n1
+}
+
+choose_base_resource() {
+    if [[ -f "$YARU_RESOURCE" ]]; then
+        echo "$YARU_RESOURCE"
+        return
+    fi
+
+    if [[ -f "$SHELL_RESOURCE" && "$SHELL_RESOURCE" != "$CUSTOM_RESOURCE" ]]; then
+        echo "$SHELL_RESOURCE"
+        return
+    fi
+
+    local best
+    best="$(best_resource)"
+    if [[ -n "$best" && -f "$best" && "$best" != "$CUSTOM_RESOURCE" ]]; then
+        echo "$best"
+        return
+    fi
+
+    local current
+    current="$(current_resource)"
+    if [[ -n "$current" && -f "$current" && "$current" != "$CUSTOM_RESOURCE" ]]; then
+        echo "$current"
+        return
+    fi
+
+    die "Could not locate a stock GDM theme resource."
+}
+
+save_previous_theme() {
+    ensure_dirs
+
+    if [[ ! -f "$PREVIOUS_THEME" ]]; then
+        local current
+        current="$(current_resource)"
+        if [[ -n "$current" && "$current" != "$CUSTOM_RESOURCE" ]]; then
+            printf '%s\n' "$current" > "$PREVIOUS_THEME"
+            chmod 0644 "$PREVIOUS_THEME"
+        fi
+    fi
+}
+
+extract_resource() {
+    local source="$1"
+    local dest="$2"
+    local resource relative output
+
+    mkdir -p "$dest"
+
+    while IFS= read -r resource; do
+        [[ -n "$resource" ]] || continue
+        case "$resource" in
+            /org/gnome/shell/theme/*)
+                relative="${resource#/org/gnome/shell/theme/}"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+
+        output="${dest}/${relative}"
+        mkdir -p "$(dirname "$output")"
+        gresource extract "$source" "$resource" > "$output"
+    done < <(gresource list "$source")
+}
+
+merge_shell_theme() {
+    local configured source file rel target
+
+    state_has shell_theme_dir || return 0
+    configured="$(state_get shell_theme_dir)"
+
+    if [[ -d "$configured/gnome-shell" ]]; then
+        source="$configured/gnome-shell"
+    else
+        source="$configured"
+    fi
+
+    [[ -d "$source" ]] || return 0
+
+    while IFS= read -r -d '' file; do
+        rel="${file#"$source"/}"
+        target="$1/$rel"
+        mkdir -p "$(dirname "$target")"
+
+        if [[ "$file" == *.css && -f "$target" ]]; then
+            {
+                echo
+                echo "/* GDM Customizer shell theme */"
+                cat "$file"
+            } >> "$target"
+        else
+            cp -f "$file" "$target"
+        fi
+    done < <(find "$source" -type f -print0)
+}
+
+resource_customizations_present() {
+    state_has background_type ||
+    state_has shell_theme_dir ||
+    state_has top_disable_arrows ||
+    state_has top_disable_corners ||
+    state_has top_text_color ||
+    state_has top_background_color ||
+    state_has banner_large
+}
+
+build_custom_css() {
+    local css=""
+
+    if state_has background_type; then
+        case "$(state_get background_type)" in
+            image)
+                css+=$'\n.login-dialog { background: transparent; }\n'
+                css+="#lockDialogGroup {"$'\n'
+                css+=" background-image: url('resource:///org/gnome/shell/theme/gdm-customizer-background');"$'\n'
+                if [[ "$(state_get_or background_adjust zoom)" == "repeat" ]]; then
+                    css+=" background-position: 0 0;"$'\n'
+                    css+=" background-size: contain;"$'\n'
+                    css+=" background-repeat: repeat;"$'\n'
+                else
+                    css+=" background-position: center;"$'\n'
+                    css+=" background-size: cover;"$'\n'
+                    css+=" background-repeat: no-repeat;"$'\n'
+                fi
+                css+="}"$'\n'
+                ;;
+            color)
+                css+=$'\n.login-dialog { background: transparent; }\n'
+                css+="#lockDialogGroup { background-color: $(state_get background_color); }"$'\n'
+                ;;
+        esac
+    fi
+
+    local panel="#panel, #panel.login-screen, #panel.unlock-screen"
+    local arrows="#panel .popup-menu-arrow, #panel.login-screen .popup-menu-arrow, #panel.unlock-screen .popup-menu-arrow"
+    local corners="#panel .panel-corner, #panel.login-screen .panel-corner, #panel.unlock-screen .panel-corner"
+    local buttons="#panel .panel-button, #panel.login-screen .panel-button, #panel.unlock-screen .panel-button, #panel .panel-button.clock-display, #panel.login-screen .panel-button.clock-display, #panel.unlock-screen .panel-button.clock-display"
+
+    if [[ "$(state_get_or top_disable_arrows false)" == "true" ]]; then
+        css+=$'\n'"${arrows} { width: 0px; }"$'\n'
+    fi
+
+    if [[ "$(state_get_or top_disable_corners false)" == "true" ]]; then
+        css+=$'\n'"${corners} { -panel-corner-opacity: 0; }"$'\n'
+    fi
+
+    if state_has top_text_color; then
+        css+=$'\n'"${buttons} { color: $(state_get top_text_color); }"$'\n'
+    fi
+
+    if state_has top_background_color; then
+        css+=$'\n'"${panel} { background-color: $(state_get top_background_color); }"$'\n'
+        if [[ "$(state_get_or top_disable_corners false)" != "true" ]]; then
+            css+="${corners} {"$'\n'
+            css+=" -panel-corner-opacity: 1;"$'\n'
+            css+=" -panel-corner-background-color: $(state_get top_background_color);"$'\n'
+            css+="}"$'\n'
+        fi
+    fi
+
+    if [[ "$(state_get_or banner_large false)" == "true" ]]; then
+        css+=$'\n.login-dialog-banner {\n font-size: 1.5em;\n font-weight: bold;\n}\n'
+    fi
+
+    printf '%s' "$css"
+}
+
+build_resource_xml() {
+    local theme_dir="$1"
+    local xml="$2"
+
+    {
+        echo '<?xml version="1.0" encoding="UTF-8"?>'
+        echo '<gresources>'
+        echo '  <gresource prefix="/org/gnome/shell/theme">'
+
+        (
+            cd "$theme_dir"
+            while IFS= read -r -d '' item; do
+                item="${item#./}"
+                local escaped="$item"
+                escaped="${escaped//&/&amp;}"
+                escaped="${escaped//</&lt;}"
+                escaped="${escaped//>/&gt;}"
+                printf '    <file>%s</file>\n' "$escaped"
+            done < <(find . -type f -print0 | sort -z)
+        )
+
+        echo '  </gresource>'
+        echo '</gresources>'
+    } > "$xml"
+}
+
+append_css_to_theme() {
+    local theme_dir="$1"
+    local css="$2"
+    local file
+
+    for file in gdm.css gnome-shell.css gnome-shell-dark.css gnome-shell-light.css gnome-shell-high-contrast.css; do
+        if [[ -f "$theme_dir/$file" ]]; then
+            {
+                echo
+                echo "/* BEGIN GDM CUSTOMIZER */"
+                printf '%s\n' "$css"
+                echo "/* END GDM CUSTOMIZER */"
+            } >> "$theme_dir/$file"
+        fi
+    done
+}
+
+restore_resource() {
+    local target=""
+
+    if [[ "$(current_resource)" == "$CUSTOM_RESOURCE" ]]; then
+        if [[ -f "$PREVIOUS_THEME" ]]; then
+            target="$(cat "$PREVIOUS_THEME")"
+        fi
+
+        if [[ -z "$target" || ! -f "$target" || "$target" == "$CUSTOM_RESOURCE" ]]; then
+            if [[ -f "$YARU_RESOURCE" ]]; then
+                target="$YARU_RESOURCE"
+            else
+                target="$(best_resource)"
+            fi
+        fi
+
+        [[ -n "$target" && -f "$target" && "$target" != "$CUSTOM_RESOURCE" ]] ||
+            die "Could not find a safe theme resource to restore."
+
+        update-alternatives --set "$ALT_NAME" "$target"
+    fi
+
+    if update-alternatives --query "$ALT_NAME" 2>/dev/null |
+       grep -Fq "Alternative: $CUSTOM_RESOURCE"; then
+        update-alternatives --remove "$ALT_NAME" "$CUSTOM_RESOURCE" || true
+    fi
+
+    rm -f "$CUSTOM_RESOURCE"
+}
+
+apply_resource_state() {
+    ensure_dirs
+
+    if ! resource_customizations_present; then
+        restore_resource
+        return
+    fi
+
+    save_previous_theme
+
+    local base work theme_dir xml compiled css bg
+    base="$(choose_base_resource)"
+    work="$(mktemp -d /tmp/gdm-customizer.XXXXXX)"
+    theme_dir="$work/theme"
+    xml="$work/gnome-shell-theme.gresource.xml"
+    compiled="$work/gnome-shell-theme.gresource"
+
+    extract_resource "$base" "$theme_dir"
+    merge_shell_theme "$theme_dir"
+
+    if [[ "$(state_get_or background_type none)" == "image" ]]; then
+        bg="$(state_get_or background_image "")"
+        [[ -f "$bg" ]] || {
+            rm -rf "$work"
+            die "Configured background image no longer exists."
+        }
+        install -m 0644 "$bg" "$theme_dir/gdm-customizer-background"
+    fi
+
+    css="$(build_custom_css)"
+    append_css_to_theme "$theme_dir" "$css"
+
+    build_resource_xml "$theme_dir" "$xml"
+
+    if ! glib-compile-resources \
+        --sourcedir="$theme_dir" \
+        --target="$compiled" \
+        "$xml"; then
+        rm -rf "$work"
+        die "Failed to compile the GDM theme. The active theme was not changed."
+    fi
+
+    if ! gresource list "$compiled" >/dev/null 2>&1; then
+        rm -rf "$work"
+        die "The compiled GResource failed validation. The active theme was not changed."
+    fi
+
+    install -m 0644 "$compiled" "$CUSTOM_RESOURCE"
+
+    update-alternatives --install \
+        "$GDM_LINK" \
+        "$ALT_NAME" \
+        "$CUSTOM_RESOURCE" \
+        5
+
+    update-alternatives --set "$ALT_NAME" "$CUSTOM_RESOURCE"
+
+    rm -rf "$work"
+
+    [[ "$(current_resource)" == "$CUSTOM_RESOURCE" ]] ||
+        die "The custom resource was created but did not become active."
+}
+
+# ------------------------------------------------------------
+# Appearance
+# ------------------------------------------------------------
+
+wallpaper_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "              Wallpaper"
+        echo "========================================"
+        echo
+        echo "Current: $(state_get_or background_type "Ubuntu default")"
+        if state_has background_image; then
+            echo "Image:   $(state_get background_image)"
+        fi
+        echo "Adjust:  $(state_get_or background_adjust zoom)"
+        echo
+        echo "1) Choose Wallpaper Image"
+        echo "2) Image Adjustment"
+        echo "3) Use Solid Background Color"
+        echo "4) Restore Default Background"
+        echo "B) Back"
+        echo
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1)
+                local image
+                if image="$(ask_back_path "Choose Wallpaper" image)"; then
+                    ensure_dirs
+                    local ext
+                    ext="$(image_extension "$image")"
+                    rm -f "${APP_DIR}/wallpaper.jpg" "${APP_DIR}/wallpaper.png" "${APP_DIR}/wallpaper.webp"
+                    local dest="${APP_DIR}/wallpaper.${ext}"
+                    install -m 0644 "$image" "$dest"
+                    state_set background_type image
+                    state_set background_image "$dest"
+                    state_set background_adjust "$(state_get_or background_adjust zoom)"
+                    apply_resource_state
+                    echo
+                    echo "Wallpaper updated."
+                    pause
+                fi
+                ;;
+            2)
+                while true; do
+                    clear
+                    echo "========================================"
+                    echo "          Wallpaper Adjustment"
+                    echo "========================================"
+                    echo
+                    echo "1) Zoom / Fill Screen"
+                    echo "2) Repeat / Tile"
+                    echo "B) Back"
+                    echo
+                    read -r -p "Choose: " sub
+                    case "$sub" in
+                        1) state_set background_adjust zoom; apply_resource_state; pause; break ;;
+                        2) state_set background_adjust repeat; apply_resource_state; pause; break ;;
+                        b|B) break ;;
+                    esac
+                done
+                ;;
+            3)
+                local color
+                if color="$(ask_hex_color "Background Color")"; then
+                    state_set background_type color
+                    state_set background_color "$color"
+                    apply_resource_state
+                    echo
+                    echo "Background color updated."
+                    pause
+                fi
+                ;;
+            4)
+                state_unset background_type
+                state_unset background_image
+                state_unset background_color
+                state_unset background_adjust
+                rm -f "${APP_DIR}/wallpaper.jpg" "${APP_DIR}/wallpaper.png" "${APP_DIR}/wallpaper.webp"
+                apply_resource_state
+                echo
+                echo "Background returned to the stock theme."
+                pause
+                ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+accent_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "             Accent Color"
+        echo "========================================"
+        echo
+        echo "Current override: $(state_get_or accent_color "Ubuntu default")"
+        echo
+        echo "1) Blue"
+        echo "2) Teal"
+        echo "3) Green"
+        echo "4) Yellow"
+        echo "5) Orange"
+        echo "6) Red"
+        echo "7) Pink"
+        echo "8) Purple"
+        echo "9) Slate"
+        echo "D) Ubuntu Default"
+        echo "B) Back"
+        echo
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1) state_set accent_color blue ;;
+            2) state_set accent_color teal ;;
+            3) state_set accent_color green ;;
+            4) state_set accent_color yellow ;;
+            5) state_set accent_color orange ;;
+            6) state_set accent_color red ;;
+            7) state_set accent_color pink ;;
+            8) state_set accent_color purple ;;
+            9) state_set accent_color slate ;;
+            d|D) state_unset accent_color ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+
+        rebuild_dconf
+        pause
+    done
+}
+
+color_scheme_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "             Color Scheme"
+        echo "========================================"
+        echo
+        echo "Current override: $(state_get_or color_scheme "Ubuntu default")"
+        echo
+        echo "1) Default"
+        echo "2) Prefer Light"
+        echo "3) Remove Override"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set color_scheme default ;;
+            2) state_set color_scheme prefer-light ;;
+            3) state_unset color_scheme ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+simple_text_setting() {
+    local title="$1" key="$2"
+    local val
+    if val="$(ask_text "$title")"; then
+        state_set "$key" "$val"
+        rebuild_dconf
+        echo
+        echo "Updated."
+        pause
+    fi
+}
+
+cursor_size_setting() {
+    local val
+    if val="$(ask_integer_range "Cursor Size" 8 128)"; then
+        state_set cursor_size "$val"
+        rebuild_dconf
+        pause
+    fi
+}
+
+shell_theme_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "          Custom Shell Theme"
+        echo "========================================"
+        echo
+        echo "Current: $(state_get_or shell_theme_dir "Stock Ubuntu/Yaru")"
+        echo
+        echo "1) Choose Theme Directory"
+        echo "2) Restore Stock Shell Theme"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1)
+                local dir
+                if dir="$(ask_back_path "Choose GNOME Shell Theme Directory" dir)"; then
+                    if [[ -d "$dir/gnome-shell" ]]; then
+                        if ! find "$dir/gnome-shell" -maxdepth 1 -name '*.css' -type f | grep -q .; then
+                            echo "No GNOME Shell CSS files found."
+                            pause
+                            continue
+                        fi
+                    elif ! find "$dir" -maxdepth 1 -name '*.css' -type f | grep -q .; then
+                        echo "No GNOME Shell CSS files found."
+                        pause
+                        continue
+                    fi
+                    state_set shell_theme_dir "$dir"
+                    apply_resource_state
+                    pause
+                fi
+                ;;
+            2)
+                state_unset shell_theme_dir
+                apply_resource_state
+                pause
+                ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+appearance_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "              Appearance"
+        echo "========================================"
+        echo
+        echo "1) Wallpaper / Background"
+        echo "2) Accent Color"
+        echo "3) Color Scheme"
+        echo "4) Icon Theme"
+        echo "5) Cursor Theme"
+        echo "6) Cursor Size"
+        echo "7) Custom Shell Theme"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1) wallpaper_menu ;;
+            2) accent_menu ;;
+            3) color_scheme_menu ;;
+            4) simple_text_setting "Icon Theme Name" icon_theme ;;
+            5) simple_text_setting "Cursor Theme Name" cursor_theme ;;
+            6) cursor_size_setting ;;
+            7) shell_theme_menu ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Fonts
+# ------------------------------------------------------------
+
+antialias_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "            Font Antialiasing"
+        echo "========================================"
+        echo "1) None"
+        echo "2) Grayscale"
+        echo "3) RGBA"
+        echo "D) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set font_antialias none ;;
+            2) state_set font_antialias grayscale ;;
+            3) state_set font_antialias rgba ;;
+            d|D) state_unset font_antialias ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+hinting_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "              Font Hinting"
+        echo "========================================"
+        echo "1) None"
+        echo "2) Slight"
+        echo "3) Medium"
+        echo "4) Full"
+        echo "D) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set font_hinting none ;;
+            2) state_set font_hinting slight ;;
+            3) state_set font_hinting medium ;;
+            4) state_set font_hinting full ;;
+            d|D) state_unset font_hinting ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+font_scale_setting() {
+    local val
+    if val="$(ask_number_range "Text Scaling Factor" 0.5 3.0)"; then
+        state_set text_scale "$val"
+        rebuild_dconf
+        pause
+    fi
+}
+
+fonts_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "                 Fonts"
+        echo "========================================"
+        echo
+        echo "1) Font Name"
+        echo "2) Antialiasing"
+        echo "3) Hinting"
+        echo "4) Text Scaling Factor"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1) simple_text_setting "Font Name (example: Ubuntu Sans 11)" font_name ;;
+            2) antialias_menu ;;
+            3) hinting_menu ;;
+            4) font_scale_setting ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Top bar
+# ------------------------------------------------------------
+
+clock_format_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "             Clock Format"
+        echo "========================================"
+        echo "1) 12-hour"
+        echo "2) 24-hour"
+        echo "D) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set clock_format 12h ;;
+            2) state_set clock_format 24h ;;
+            d|D) state_unset clock_format ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+top_color_setting() {
+    local title="$1" key="$2"
+    local color
+    if color="$(ask_hex_color "$title")"; then
+        state_set "$key" "$color"
+        apply_resource_state
+        pause
+    fi
+}
+
+top_bar_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "               Top Bar"
+        echo "========================================"
+        echo
+        echo "1) Clock Format"
+        echo "2) Show Date"
+        echo "3) Show Weekday"
+        echo "4) Show Seconds"
+        echo "5) Show Battery Percentage"
+        echo "6) Disable Menu Arrows"
+        echo "7) Disable Rounded Corners"
+        echo "8) Top Bar Text Color"
+        echo "9) Top Bar Background Color"
+        echo "10) Remove Custom Top Bar Colors"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1) clock_format_menu ;;
+            2) toggle_menu "Show Date" clock_date ;;
+            3) toggle_menu "Show Weekday" clock_weekday ;;
+            4) toggle_menu "Show Seconds" clock_seconds ;;
+            5) toggle_menu "Show Battery Percentage" show_battery ;;
+            6) toggle_menu "Disable Menu Arrows" top_disable_arrows resource ;;
+            7) toggle_menu "Disable Rounded Corners" top_disable_corners resource ;;
+            8) top_color_setting "Top Bar Text Color" top_text_color ;;
+            9) top_color_setting "Top Bar Background Color" top_background_color ;;
+            10)
+                state_unset top_text_color
+                state_unset top_background_color
+                apply_resource_state
+                pause
+                ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Accessibility
+# ------------------------------------------------------------
+
+accessibility_menu() {
+    toggle_menu "Always Show Accessibility Menu" a11y_always
+}
+
+# ------------------------------------------------------------
+# Sound
+# ------------------------------------------------------------
+
+sound_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "                 Sound"
+        echo "========================================"
+        echo
+        echo "1) Sound Theme"
+        echo "2) Event Sounds"
+        echo "3) Input Feedback Sounds"
+        echo "4) Allow Volume Above 100%"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) simple_text_setting "Sound Theme Name (example: Yaru)" sound_theme ;;
+            2) toggle_menu "Event Sounds" event_sounds ;;
+            3) toggle_menu "Input Feedback Sounds" feedback_sounds ;;
+            4) toggle_menu "Allow Volume Above 100%" over_amplification ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Mouse
+# ------------------------------------------------------------
+
+mouse_accel_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "          Pointer Acceleration"
+        echo "========================================"
+        echo
+        echo "1) Default"
+        echo "2) Flat"
+        echo "3) Adaptive"
+        echo "D) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set mouse_accel default ;;
+            2) state_set mouse_accel flat ;;
+            3) state_set mouse_accel adaptive ;;
+            d|D) state_unset mouse_accel ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+mouse_speed_setting() {
+    local val
+    if val="$(ask_number_range "Mouse Speed" -1.0 1.0)"; then
+        state_set mouse_speed "$val"
+        rebuild_dconf
+        pause
+    fi
+}
+
+mouse_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "                 Mouse"
+        echo "========================================"
+        echo
+        echo "1) Pointer Acceleration"
+        echo "2) Natural Scrolling"
+        echo "3) Pointer Speed"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) mouse_accel_menu ;;
+            2) toggle_menu "Mouse Natural Scrolling" mouse_natural ;;
+            3) mouse_speed_setting ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Touchpad
+# ------------------------------------------------------------
+
+touchpad_mode_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "            Touchpad Enabled"
+        echo "========================================"
+        echo
+        echo "1) Enabled"
+        echo "2) Disabled"
+        echo "3) Disabled When External Mouse Is Connected"
+        echo "D) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set touchpad_send_events enabled ;;
+            2) state_set touchpad_send_events disabled ;;
+            3) state_set touchpad_send_events disabled-on-external-mouse ;;
+            d|D) state_unset touchpad_send_events ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+touchpad_speed_setting() {
+    local val
+    if val="$(ask_number_range "Touchpad Speed" -1.0 1.0)"; then
+        state_set touchpad_speed "$val"
+        rebuild_dconf
+        pause
+    fi
+}
+
+touchpad_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "               Touchpad"
+        echo "========================================"
+        echo
+        echo "1) Enable / Disable"
+        echo "2) Speed"
+        echo "3) Tap To Click"
+        echo "4) Natural Scrolling"
+        echo "5) Two-Finger Scrolling"
+        echo "6) Disable While Typing"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) touchpad_mode_menu ;;
+            2) touchpad_speed_setting ;;
+            3) toggle_menu "Tap To Click" touchpad_tap ;;
+            4) toggle_menu "Touchpad Natural Scrolling" touchpad_natural ;;
+            5) toggle_menu "Two-Finger Scrolling" touchpad_twofinger ;;
+            6) toggle_menu "Disable Touchpad While Typing" touchpad_disable_typing ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Power
+# ------------------------------------------------------------
+
+power_button_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "          Power Button Action"
+        echo "========================================"
+        echo
+        echo "1) Interactive"
+        echo "2) Nothing"
+        echo "3) Suspend"
+        echo "4) Hibernate"
+        echo "D) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set power_button interactive ;;
+            2) state_set power_button nothing ;;
+            3) state_set power_button suspend ;;
+            4) state_set power_button hibernate ;;
+            d|D) state_unset power_button ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+sleep_menu() {
+    local which="$1"
+    local typekey timeoutkey title
+    if [[ "$which" == "ac" ]]; then
+        typekey="sleep_ac_type"
+        timeoutkey="sleep_ac_timeout"
+        title="Sleep On AC Power"
+    else
+        typekey="sleep_battery_type"
+        timeoutkey="sleep_battery_timeout"
+        title="Sleep On Battery"
+    fi
+
+    while true; do
+        clear
+        echo "========================================"
+        printf "          %s\n" "$title"
+        echo "========================================"
+        echo
+        echo "Current action: $(state_get_or "$typekey" "Ubuntu default")"
+        if state_has "$timeoutkey"; then
+            echo "Current timeout: $(state_get "$timeoutkey") seconds"
+        fi
+        echo
+        echo "1) Suspend"
+        echo "2) Do Nothing"
+        echo "3) Set Timeout (minutes)"
+        echo "4) Remove Override"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1) state_set "$typekey" suspend; rebuild_dconf; pause ;;
+            2) state_set "$typekey" nothing; rebuild_dconf; pause ;;
+            3)
+                local mins
+                if mins="$(ask_integer_range "Sleep Timeout In Minutes" 1 1440)"; then
+                    state_set "$timeoutkey" "$((mins * 60))"
+                    rebuild_dconf
+                    pause
+                fi
+                ;;
+            4)
+                state_unset "$typekey"
+                state_unset "$timeoutkey"
+                rebuild_dconf
+                pause
+                ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+blank_screen_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "            Blank Screen"
+        echo "========================================"
+        echo
+        echo "Current idle delay: $(state_get_or idle_delay "Ubuntu default")"
+        echo
+        echo "1) Disable Blank Screen"
+        echo "2) Set Delay (minutes)"
+        echo "3) Use Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set idle_delay 0; rebuild_dconf; pause ;;
+            2)
+                local mins
+                if mins="$(ask_integer_range "Blank Screen Delay In Minutes" 1 1440)"; then
+                    state_set idle_delay "$((mins * 60))"
+                    rebuild_dconf
+                    pause
+                fi
+                ;;
+            3) state_unset idle_delay; rebuild_dconf; pause ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+power_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "                 Power"
+        echo "========================================"
+        echo
+        echo "1) Power Button Action"
+        echo "2) Automatic Power Saver On Low Battery"
+        echo "3) Dim Screen"
+        echo "4) Blank Screen"
+        echo "5) Sleep On AC"
+        echo "6) Sleep On Battery"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) power_button_menu ;;
+            2) toggle_menu "Automatic Power Saver On Low Battery" auto_power_saver ;;
+            3) toggle_menu "Dim Screen" dim_screen ;;
+            4) blank_screen_menu ;;
+            5) sleep_menu ac ;;
+            6) sleep_menu battery ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Night light
+# ------------------------------------------------------------
+
+night_temperature_setting() {
+    local val
+    if val="$(ask_integer_range "Night Light Temperature (Kelvin)" 1000 10000)"; then
+        state_set night_temp "$val"
+        rebuild_dconf
+        pause
+    fi
+}
+
+time_to_decimal() {
+    local value="$1"
+    if [[ "$value" =~ ^([0-9]{1,2}):([0-9]{2})$ ]]; then
+        local h="${BASH_REMATCH[1]}"
+        local m="${BASH_REMATCH[2]}"
+        if (( h >= 0 && h <= 23 && m >= 0 && m <= 59 )); then
+            awk -v h="$h" -v m="$m" 'BEGIN { printf "%.6f\n", h + m/60 }'
+            return 0
+        fi
+    fi
+    return 1
+}
+
+night_time_setting() {
+    local title="$1" key="$2"
+    local input decimal
+
+    while true; do
+        clear
+        echo "========================================"
+        printf "          %s\n" "$title"
+        echo "========================================"
+        echo
+        echo "Enter time in 24-hour HH:MM format."
+        echo "Example: 20:30"
+        echo
+        echo "B) Back"
+        read -r -p "Time: " input
+        case "$input" in
+            b|B|back|BACK) return ;;
+        esac
+
+        if decimal="$(time_to_decimal "$input")"; then
+            state_set "$key" "$decimal"
+            rebuild_dconf
+            pause
+            return
+        fi
+
+        echo "Invalid time."
+        sleep 2
+    done
+}
+
+night_light_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "              Night Light"
+        echo "========================================"
+        echo
+        echo "1) Enable / Disable"
+        echo "2) Temperature"
+        echo "3) Automatic Schedule"
+        echo "4) Custom Start Time"
+        echo "5) Custom End Time"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) toggle_menu "Night Light" night_enabled ;;
+            2) night_temperature_setting ;;
+            3) toggle_menu "Automatic Night Light Schedule" night_auto ;;
+            4) night_time_setting "Night Light Start Time" night_from ;;
+            5) night_time_setting "Night Light End Time" night_to ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Login screen
+# ------------------------------------------------------------
+
+logo_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "             Logo Settings"
+        echo "========================================"
+        echo
+        echo "Current: $(state_get_or logo_enabled "Ubuntu default")"
+        echo
+        echo "1) Choose Logo Image"
+        echo "2) Turn Logo On"
+        echo "3) Turn Logo Off"
+        echo "4) Use Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+
+        case "$choice" in
+            1)
+                local image ext dest
+                if image="$(ask_back_path "Choose Logo Image" image)"; then
+                    ext="$(image_extension "$image")"
+                    ensure_dirs
+                    rm -f "${APP_DIR}/logo.jpg" "${APP_DIR}/logo.png" "${APP_DIR}/logo.webp"
+                    dest="${APP_DIR}/logo.${ext}"
+                    install -m 0644 "$image" "$dest"
+                    state_set logo_enabled true
+                    rebuild_dconf
+                    pause
+                fi
+                ;;
+            2)
+                if find "$APP_DIR" -maxdepth 1 -type f \
+                   \( -name 'logo.jpg' -o -name 'logo.png' -o -name 'logo.webp' \) |
+                   grep -q .; then
+                    state_set logo_enabled true
+                    rebuild_dconf
+                else
+                    echo
+                    echo "Choose a logo image first."
+                fi
+                pause
+                ;;
+            3) state_set logo_enabled false; rebuild_dconf; pause ;;
+            4) state_unset logo_enabled; rebuild_dconf; pause ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+banner_text_setting() {
+    local text
+    if text="$(ask_text "Welcome Message")"; then
+        state_set banner_text "$text"
+        state_set banner_enabled true
+        rebuild_dconf
+        pause
+    fi
+}
+
+restart_buttons_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "        Restart / Power Buttons"
+        echo "========================================"
+        echo
+        echo "1) Show Buttons"
+        echo "2) Hide Buttons"
+        echo "3) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set disable_restart false ;;
+            2) state_set disable_restart true ;;
+            3) state_unset disable_restart ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+user_list_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "               User List"
+        echo "========================================"
+        echo
+        echo "1) Show User List"
+        echo "2) Hide User List"
+        echo "3) Ubuntu Default"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) state_set disable_user_list false ;;
+            2) state_set disable_user_list true ;;
+            3) state_unset disable_user_list ;;
+            b|B) return ;;
+            *) continue ;;
+        esac
+        rebuild_dconf
+        pause
+    done
+}
+
+login_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "             Login Screen"
+        echo "========================================"
+        echo
+        echo "1) Logo"
+        echo "2) Set Welcome Message"
+        echo "3) Welcome Message On / Off"
+        echo "4) Large Welcome Message"
+        echo "5) User List"
+        echo "6) Restart / Power Buttons"
+        echo "7) Fingerprint Authentication"
+        echo "B) Back"
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) logo_menu ;;
+            2) banner_text_setting ;;
+            3) toggle_menu "Welcome Message" banner_enabled ;;
+            4) toggle_menu "Large Welcome Message" banner_large resource ;;
+            5) user_list_menu ;;
+            6) restart_buttons_menu ;;
+            7) toggle_menu "Fingerprint Authentication" fingerprint ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Display
+# ------------------------------------------------------------
+
+apply_current_display() {
+    local user_home source
+    user_home="$(calling_user_home)"
+    source="${user_home}/.config/monitors.xml"
+
+    if [[ ! -s "$source" ]]; then
+        echo
+        echo "No usable monitors.xml was found at:"
+        echo "  $source"
+        pause
+        return
+    fi
+
+    ensure_dirs
+
+    if [[ ! -f "$PREVIOUS_MONITORS" && ! -f "$MONITORS_MARKER" ]]; then
+        if [[ -f /etc/xdg/monitors.xml ]]; then
+            cp -a /etc/xdg/monitors.xml "$PREVIOUS_MONITORS"
+        else
+            touch "$MONITORS_MARKER"
+        fi
+    fi
+
+    install -Dm644 "$source" /etc/xdg/monitors.xml
+
+    machinectl shell "${GDM_USER}@" /usr/bin/env \
+        DCONF_PROFILE=gdm \
+        gsettings set org.gnome.mutter experimental-features \
+        "['scale-monitor-framebuffer']" >/dev/null 2>&1 || true
+
+    echo
+    echo "Current desktop display configuration copied to GDM."
+    echo "Installed as /etc/xdg/monitors.xml"
+    pause
+}
+
+restore_display() {
+    if [[ -f "$PREVIOUS_MONITORS" ]]; then
+        install -Dm644 "$PREVIOUS_MONITORS" /etc/xdg/monitors.xml
+        rm -f "$PREVIOUS_MONITORS"
+    elif [[ -f "$MONITORS_MARKER" ]]; then
+        rm -f /etc/xdg/monitors.xml
+        rm -f "$MONITORS_MARKER"
+    else
+        echo
+        echo "GDM Customizer has no saved display configuration to restore."
+        pause
+        return
+    fi
+
+    echo
+    echo "Display configuration restored."
+    pause
+}
+
+display_menu() {
+    while true; do
+        clear
+        echo "========================================"
+        echo "                Display"
+        echo "========================================"
+        echo
+        echo "1) Apply Current User Display Configuration To GDM"
+        echo "2) Restore Previous GDM Display Configuration"
+        echo "B) Back"
+        echo
+        echo "GNOME 49+ uses /etc/xdg/monitors.xml for GDM."
+        echo
+        read -r -p "Choose: " choice
+        case "$choice" in
+            1) apply_current_display ;;
+            2) restore_display ;;
+            b|B) return ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------
+# Status and restore
+# ------------------------------------------------------------
+
+show_status() {
+    clear
+    echo "================================================"
+    echo "                 GDM STATUS"
+    echo "================================================"
+    echo
+    printf "%-24s %s\n" "GDM user:" "$GDM_USER"
+    printf "%-24s " "GDM:"
+    gdm3 --version 2>/dev/null || echo Unknown
+    printf "%-24s " "GNOME Shell:"
+    gnome-shell --version 2>/dev/null || echo Unknown
+
+    echo
+    echo "Theme resource:"
+    echo "  $(current_resource)"
+
+    if [[ "$(current_resource)" == "$CUSTOM_RESOURCE" ]]; then
+        echo "  Custom GResource: ACTIVE"
+    else
+        echo "  Custom GResource: inactive"
+    fi
+
+    echo
+    echo "Effective GDM interface settings:"
+    printf "  %-22s %s\n" "Accent:" "$(gdm_get org.gnome.desktop.interface accent-color)"
+    printf "  %-22s %s\n" "Clock format:" "$(gdm_get org.gnome.desktop.interface clock-format)"
+    printf "  %-22s %s\n" "Date:" "$(gdm_get org.gnome.desktop.interface clock-show-date)"
+    printf "  %-22s %s\n" "Weekday:" "$(gdm_get org.gnome.desktop.interface clock-show-weekday)"
+    printf "  %-22s %s\n" "Seconds:" "$(gdm_get org.gnome.desktop.interface clock-show-seconds)"
+    printf "  %-22s %s\n" "Font:" "$(gdm_get org.gnome.desktop.interface font-name)"
+    printf "  %-22s %s\n" "Icon theme:" "$(gdm_get org.gnome.desktop.interface icon-theme)"
+    printf "  %-22s %s\n" "Cursor theme:" "$(gdm_get org.gnome.desktop.interface cursor-theme)"
+
+    echo
+    echo "Effective login-screen settings:"
+    printf "  %-22s %s\n" "Logo:" "$(gdm_get org.gnome.login-screen logo)"
+    printf "  %-22s %s\n" "Banner enabled:" "$(gdm_get org.gnome.login-screen banner-message-enable)"
+    printf "  %-22s %s\n" "Banner text:" "$(gdm_get org.gnome.login-screen banner-message-text)"
+    printf "  %-22s %s\n" "User list disabled:" "$(gdm_get org.gnome.login-screen disable-user-list)"
+    printf "  %-22s %s\n" "Restart disabled:" "$(gdm_get org.gnome.login-screen disable-restart-buttons)"
+
+    echo
+    if [[ -f "$DCONF_FILE" ]]; then
+        echo "Customizer dconf:"
+        echo "  $DCONF_FILE"
+    else
+        echo "Customizer dconf: none"
+    fi
+
+    echo
+    echo "Saved custom state:"
+    if [[ -d "$STATE_DIR" ]] && find "$STATE_DIR" -maxdepth 1 -type f | grep -q .; then
+        local f
+        while IFS= read -r f; do
+            printf "  %-28s %s\n" "$(basename "$f"):" "$(cat "$f")"
+        done < <(find "$STATE_DIR" -maxdepth 1 -type f | sort)
+    else
+        echo "  none"
+    fi
+
+    echo
+    echo "Display config:"
+    if [[ -f /etc/xdg/monitors.xml ]]; then
+        echo "  /etc/xdg/monitors.xml exists"
+    else
+        echo "  no /etc/xdg/monitors.xml"
+    fi
+
+    echo
+    echo "================================================"
+    pause
+}
+
+restore_all() {
+    clear
+    echo "================================================"
+    echo "            Restore Customizations"
+    echo "================================================"
+    echo
+    echo "This removes ONLY changes owned by GDM Customizer:"
+    echo
+    echo "  - its custom GResource alternative"
+    echo "  - its 99-gdm-customizer dconf file"
+    echo "  - its saved logo/wallpaper/theme state"
+    echo "  - its display file only if this tool installed it"
+    echo
+    echo "Other GDM configuration files are left alone."
+    echo
+    read -r -p "Continue? [y/N]: " answer
+
+    case "$answer" in
+        y|Y|yes|YES) ;;
+        *) return ;;
+    esac
+
+    restore_resource
+
+    rm -f "$DCONF_FILE"
+    dconf update
+
+    if [[ -f "$PREVIOUS_MONITORS" ]]; then
+        install -Dm644 "$PREVIOUS_MONITORS" /etc/xdg/monitors.xml
+    elif [[ -f "$MONITORS_MARKER" ]]; then
+        rm -f /etc/xdg/monitors.xml
+    fi
+
+    rm -rf "$STATE_DIR"
+    rm -f \
+        "$PREVIOUS_THEME" \
+        "$PREVIOUS_MONITORS" \
+        "$MONITORS_MARKER" \
+        "${APP_DIR}/logo.jpg" "${APP_DIR}/logo.png" "${APP_DIR}/logo.webp" \
+        "${APP_DIR}/wallpaper.jpg" "${APP_DIR}/wallpaper.png" "${APP_DIR}/wallpaper.webp" \
+        "$CUSTOM_RESOURCE"
+
+    rmdir "$APP_DIR" 2>/dev/null || true
+
+    echo
+    echo "GDM Customizer settings restored."
+    echo "Log out or reboot to see all changes."
+    pause
+}
+
+# ------------------------------------------------------------
+# Main menu
+# ------------------------------------------------------------
+
+main_menu() {
+    while true; do
+        clear
+        echo "================================================"
+        echo "          GDM Customizer - Ubuntu 26.04"
+        echo "================================================"
+        echo
+        echo "1) Appearance"
+        echo "2) Fonts"
+        echo "3) Top Bar"
+        echo "4) Accessibility"
+        echo "5) Sound"
+        echo "6) Mouse"
+        echo "7) Touchpad"
+        echo "8) Power"
+        echo "9) Night Light"
+        echo "10) Login Screen"
+        echo "11) Display"
+        echo "12) Show Status"
+        echo "13) Restore Customizations"
+        echo "0) Exit"
+        echo
+        read -r -p "Choose an option: " choice
+
+        case "$choice" in
+            1) appearance_menu ;;
+            2) fonts_menu ;;
+            3) top_bar_menu ;;
+            4) accessibility_menu ;;
+            5) sound_menu ;;
+            6) mouse_menu ;;
+            7) touchpad_menu ;;
+            8) power_menu ;;
+            9) night_light_menu ;;
+            10) login_menu ;;
+            11) display_menu ;;
+            12) show_status ;;
+            13) restore_all ;;
+            0)
+                clear
+                echo "GDM Customizer closed."
+                echo
+                exit 0
+                ;;
+        esac
+    done
+}
+
+require_root
+check_commands
+ensure_dirs
+ensure_gdm_dconf
+main_menu
+
+
+END WORKING GDM CUSTOMIZER PROTOTYPE
+====================================
+
+============================================================
+FINAL DELIVERABLES
+============================================================
+
+Deliver all of the following:
+
+1. Complete source tree.
+2. GTK4/Libadwaita application.
+3. Desktop GSettings backend.
+4. GNOME Shell companion.
+5. Dock implementation.
+6. Blur implementation.
+7. Shell appearance renderer.
+8. PolicyKit action.
+9. D-Bus helper.
+10. GDM dconf backend.
+11. GDM GResource builder.
+12. Safe GDM restore.
+13. Theme manifest specification.
+14. JSON Schema for .gctheme if used.
+15. Theme import/export.
+16. Theme Builder.
+17. Theme preview.
+18. Sample themes.
+19. Status/diagnostics page.
+20. App icon.
+21. Desktop file.
+22. AppStream metadata.
+23. Debian packaging.
+24. amd64 .deb.
+25. arm64 .deb.
+26. README.
+27. Build instructions.
+28. Installation instructions.
+29. Uninstallation/purge behavior documentation.
+30. Theme-author documentation.
+31. Security model documentation.
+32. Known limitations.
+33. Test checklist/results for Ubuntu 26.04 GNOME 50.1+.
+
+Do not provide only pseudocode.
+
+Do not provide only screenshots.
+
+Do not leave major pages as placeholders.
+
+Do not claim success for a feature that has not been wired to the real backend.
+
+The final result should be a cohesive, modern GNOME customization product that can plausibly become a public application and a safe theme-sharing ecosystem.

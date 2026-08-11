@@ -1,0 +1,9 @@
+{
+  "uuid": "gnome-customizer@io.github.gnomecustomizer",
+  "name": "GNOME Customizer Shell Companion",
+  "description": "Focused dock, blur, and Shell appearance renderer for GNOME Customizer",
+  "shell-version": ["50"],
+  "settings-schema": "io.github.gnomecustomizer.shell",
+  "version": 13,
+  "url": "https://github.com/uk2010/gnome-customizer"
+}

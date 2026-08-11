@@ -1,0 +1,302 @@
+#!@PYTHON@
+from __future__ import annotations
+
+import base64, hashlib, io, json, os, pwd, re, shutil, subprocess, tempfile, gi
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from xml.etree import ElementTree
+from xml.sax.saxutils import escape as xml_escape
+from PIL import Image
+gi.require_version("Polkit", "1.0")
+from gi.repository import Gio, GLib, Polkit
+
+BUS="io.github.gnomecustomizer.SystemHelper"; PATH="/io/github/gnomecustomizer/SystemHelper"; ACTION="io.github.gnomecustomizer.modify-system"
+ROOT=Path("/usr/local/share/gnome-customizer"); STATE=ROOT/"state"; ASSETS=ROOT/"assets"
+DCONF=Path("/etc/dconf/db/gdm.d/99-gdm-customizer"); PROFILE=Path("/etc/dconf/profile/gdm")
+RESOURCE=ROOT/"gnome-shell-theme.gresource"; LINK=Path("/usr/share/gnome-shell/gdm-theme.gresource"); ALT="gdm-theme.gresource"
+PREVIOUS=STATE/"previous-resource"; PREV_MON=STATE/"monitors.xml.previous"; MON_MARK=STATE/"monitors-created"
+GDM_STATE=STATE/"gdm-settings.json"; PROFILE_MARK=STATE/"profile-created"
+RESOURCE_STATE=STATE/"resource-settings.json"
+MONITORS=Path("/etc/xdg/monitors.xml")
+YARU=Path("/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"); STOCK=Path("/usr/share/gnome-shell/gnome-shell-theme.gresource")
+MAX_PAYLOAD=56*1024*1024; MAX_ASSET=20*1024*1024
+COMPILE_RESOURCES="/usr/bin/glib-compile-resources"
+INTROSPECTION=Path("/usr/share/dbus-1/interfaces/io.github.gnomecustomizer.SystemHelper.xml")
+COL=re.compile(r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
+ALLOWED={
+ "org.gnome.desktop.interface": {"accent-color":str,"color-scheme":str,"cursor-theme":str,"cursor-size":int,"icon-theme":str,"show-battery-percentage":bool,"clock-show-date":bool,"clock-show-seconds":bool,"clock-show-weekday":bool,"clock-format":str,"font-name":str,"font-antialiasing":str,"font-hinting":str,"text-scaling-factor":float},
+ "org.gnome.desktop.a11y":{"always-show-universal-access-status":bool},
+ "org.gnome.desktop.sound":{"theme-name":str,"event-sounds":bool,"input-feedback-sounds":bool,"allow-volume-above-100-percent":bool},
+ "org.gnome.desktop.peripherals.mouse":{"accel-profile":str,"left-handed":bool,"natural-scroll":bool,"speed":float,"middle-click-emulation":bool,"double-click":int,"drag-threshold":int},
+ "org.gnome.desktop.peripherals.touchpad":{"send-events":str,"accel-profile":str,"speed":float,"tap-to-click":bool,"tap-and-drag":bool,"tap-and-drag-lock":bool,"natural-scroll":bool,"two-finger-scrolling-enabled":bool,"edge-scrolling-enabled":bool,"click-method":str,"left-handed":str,"middle-click-emulation":bool,"disable-while-typing":bool,"disable-while-typing-timeout":int},
+ "org.gnome.settings-daemon.plugins.power":{"power-button-action":str,"power-saver-profile-on-low-battery":bool,"dim-screen":bool,"idle-dim":bool,"idle-brightness":int,"ambient-enabled":bool,"sleep-inactive-ac-type":str,"sleep-inactive-ac-timeout":int,"sleep-inactive-battery-type":str,"sleep-inactive-battery-timeout":int},
+ "org.gnome.desktop.session":{"idle-delay":int}, "org.gnome.settings-daemon.plugins.color":{"night-light-enabled":bool,"night-light-temperature":int,"night-light-schedule-automatic":bool,"night-light-schedule-from":float,"night-light-schedule-to":float},
+ "org.gnome.login-screen":{"logo":str,"banner-message-enable":bool,"banner-message-text":str,"disable-restart-buttons":bool,"disable-user-list":bool,"enable-fingerprint-authentication":bool}
+}
+
+def run(argv, input=None, timeout=60):
+ return subprocess.run(argv,input=input,text=True,capture_output=True,check=True,timeout=timeout)
+def atomic(path:Path,data:bytes,mode=0o644):
+ path.parent.mkdir(parents=True,exist_ok=True); fd,tmp=tempfile.mkstemp(prefix="."+path.name+"-",dir=path.parent)
+ try:
+  with os.fdopen(fd,"wb") as f: f.write(data); f.flush(); os.fsync(f.fileno())
+  os.chmod(tmp,mode); os.replace(tmp,path)
+ finally:
+  try: os.unlink(tmp)
+  except FileNotFoundError: pass
+def current():
+ try:
+  if not LINK.exists():return None
+  return Path(os.path.realpath(LINK))
+ except OSError:return None
+def base_resource():
+ for p in (YARU,STOCK,current()):
+  if p and p.is_file() and p != RESOURCE:return p
+ raise ValueError("No valid stock GDM resource is installed")
+def safe_string(v): return "'"+v.replace("\\","\\\\").replace("'","\\'").replace("\r","\\r").replace("\n","\\n").replace("\t","\\t")+"'"
+def css_rgba(value,opacity=1.0):
+ raw=value.lstrip("#");alpha=(int(raw[6:8],16)/255 if len(raw)==8 else 1.0)*opacity
+ return f"rgba({int(raw[0:2],16)}, {int(raw[2:4],16)}, {int(raw[4:6],16)}, {max(0,min(1,alpha)):.3f})"
+def validate_setting(schema,key,value):
+ if isinstance(value,str):
+  if len(value)>4096 or any(ord(c)<32 and c not in "\n\t" for c in value):raise ValueError(f"Invalid text for {key}")
+ enums={"accent-color":{"blue","teal","green","yellow","orange","red","pink","purple","slate","brown"},"color-scheme":{"default","prefer-light","prefer-dark"},"clock-format":{"12h","24h"},"font-antialiasing":{"none","grayscale","rgba"},"font-hinting":{"none","slight","medium","full"},"accel-profile":{"default","flat","adaptive"},"send-events":{"enabled","disabled","disabled-on-external-mouse"},"click-method":{"default","none","areas","fingers"},"left-handed":{"right","left","mouse"},"power-button-action":{"interactive","nothing","suspend","hibernate"},"sleep-inactive-ac-type":{"nothing","suspend","hibernate"},"sleep-inactive-battery-type":{"nothing","suspend","hibernate"}}
+ if key in enums and isinstance(value,str) and value not in enums[key]:raise ValueError(f"Unsupported value for {key}")
+ if key=="logo" and value:
+  logo=Path(value)
+  if logo.parent!=ASSETS or logo.name not in {"logo.png","logo.jpg","logo.webp"}:raise ValueError("Logo must be an installed GNOME Customizer asset")
+ bounds={"cursor-size":(8,128),"text-scaling-factor":(.5,3),"speed":(-1,1),"double-click":(100,5000),"drag-threshold":(1,100),"disable-while-typing-timeout":(100,5000),"idle-brightness":(0,100),"sleep-inactive-ac-timeout":(0,86400),"sleep-inactive-battery-timeout":(0,86400),"idle-delay":(0,86400),"night-light-temperature":(1000,10000),"night-light-schedule-from":(0,24),"night-light-schedule-to":(0,24)}
+ if key in bounds and not bounds[key][0]<=value<=bounds[key][1]:raise ValueError(f"Value out of range for {key}")
+def require_dict(raw):
+ if len(raw)>MAX_PAYLOAD:raise ValueError("Request is too large")
+ value=json.loads(raw or "{}")
+ if not isinstance(value,dict):raise ValueError("Request must be an object")
+ return value
+def gdm_user():
+ for name in ("gdm","Debian-gdm"):
+  try:pwd.getpwnam(name);return name
+  except KeyError:pass
+ return None
+
+class Helper:
+ def __init__(self,connection):self.connection=connection
+ def authorize(self,sender):
+  reply=self.connection.call_sync("org.freedesktop.DBus","/org/freedesktop/DBus","org.freedesktop.DBus","GetConnectionUnixProcessID",GLib.Variant("(s)",(sender,)),GLib.VariantType("(u)"),Gio.DBusCallFlags.NONE,5000,None)
+  pid=reply.unpack()[0]
+  uid_reply=self.connection.call_sync("org.freedesktop.DBus","/org/freedesktop/DBus","org.freedesktop.DBus","GetConnectionUnixUser",GLib.Variant("(s)",(sender,)),GLib.VariantType("(u)"),Gio.DBusCallFlags.NONE,5000,None)
+  uid=uid_reply.unpack()[0]
+  try:tail=Path(f"/proc/{pid}/stat").read_text().rsplit(") ",1)[1].split();start_time=int(tail[19])
+  except (OSError,ValueError,IndexError):raise PermissionError("Could not verify the requesting process")
+  subject=Polkit.UnixProcess.new_for_owner(pid,start_time,uid)
+  result=Polkit.Authority.get_sync(None).check_authorization_sync(subject,ACTION,None,Polkit.CheckAuthorizationFlags.ALLOW_USER_INTERACTION,None)
+  if not result.get_is_authorized():raise PermissionError("Administrator authentication was cancelled or denied")
+ def dconf(self,p):
+  incoming=p.get("settings");
+  if not isinstance(incoming,dict):raise ValueError("settings must be an object")
+  try:settings=json.loads(GDM_STATE.read_text())
+  except (OSError,json.JSONDecodeError):settings={}
+  if not isinstance(settings,dict):settings={}
+  for schema,values in incoming.items():
+   if not isinstance(values,dict):raise ValueError("Schema settings must be an object")
+   settings.setdefault(schema,{}).update(values)
+  lines=[]
+  for schema,values in settings.items():
+   if schema not in ALLOWED or not isinstance(values,dict):raise ValueError("Unsupported GDM schema")
+   lines.append("["+schema.replace(".","/")+"]")
+   for key,value in values.items():
+    typ=ALLOWED[schema].get(key)
+    if typ is None or type(value) is not typ:raise ValueError(f"Invalid {schema} {key}")
+    validate_setting(schema,key,value)
+    if isinstance(value,str): rendered=safe_string(value)
+    elif isinstance(value,bool):rendered=str(value).lower()
+    elif isinstance(value,float):rendered=str(value)
+    elif key in {"idle-delay","night-light-temperature","disable-while-typing-timeout"}:rendered="uint32 "+str(value)
+    else:rendered=str(value)
+    lines.append(f"{key}={rendered}")
+   lines.append("")
+  PROFILE.parent.mkdir(parents=True,exist_ok=True)
+  if not PROFILE.exists():atomic(PROFILE,b"user-db:user\nsystem-db:gdm\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n");STATE.mkdir(parents=True,exist_ok=True);PROFILE_MARK.touch()
+  if lines:atomic(DCONF,("\n".join(lines)).encode())
+  else:
+   try:DCONF.unlink()
+   except FileNotFoundError:pass
+  STATE.mkdir(parents=True,exist_ok=True);atomic(GDM_STATE,(json.dumps(settings,sort_keys=True,indent=2)+"\n").encode(),0o600);run(["/usr/bin/dconf","update"]);return {"settings":sum(len(x) for x in settings.values())}
+ def assets(self,p):
+  assets=p.get("assets");
+  if not isinstance(assets,dict) or len(assets)>2:raise ValueError("Invalid asset collection")
+  ASSETS.mkdir(parents=True,exist_ok=True); installed={}
+  for role,item in assets.items():
+   if role not in {"wallpaper","logo"} or not isinstance(item,dict) or set(item)!={"mime","data"}:raise ValueError("Unsupported asset")
+   mime=item["mime"]
+   if mime not in {"image/png","image/jpeg","image/webp"}:raise ValueError("Unsupported image type")
+   try:data=base64.b64decode(item["data"],validate=True)
+   except Exception:raise ValueError("Malformed image data")
+   if not data or len(data)>MAX_ASSET:raise ValueError("Image exceeds size limit")
+   magic={"image/png":b"\x89PNG\r\n\x1a\n","image/jpeg":b"\xff\xd8\xff","image/webp":b"RIFF"}[mime]
+   if not data.startswith(magic) or (mime=="image/webp" and data[8:12]!=b"WEBP"):raise ValueError("Image content does not match its type")
+   try:
+    with Image.open(io.BytesIO(data)) as image:
+     expected={"image/png":"PNG","image/jpeg":"JPEG","image/webp":"WEBP"}[mime]
+     if image.format!=expected or image.width>16384 or image.height>16384 or image.width*image.height>80_000_000:raise ValueError("Unsafe image dimensions or type")
+     image.verify()
+   except ValueError:raise
+   except Exception:raise ValueError("Image data is corrupt")
+   ext={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"}[mime]; dest=ASSETS/f"{role}.{ext}"
+   for old in ASSETS.glob(role+".*"):old.unlink()
+   atomic(dest,data);installed[role]=str(dest)
+  return {"assets":installed}
+ def resource(self,p):
+  allowed={"wallpaper","background_color","panel_color","panel_color2","panel_gradient_enabled","panel_gradient_direction","panel_text_color","panel_opacity","panel_radius"}
+  if set(p)-allowed:raise ValueError("Unsupported resource property")
+  try:saved=json.loads(RESOURCE_STATE.read_text())
+  except (OSError,json.JSONDecodeError):saved={}
+  if not isinstance(saved,dict):saved={}
+  saved.update(p);p=saved
+  if "background_color" in p and not COL.fullmatch(p["background_color"]):raise ValueError("Invalid background color")
+  for key in ("panel_color","panel_color2","panel_text_color"):
+   if key in p and not COL.fullmatch(p[key]):raise ValueError("Invalid panel color")
+  if "panel_gradient_direction" in p and p["panel_gradient_direction"] not in {"vertical","horizontal"}:raise ValueError("Invalid panel gradient direction")
+  if "panel_gradient_enabled" in p and type(p["panel_gradient_enabled"]) is not bool:raise ValueError("Invalid panel gradient state")
+  if "wallpaper" in p and type(p["wallpaper"]) is not bool:raise ValueError("Invalid wallpaper state")
+  opacity=p.get("panel_opacity",1.0)
+  if type(opacity) not in (int,float) or not 0<=opacity<=1:raise ValueError("Invalid panel opacity")
+  radius=p.get("panel_radius",0)
+  if type(radius) is not int or not 0<=radius<=32:raise ValueError("Invalid panel radius")
+  source=base_resource(); work=Path(tempfile.mkdtemp(prefix="gdm-customizer-")); theme=work/"theme"
+  try:
+   theme.mkdir(); resources=run(["/usr/bin/gresource","list",str(source)]).stdout.splitlines()
+   for item in resources:
+    prefix="/org/gnome/shell/theme/"
+    if not item.startswith(prefix):continue
+    rel=item[len(prefix):]
+    if not rel or ".." in Path(rel).parts or Path(rel).is_absolute():raise ValueError("Stock resource contains an unsafe path")
+    out=theme/rel;out.parent.mkdir(parents=True,exist_ok=True)
+    out.write_bytes(subprocess.run(["/usr/bin/gresource","extract",str(source),item],capture_output=True,check=True).stdout)
+   css="\n/* GNOME Customizer controlled appearance */\n.login-dialog { background: transparent; }\n"
+   if p.get("wallpaper",False):
+    candidates=list(ASSETS.glob("wallpaper.*"))
+    if not candidates:raise ValueError("No installed wallpaper asset")
+    shutil.copy2(candidates[0],theme/"gnome-customizer-background")
+    css+="#lockDialogGroup { background-image: url('resource:///org/gnome/shell/theme/gnome-customizer-background'); background-size: cover; background-position: center; }\n"
+   elif "background_color" in p:css+=f"#lockDialogGroup {{ background-color: {p['background_color']}; }}\n"
+   if "panel_color" in p:
+    if p.get("panel_gradient_enabled",False) and "panel_color2" in p:css+=f"#panel, #panel.login-screen {{ background-gradient-direction: {p.get('panel_gradient_direction','horizontal')}; background-gradient-start: {css_rgba(p['panel_color'],opacity)}; background-gradient-end: {css_rgba(p['panel_color2'],opacity)}; border-radius: {radius}px; }}\n"
+    else:css+=f"#panel, #panel.login-screen {{ background-color: {css_rgba(p['panel_color'],opacity)}; border-radius: {radius}px; }}\n"
+   if "panel_text_color" in p:css+=f"#panel .panel-button, #panel.login-screen .panel-button {{ color: {p['panel_text_color']}; }}\n"
+   found=0
+   for name in ("gdm.css","gnome-shell.css","gnome-shell-dark.css","gnome-shell-light.css","gnome-shell-high-contrast.css"):
+    dest=theme/name
+    if dest.exists():dest.write_text(dest.read_text(errors="strict")+css);found+=1
+   if not found:raise ValueError("Stock resource has no supported GNOME Shell CSS")
+   files=sorted(x.relative_to(theme).as_posix() for x in theme.rglob("*") if x.is_file())
+   xml="<?xml version='1.0' encoding='UTF-8'?><gresources><gresource prefix='/org/gnome/shell/theme'>"+"".join(f"<file>{xml_escape(x)}</file>" for x in files)+"</gresource></gresources>"
+   (work/"resource.xml").write_text(xml); compiled=work/"theme.gresource"
+   run([COMPILE_RESOURCES,f"--sourcedir={theme}",f"--target={compiled}",str(work/"resource.xml")])
+   listed=run(["/usr/bin/gresource","list",str(compiled)]).stdout
+   if "/org/gnome/shell/theme/gdm.css" not in listed:raise ValueError("Compiled resource failed validation")
+   atomic(RESOURCE,compiled.read_bytes());STATE.mkdir(parents=True,exist_ok=True);atomic(RESOURCE_STATE,(json.dumps(p,sort_keys=True,indent=2)+"\n").encode(),0o600);return {"sha256":hashlib.sha256(RESOURCE.read_bytes()).hexdigest()}
+  finally:shutil.rmtree(work)
+ def activate(self,p):
+  if not RESOURCE.is_file():raise ValueError("Custom GDM resource has not been built")
+  STATE.mkdir(parents=True,exist_ok=True)
+  cur=current()
+  if not PREVIOUS.exists() and cur and cur!=RESOURCE:atomic(PREVIOUS,(str(cur)+"\n").encode())
+  run(["/usr/bin/update-alternatives","--install",str(LINK),ALT,str(RESOURCE),"5"]);run(["/usr/bin/update-alternatives","--set",ALT,str(RESOURCE)])
+  if current()!=RESOURCE:raise RuntimeError("Custom resource did not become active")
+  return {"active":True}
+ def restore_resource(self,p):
+  if current()==RESOURCE:
+   targets=[]
+   if PREVIOUS.exists():targets.append(Path(PREVIOUS.read_text().strip()))
+   targets.extend([YARU,STOCK])
+   target=next((x for x in targets if x.is_file() and x!=RESOURCE),None)
+   if not target:raise RuntimeError("No safe stock GDM resource can be restored")
+   run(["/usr/bin/update-alternatives","--set",ALT,str(target)])
+  subprocess.run(["/usr/bin/update-alternatives","--remove",ALT,str(RESOURCE)],capture_output=True)
+  RESOURCE.unlink(missing_ok=True);PREVIOUS.unlink(missing_ok=True)
+  if not p.get("preserve_state"):RESOURCE_STATE.unlink(missing_ok=True)
+  return {"active":False}
+ def monitors(self,p):
+  data=p.get("xml")
+  if not isinstance(data,str) or not data.startswith("<monitors version=") or len(data)>2*1024*1024:raise ValueError("Invalid monitors.xml")
+  if "<!DOCTYPE" in data.upper() or "<!ENTITY" in data.upper():raise ValueError("Unsafe monitors.xml declarations")
+  try:root=ElementTree.fromstring(data)
+  except ElementTree.ParseError:raise ValueError("Malformed monitors.xml")
+  if root.tag!="monitors" or root.get("version") not in {"1","2"}:raise ValueError("Unsupported monitors.xml format")
+  target=MONITORS;STATE.mkdir(parents=True,exist_ok=True)
+  if not PREV_MON.exists() and not MON_MARK.exists():
+   if target.exists():shutil.copy2(target,PREV_MON)
+   else:MON_MARK.touch()
+  atomic(target,data.encode());return {"installed":True}
+ def restore_monitors(self,p):
+  target=MONITORS
+  if PREV_MON.exists():shutil.copy2(PREV_MON,target);PREV_MON.unlink()
+  elif MON_MARK.exists():target.unlink(missing_ok=True);MON_MARK.unlink()
+  return {"restored":True}
+ def restore_all(self,p):
+  self.restore_resource({});self.restore_monitors({});DCONF.unlink(missing_ok=True);run(["/usr/bin/dconf","update"])
+  if ASSETS.exists():shutil.rmtree(ASSETS)
+  GDM_STATE.unlink(missing_ok=True)
+  if PROFILE_MARK.exists():
+   expected=b"user-db:user\nsystem-db:gdm\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n"
+   try:
+    if PROFILE.read_bytes()==expected:PROFILE.unlink()
+   except FileNotFoundError:pass
+   PROFILE_MARK.unlink(missing_ok=True)
+  return {"restored":True}
+ def gdm_get(self,schema,key):
+  user=gdm_user()
+  if not user:return "Unavailable"
+  try:
+   output=run(["/usr/bin/machinectl","shell",user+"@","/usr/bin/env","DCONF_PROFILE=gdm","/usr/bin/gsettings","get",schema,key],timeout=5).stdout.splitlines()
+   return next((line for line in reversed(output) if not line.startswith(("Connected to ","Connection to "))),"Unavailable")
+  except Exception:return "Unavailable"
+ def transaction(self,p):
+  if set(p)-{"assets","resource","settings","monitors"}:raise ValueError("Unsupported transaction operation")
+  work=Path(tempfile.mkdtemp(prefix="gnome-customizer-rollback-")); paths=[DCONF,GDM_STATE,RESOURCE,RESOURCE_STATE,MONITORS,PREVIOUS,PREV_MON,MON_MARK,PROFILE,PROFILE_MARK]
+  snapshots={}; old_active=current()
+  for item in paths:
+   snapshots[item]=(item.exists(),item.read_bytes() if item.is_file() else b"")
+  assets_backup=work/"assets"
+  if ASSETS.exists():shutil.copytree(ASSETS,assets_backup)
+  try:
+   result={}
+   if "assets" in p:result.update(self.assets({"assets":p["assets"]}))
+   if "resource" in p:result.update(self.resource(p["resource"]))
+   if "settings" in p:result.update(self.dconf({"settings":p["settings"]}))
+   if "monitors" in p:result.update(self.monitors({"xml":p["monitors"]}))
+   if "resource" in p:result.update(self.activate({}))
+   return result
+  except Exception:
+   if current()!=old_active:
+    if old_active and old_active.is_file():subprocess.run(["/usr/bin/update-alternatives","--set",ALT,str(old_active)],capture_output=True)
+    else:subprocess.run(["/usr/bin/update-alternatives","--remove",ALT,str(RESOURCE)],capture_output=True)
+   for item,(existed,data) in snapshots.items():
+    if existed:atomic(item,data)
+    else:item.unlink(missing_ok=True)
+   if ASSETS.exists():shutil.rmtree(ASSETS)
+   if assets_backup.exists():shutil.copytree(assets_backup,ASSETS)
+   subprocess.run(["/usr/bin/dconf","update"],capture_output=True)
+   raise
+  finally:shutil.rmtree(work)
+ def status(self):
+  queries=(("Accent","org.gnome.desktop.interface","accent-color"),("Color scheme","org.gnome.desktop.interface","color-scheme"),("Clock format","org.gnome.desktop.interface","clock-format"),("Date","org.gnome.desktop.interface","clock-show-date"),("Weekday","org.gnome.desktop.interface","clock-show-weekday"),("Seconds","org.gnome.desktop.interface","clock-show-seconds"),("Font","org.gnome.desktop.interface","font-name"),("Icons","org.gnome.desktop.interface","icon-theme"),("Cursor","org.gnome.desktop.interface","cursor-theme"),("Logo","org.gnome.login-screen","logo"),("Banner enabled","org.gnome.login-screen","banner-message-enable"),("Banner text","org.gnome.login-screen","banner-message-text"),("User list disabled","org.gnome.login-screen","disable-user-list"),("Power buttons disabled","org.gnome.login-screen","disable-restart-buttons"))
+  with ThreadPoolExecutor(max_workers=7) as pool:values=pool.map(lambda q:self.gdm_get(q[1],q[2]),queries)
+  effective={query[0]:value for query,value in zip(queries,values)}
+  return {"available":True,"gdm_user":gdm_user(),"active_resource":str(current() or ""),"custom_resource_active":current()==RESOURCE,"dconf_override":DCONF.exists(),"monitor_managed":PREV_MON.exists() or MON_MARK.exists(),"effective":effective}
+
+def main():
+ loop=GLib.MainLoop(); connection=Gio.bus_get_sync(Gio.BusType.SYSTEM,None); helper=Helper(connection)
+ xml=INTROSPECTION.read_text(); node=Gio.DBusNodeInfo.new_for_xml(xml); iface=node.interfaces[0]
+ methods={"ApplyTransaction":helper.transaction,"ApplyGdmDconf":helper.dconf,"InstallGdmAssets":helper.assets,"InstallGdmResource":helper.resource,"ActivateGdmResource":helper.activate,"RestoreGdmResource":helper.restore_resource,"ApplyMonitorConfiguration":helper.monitors,"RestoreMonitorConfiguration":helper.restore_monitors,"RestoreGdmDefaults":helper.restore_all,"QueryStatus":lambda p:helper.status()}
+ def call(conn,sender,path,interface,method,params,invocation):
+  try:
+   if method!="QueryStatus":helper.authorize(sender)
+   result={"ok":True,**methods[method](require_dict(params.unpack()[0]))};invocation.return_value(GLib.Variant("(s)",(json.dumps(result),)))
+  except Exception as exc:invocation.return_value(GLib.Variant("(s)",(json.dumps({"ok":False,"error":str(exc)}),)))
+ connection.register_object(PATH,iface,call,None,None);Gio.bus_own_name_on_connection(connection,BUS,Gio.BusNameOwnerFlags.NONE,None,None);loop.run()
+if __name__=="__main__":
+ if len(os.sys.argv)==2 and os.sys.argv[1]=="--prepare-uninstall":
+  if os.geteuid()!=0:raise SystemExit("must run as root")
+  connection=None;service=Helper(connection);service.restore_resource({"preserve_state":True});service.restore_monitors({})
+ else:main()

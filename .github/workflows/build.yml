@@ -1,0 +1,26 @@
+name: Build and test
+on: [push, pull_request]
+jobs:
+  package:
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: apt-get update && apt-get install -y appstream desktop-file-utils nodejs && apt-get build-dep -y .
+      - run: glib-compile-schemas --strict --dry-run data/schemas && glib-compile-schemas --strict --dry-run shell/schemas && node --check shell/extension.js
+      - run: |
+          if [ "${{ matrix.arch }}" = arm64 ]; then
+            dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross
+          else
+            dpkg-buildpackage -us -uc -b -d -aamd64
+          fi
+      - run: python3 tests/integration/check_install_tree.py debian/gnome-customizer
+      - run: desktop-file-validate debian/gnome-customizer/usr/share/applications/io.github.gnomecustomizer.desktop && appstreamcli validate --no-net debian/gnome-customizer/usr/share/metainfo/io.github.gnomecustomizer.metainfo.xml
+      - run: dpkg-deb --info ../gnome-customizer_*_${{ matrix.arch }}.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnome-customizer-${{ matrix.arch }}
+          path: ../gnome-customizer_*_${{ matrix.arch }}.deb

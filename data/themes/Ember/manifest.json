@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "id": "ember",
+  "name": "Ember",
+  "author": "GNOME Customizer",
+  "description": "A restrained warm dark appearance.",
+  "minimum_gnome": "50.1",
+  "maximum_tested_gnome": "50.x",
+  "desktop": {"color_scheme": "prefer-dark", "accent": "orange"},
+  "applications": {
+    "window_color": "#1C1412", "view_color": "#140E0D", "sidebar_color": "#281A17",
+    "headerbar_color": "#2B1B17", "card_color": "#33201B", "popover_color": "#38241E",
+    "dialog_color": "#2B1B17", "text_color": "#FFF8F3", "muted_text_color": "#D6B8AA",
+    "accent_color": "#A8440A", "accent_text_color": "#FFFFFF", "border_color": "#684132",
+    "corner_radius": 12, "shadow_strength": 0.45
+  },
+  "shell": {
+    "panel": {"color": "#241814", "opacity": 0.9, "blur": 16, "text_color": "#FFF8F3"},
+    "dock": {"color": "#2B1B17", "opacity": 0.86, "blur": 20, "corner_radius": 16, "indicator_style": "dash"},
+    "menus": {"color": "#261A17", "opacity": 0.95, "blur": 14, "corner_radius": 12},
+    "overview": {"color": "#3A1C12", "opacity": 0.3, "blur": 30, "brightness": 0.7, "saturation": 0.78}
+  },
+  "login": {"background_color": "#1E1412", "accent": "orange"}
+}
