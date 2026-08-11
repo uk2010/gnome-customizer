@@ -195,9 +195,10 @@ class Dock {
 export default class CustomizerExtension extends Extension {
     enable() {
         this._settings = this.getSettings(); this._docks = []; this._effects = []; this._menuActors = new Map(); this._suppressedDocks = new Map(); this._overviewBackgrounds = [];
-        this._panelStyle = Main.panel.get_style(); this._overviewStyle = (Main.overview._overview ?? Main.overview).get_style?.() ?? null;
+        this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style();
         this._changed = this._settings.connect('changed', () => this._sync());
         this._monitors = Main.layoutManager.connect('monitors-changed', () => { this._rebuildDocks(); this._rebuildOverviewBackgrounds(); });
+        this._overviewShowing = Main.overview.connect('showing', () => this._lowerOverviewBackground());
         this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) { this._styleMenus(); this._syncExternalDocks(); } return GLib.SOURCE_REMOVE; }));
         this._rebuildDocks(); this._rebuildOverviewBackgrounds(); this._sync();
     }
@@ -266,15 +267,27 @@ export default class CustomizerExtension extends Extension {
         try { this._overviewBackgroundGroup?.destroy(); } catch (_) {}
         this._overviewBackgroundGroup=null;
     }
+    _lowerOverviewBackground() {
+        const group=this._overviewBackgroundGroup;
+        const parent=group?.get_parent();
+        if (parent !== Main.layoutManager.overviewGroup) return;
+        const children=parent.get_children();
+        if (children[0] !== group) {
+            parent.remove_child(group);
+            parent.insert_child_at_index(group,0);
+        }
+    }
     _rebuildOverviewBackgrounds() {
         this._destroyOverviewBackgrounds();
         this._overviewBackgroundGroup=new Meta.BackgroundGroup({name:'gnome-customizer-overview-background'});
         for (let i=0;i<Main.layoutManager.monitors.length;i++) {
             const monitor=Main.layoutManager.monitors[i];
-            const surface=new St.Widget({x:monitor.x,y:monitor.y,width:monitor.width,height:monitor.height});
+            // The half-pixel offset and positive z position are required by
+            // Mutter for reliable background painting across monitor layouts.
+            const surface=new St.Widget({x:monitor.x,y:monitor.y+0.5,z_position:1,width:monitor.width,height:monitor.height});
             const manager=new Background.BackgroundManager({container:surface,monitorIndex:i,controlPosition:false});
             const tint=new St.Widget({x:0,y:0,width:monitor.width,height:monitor.height});
-            surface.add_child(tint);this._overviewBackgroundGroup.add_child(surface);
+            surface.add_child(tint);this._overviewBackgroundGroup.insert_child_at_index(surface,0);
             this._overviewBackgrounds.push({surface,tint,manager});
         }
         Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup,0);
@@ -292,12 +305,12 @@ export default class CustomizerExtension extends Extension {
         for (const {surface,tint} of this._overviewBackgrounds) {
             surface.remove_effect_by_name('gnome-customizer-overview-blur');
             surface.remove_effect_by_name('gnome-customizer-overview-desaturate');
-            if (enabled && sigma>0) surface.add_effect_with_name('gnome-customizer-overview-blur',new Shell.BlurEffect({mode:Shell.BlurMode.ACTOR,brightness,radius:sigma}));
+            const scale=St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            if (enabled && sigma>0) surface.add_effect_with_name('gnome-customizer-overview-blur',new Shell.BlurEffect({mode:Shell.BlurMode.ACTOR,brightness,radius:sigma*scale}));
             if (enabled && saturation<1) surface.add_effect_with_name('gnome-customizer-overview-desaturate',new Clutter.DesaturateEffect({factor:1-saturation}));
             tint.set_style(`background-color: ${colorWithOpacity(color, opacity)};`);
         }
-        const overview=Main.overview._overview ?? Main.overview;
-        overview.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
+        Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
     }
     _sync() {
         if (this._settings.get_boolean('panel-enabled')) {
@@ -312,10 +325,10 @@ export default class CustomizerExtension extends Extension {
         this._styleMenus(); this._docks.forEach(d => d.sync()); this._syncExternalDocks();
     }
     disable() {
-        this._settings.disconnect(this._changed); Main.layoutManager.disconnect(this._monitors); Main.uiGroup.disconnect(this._uiAdded);
+        this._settings.disconnect(this._changed); Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.uiGroup.disconnect(this._uiAdded);
         this._docks.forEach(d => d.destroy()); this._docks=[]; this._restoreExternalDocks(); this._destroyOverviewBackgrounds();
         Main.panel.set_style(this._panelStyle);
-        try { (Main.overview._overview ?? Main.overview).set_style(this._overviewStyle); } catch (_) {}
+        Main.layoutManager.overviewGroup.set_style(this._overviewStyle);
         for (const [actor,name] of this._effects) { try { actor?.remove_effect_by_name(name); } catch (_) {} }
         this._restoreMenus();
         this._effects=[]; this._menuActors=new Map(); this._suppressedDocks=new Map(); this._settings=null;

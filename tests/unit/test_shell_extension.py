@@ -41,6 +41,10 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("new Meta.BackgroundGroup", extension)
         self.assertIn("new Background.BackgroundManager", extension)
         self.assertIn("mode:Shell.BlurMode.ACTOR", extension)
+        self.assertIn("Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;'", extension)
+        self.assertIn("y:monitor.y+0.5,z_position:1", extension)
+        self.assertIn("radius:sigma*scale", extension)
+        self.assertIn("Main.overview.connect('showing', () => this._lowerOverviewBackground())", extension)
         for key in ("overview-enabled", "overview-opacity", "overview-brightness", "overview-saturation"):
             self.assertIn(key, schema)
 
@@ -50,7 +54,7 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn('<key name="menu-enabled" type="b"><default>false</default></key>',schema)
         self.assertIn('<key name="overview-enabled" type="b"><default>false</default></key>',schema)
         self.assertIn("get_boolean('panel-enabled')",extension);self.assertIn("get_boolean('menu-enabled')",extension)
-        self.assertIn("overview.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle)",extension)
+        self.assertIn("Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle)",extension)
 
     def test_surface_opacity_is_applied_to_background_alpha(self):
         extension = (ROOT / "shell/extension.js").read_text()

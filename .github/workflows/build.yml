@@ -1,5 +1,8 @@
 name: Build and test
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 jobs:
   package:
     strategy:
@@ -21,7 +24,8 @@ jobs:
       - run: python3 tests/integration/check_install_tree.py debian/gnome-customizer
       - run: desktop-file-validate debian/gnome-customizer/usr/share/applications/io.github.gnomecustomizer.desktop && appstreamcli validate --no-net debian/gnome-customizer/usr/share/metainfo/io.github.gnomecustomizer.metainfo.xml
       - run: dpkg-deb --info ../gnome-customizer_*_${{ matrix.arch }}.deb
+      - run: mkdir -p artifacts && cp ../gnome-customizer_*_${{ matrix.arch }}.deb artifacts/
       - uses: actions/upload-artifact@v4
         with:
           name: gnome-customizer-${{ matrix.arch }}
-          path: ../gnome-customizer_*_${{ matrix.arch }}.deb
+          path: artifacts/gnome-customizer_*_${{ matrix.arch }}.deb

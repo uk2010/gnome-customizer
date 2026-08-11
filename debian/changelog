@@ -1,3 +1,11 @@
+gnome-customizer (0.3.6) resolute; urgency=high
+
+  * Render the real desktop wallpaper behind the overview and app grid.
+  * Keep the wallpaper actor correctly positioned in GNOME Shell 50.
+  * Scale overview blur strength correctly on HiDPI displays.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 20:10:00 -0500
+
 gnome-customizer (0.3.5) resolute; urgency=high
 
   * Use Ubuntu's native Show Applications icon unchanged in every color mode.
