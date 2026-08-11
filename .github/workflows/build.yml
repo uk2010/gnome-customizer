@@ -3,12 +3,13 @@ on: [push, pull_request]
 jobs:
   package:
     strategy:
+      fail-fast: false
       matrix:
         arch: [amd64, arm64]
     runs-on: ubuntu-latest
     container: ubuntu:26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: apt-get update && apt-get install -y appstream desktop-file-utils nodejs && apt-get build-dep -y .
       - run: glib-compile-schemas --strict --dry-run data/schemas && glib-compile-schemas --strict --dry-run shell/schemas && node --check shell/extension.js
       - run: |
