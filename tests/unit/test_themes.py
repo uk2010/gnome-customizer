@@ -65,5 +65,8 @@ class ThemeTests(unittest.TestCase):
     def test_dock_theme_allows_full_transparency(self):
         manifest={**BASE,"shell":{"dock":{"opacity":0}}}
         self.assertEqual(validate_manifest(manifest)["shell"]["dock"]["opacity"],0)
+    def test_dock_theme_allows_no_running_indicator(self):
+        manifest={**BASE,"shell":{"dock":{"indicator_style":"none"}}}
+        self.assertEqual(validate_manifest(manifest)["shell"]["dock"]["indicator_style"],"none")
 
 if __name__=="__main__":unittest.main()

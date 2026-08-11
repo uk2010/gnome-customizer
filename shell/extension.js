@@ -68,15 +68,14 @@ class Dock {
         const showAppsFirst = this._settings.get_string('dock-show-apps-position') === 'first';
         if (showAppsFirst) this._addShowAppsButton(size, showAppsChecked);
         for (const app of this._apps()) {
-            const content = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_align: Clutter.ActorAlign.CENTER});
-            content.add_child(app.create_icon_texture(size));
-            if (app.state === Shell.AppState.RUNNING) {
+            const [content,indicatorLane] = this._iconContent(app.create_icon_texture(size),size);
+            if (app.state === Shell.AppState.RUNNING && indicatorStyle !== 'none') {
                 const width = indicatorStyle === 'dot' ? 7 : indicatorStyle === 'dash' ? 14 : Math.max(18,size-8);
                 const height = indicatorStyle === 'dot' ? 7 : indicatorStyle === 'dash' ? 5 : 4;
-                content.add_child(new St.Widget({
+                indicatorLane.set_child(new St.Widget({
                     style_class: `gnome-customizer-running-indicator ${indicatorStyle}`,
                     style: 'background-color: #ffffff; border: 1px solid rgba(0, 0, 0, 0.72);',
-                    width, height, x_align: Clutter.ActorAlign.CENTER,
+                    width, height, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER,
                 }));
             }
             const button = new St.Button({style_class: 'gnome-customizer-dock-button', can_focus: true, accessible_name: app.get_name(), child: content});
@@ -85,6 +84,20 @@ class Dock {
         }
         if (!showAppsFirst) this._addShowAppsButton(size, showAppsChecked);
         this._queuePosition();
+    }
+
+    _iconContent(icon,size) {
+        const content=new St.BoxLayout({orientation:Clutter.Orientation.VERTICAL,x_align:Clutter.ActorAlign.CENTER,style:'spacing: 3px;'});
+        const indicatorLane=new St.Bin({
+            style_class:'gnome-customizer-indicator-lane',
+            x_align:Clutter.ActorAlign.CENTER,
+            y_align:Clutter.ActorAlign.CENTER,
+            width:size,
+            height:9,
+        });
+        content.add_child(icon);
+        content.add_child(indicatorLane);
+        return [content,indicatorLane];
     }
 
     _addShowAppsButton(size, checked) {
@@ -98,7 +111,7 @@ class Dock {
             toggle_mode: true,
             can_focus: true,
             accessible_name: 'Show Applications',
-            child: icon,
+            child: this._iconContent(icon,size)[0],
         });
         button.checked = checked && Main.overview.visible;
         button.connect('clicked', () => {
@@ -200,6 +213,9 @@ export default class CustomizerExtension extends Extension {
         this._monitors = Main.layoutManager.connect('monitors-changed', () => { this._rebuildDocks(); this._rebuildOverviewBackgrounds(); });
         this._overviewShowing = Main.overview.connect('showing', () => this._lowerOverviewBackground());
         this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) { this._styleMenus(); this._syncExternalDocks(); } return GLib.SOURCE_REMOVE; }));
+        this._panelBackground=new St.Widget({name:'gnome-customizer-panel-background',reactive:false});
+        this._panelBackground.add_constraint(new Clutter.BindConstraint({source:Main.panel,coordinate:Clutter.BindCoordinate.ALL}));
+        Main.layoutManager.panelBox.insert_child_at_index(this._panelBackground,0);
         this._rebuildDocks(); this._rebuildOverviewBackgrounds(); this._sync();
     }
     _rebuildDocks() { this._docks?.forEach(d => d.destroy()); this._docks = Main.layoutManager.monitors.map((_, i) => new Dock(this._settings, i)); }
@@ -315,10 +331,13 @@ export default class CustomizerExtension extends Extension {
     _sync() {
         if (this._settings.get_boolean('panel-enabled')) {
             const opacity=this._settings.get_double('panel-opacity'), text=this._settings.get_string('panel-text-color');
-            Main.panel.set_style(`${backgroundStyle(this._settings, 'panel', opacity)} color: ${text}; border-radius: ${this._settings.get_int('panel-radius')}px;`);
-            this._blur(Main.panel, 'gnome-customizer-panel-blur', this._settings.get_int('panel-blur'));
+            this._panelBackground.visible=true;
+            this._panelBackground.set_style(`${backgroundStyle(this._settings, 'panel', opacity)} border-radius: ${this._settings.get_int('panel-radius')}px;`);
+            Main.panel.set_style(`background-color: transparent; color: ${text};`);
+            this._blur(this._panelBackground, 'gnome-customizer-panel-blur', opacity>0 ? this._settings.get_int('panel-blur') : 0);
         } else {
-            Main.panel.remove_effect_by_name('gnome-customizer-panel-blur');
+            this._panelBackground.remove_effect_by_name('gnome-customizer-panel-blur');
+            this._panelBackground.visible=false;
             Main.panel.set_style(this._panelStyle);
         }
         this._syncOverviewBackgrounds();
@@ -327,6 +346,7 @@ export default class CustomizerExtension extends Extension {
     disable() {
         this._settings.disconnect(this._changed); Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.uiGroup.disconnect(this._uiAdded);
         this._docks.forEach(d => d.destroy()); this._docks=[]; this._restoreExternalDocks(); this._destroyOverviewBackgrounds();
+        this._panelBackground.destroy(); this._panelBackground=null;
         Main.panel.set_style(this._panelStyle);
         Main.layoutManager.overviewGroup.set_style(this._overviewStyle);
         for (const [actor,name] of this._effects) { try { actor?.remove_effect_by_name(name); } catch (_) {} }

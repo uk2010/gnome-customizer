@@ -87,7 +87,7 @@ def _surface(obj: Any, where: str):
     for field, (low, high, integer) in bounds.items():
         if field in obj: _number(obj[field], f"{where}.{field}", low, high, integer)
     if "background_type" in obj and obj["background_type"] not in {"solid", "gradient"}: raise ThemeError(f"Invalid background type at {where}")
-    if "indicator_style" in obj and obj["indicator_style"] not in {"dot", "dash", "line"}: raise ThemeError(f"Invalid indicator style at {where}")
+    if "indicator_style" in obj and obj["indicator_style"] not in {"none", "dot", "dash", "line"}: raise ThemeError(f"Invalid indicator style at {where}")
 
 
 def validate_application_palette(value: Any, require_complete=False) -> dict:

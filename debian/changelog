@@ -1,3 +1,11 @@
+gnome-customizer (0.3.7) resolute; urgency=high
+
+  * Preserve custom top-bar opacity in Overview and Show Applications.
+  * Reserve a fixed indicator lane so running apps never move dock icons.
+  * Add a None selection for running indicators and theme packages.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 20:40:00 -0500
+
 gnome-customizer (0.3.6) resolute; urgency=high
 
   * Render the real desktop wallpaper behind the overview and app grid.

@@ -7,7 +7,7 @@
     <key name="dock-floating" type="b"><default>true</default></key>
     <key name="dock-icon-size" type="i"><range min="24" max="96"/><default>48</default></key>
     <key name="dock-spacing" type="i"><range min="0" max="24"/><default>8</default></key>
-    <key name="dock-indicator-style" type="s"><choices><choice value="dot"/><choice value="dash"/><choice value="line"/></choices><default>'dot'</default></key>
+    <key name="dock-indicator-style" type="s"><choices><choice value="none"/><choice value="dot"/><choice value="dash"/><choice value="line"/></choices><default>'dot'</default></key>
     <key name="dock-opacity" type="d"><range min="0.0" max="1.0"/><default>0.82</default></key>
     <key name="dock-color" type="s"><default>'#202026'</default></key>
     <key name="dock-gradient-enabled" type="b"><default>false</default></key>

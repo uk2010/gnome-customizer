@@ -36,7 +36,7 @@
       "shadow_strength": {"type": "number", "minimum": 0, "maximum": 1},
       "icon_size": {"type": "integer", "minimum": 24, "maximum": 96},
       "spacing": {"type": "integer", "minimum": 0, "maximum": 24},
-      "indicator_style": {"enum": ["dot", "dash", "line"]}
+      "indicator_style": {"enum": ["none", "dot", "dash", "line"]}
     }},
     "dockSurface": {"type": "object", "additionalProperties": false, "properties": {
       "background_type": {"enum": ["solid", "gradient"]}, "color": {"$ref": "#/$defs/color"},
@@ -52,7 +52,7 @@
       "shadow_strength": {"type": "number", "minimum": 0, "maximum": 1},
       "icon_size": {"type": "integer", "minimum": 24, "maximum": 96},
       "spacing": {"type": "integer", "minimum": 0, "maximum": 24},
-      "indicator_style": {"enum": ["dot", "dash", "line"]}
+      "indicator_style": {"enum": ["none", "dot", "dash", "line"]}
     }},
     "desktop": {"type": "object", "additionalProperties": false, "properties": {
       "color_scheme": {"enum": ["default", "prefer-light", "prefer-dark"]},

@@ -24,11 +24,29 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertNotIn("icon.set_style",extension)
 
     def test_running_indicator_has_visible_shell_compatible_style(self):
-        extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
+        extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
         self.assertIn("app.state === Shell.AppState.RUNNING",extension)
+        self.assertIn("indicatorStyle !== 'none'",extension)
+        self.assertIn('<choice value="none"/>',schema)
         self.assertIn("indicatorStyle === 'dot' ? 7",extension)
         self.assertIn("background-color: #ffffff",extension)
         self.assertNotIn("background-color: currentColor",stylesheet)
+
+    def test_every_dock_icon_reserves_a_fixed_indicator_lane(self):
+        extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
+        self.assertIn("_iconContent(app.create_icon_texture(size),size)",extension)
+        self.assertIn("child: this._iconContent(icon,size)[0]",extension)
+        self.assertIn("height:9",extension)
+        self.assertIn("indicatorLane.set_child",extension)
+        self.assertIn("gnome-customizer-indicator-lane",stylesheet)
+
+    def test_panel_background_survives_the_overview_pseudo_state(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("name:'gnome-customizer-panel-background'",extension)
+        self.assertIn("Main.layoutManager.panelBox.insert_child_at_index(this._panelBackground,0)",extension)
+        self.assertIn("backgroundStyle(this._settings, 'panel', opacity)",extension)
+        self.assertIn("Main.panel.set_style(`background-color: transparent; color: ${text};`)",extension)
+        self.assertNotIn("this._blur(Main.panel, 'gnome-customizer-panel-blur'",extension)
 
     def test_corner_radius_is_independent_of_floating_margin(self):
         extension=(ROOT/"shell/extension.js").read_text()

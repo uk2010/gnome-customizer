@@ -2,5 +2,6 @@
 .gnome-customizer-dock-button { padding: 4px; border-radius: 10px; }
 .gnome-customizer-dock-button:hover { background-color: rgba(255,255,255,.14); }
 .gnome-customizer-show-apps:checked { background-color: rgba(255,255,255,.22); }
-.gnome-customizer-running-indicator { background-color: #ffffff; border: 1px solid rgba(0,0,0,.72); border-radius: 2px; margin-top: 3px; }
+.gnome-customizer-indicator-lane { height: 9px; }
+.gnome-customizer-running-indicator { background-color: #ffffff; border: 1px solid rgba(0,0,0,.72); border-radius: 2px; }
 .gnome-customizer-running-indicator.dot { border-radius: 999px; }
