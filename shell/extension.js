@@ -207,11 +207,12 @@ class Dock {
 
 export default class CustomizerExtension extends Extension {
     enable() {
-        this._settings = this.getSettings(); this._docks = []; this._effects = []; this._menuActors = new Map(); this._suppressedDocks = new Map(); this._overviewBackgrounds = [];
+        this._settings = this.getSettings(); this._docks = []; this._effects = []; this._menuActors = new Map(); this._suppressedDocks = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0;
         this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style();
         this._changed = this._settings.connect('changed', () => this._sync());
         this._monitors = Main.layoutManager.connect('monitors-changed', () => { this._rebuildDocks(); this._rebuildOverviewBackgrounds(); });
         this._overviewShowing = Main.overview.connect('showing', () => this._lowerOverviewBackground());
+        this._overviewHidden = Main.overview.connect('hidden', () => this._queuePanelStyleRestore());
         this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) { this._styleMenus(); this._syncExternalDocks(); } return GLib.SOURCE_REMOVE; }));
         this._panelBackground=new St.Widget({name:'gnome-customizer-panel-background',reactive:false});
         this._panelBackground.add_constraint(new Clutter.BindConstraint({source:Main.panel,coordinate:Clutter.BindCoordinate.SIZE}));
@@ -330,14 +331,29 @@ export default class CustomizerExtension extends Extension {
         }
         Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
     }
+    _queuePanelStyleRestore() {
+        if (this._panelRestoreSource || !this._settings) return;
+        // GNOME Shell 50 clears Main.panel.style immediately after emitting
+        // `hidden`, so restore our dynamic text style on the following idle.
+        this._panelRestoreSource=GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._panelRestoreSource=0;
+            if (this._settings?.get_boolean('panel-enabled')) {
+                const text=this._settings.get_string('panel-text-color');
+                Main.panel.set_style(`background-color: transparent; color: ${text};`);
+            }
+            return GLib.SOURCE_REMOVE;
+        });
+    }
     _sync() {
         if (this._settings.get_boolean('panel-enabled')) {
             const opacity=this._settings.get_double('panel-opacity'), text=this._settings.get_string('panel-text-color');
+            Main.panel.add_style_class_name('gnome-customizer-panel');
             this._panelBackground.visible=true;
             this._panelBackground.set_style(`${backgroundStyle(this._settings, 'panel', opacity)} border-radius: ${this._settings.get_int('panel-radius')}px;`);
             Main.panel.set_style(`background-color: transparent; color: ${text};`);
             this._blur(this._panelBackground, 'gnome-customizer-panel-blur', opacity>0 ? this._settings.get_int('panel-blur') : 0);
         } else {
+            Main.panel.remove_style_class_name('gnome-customizer-panel');
             this._panelBackground.remove_effect_by_name('gnome-customizer-panel-blur');
             this._panelBackground.visible=false;
             Main.panel.set_style(this._panelStyle);
@@ -346,9 +362,11 @@ export default class CustomizerExtension extends Extension {
         this._styleMenus(); this._docks.forEach(d => d.sync()); this._syncExternalDocks();
     }
     disable() {
-        this._settings.disconnect(this._changed); Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.uiGroup.disconnect(this._uiAdded);
+        if (this._panelRestoreSource) { GLib.Source.remove(this._panelRestoreSource); this._panelRestoreSource=0; }
+        this._settings.disconnect(this._changed); Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.uiGroup.disconnect(this._uiAdded);
         this._docks.forEach(d => d.destroy()); this._docks=[]; this._restoreExternalDocks(); this._destroyOverviewBackgrounds();
         this._panelBackground.destroy(); this._panelBackground=null;
+        Main.panel.remove_style_class_name('gnome-customizer-panel');
         Main.panel.set_style(this._panelStyle);
         Main.layoutManager.overviewGroup.set_style(this._overviewStyle);
         for (const [actor,name] of this._effects) { try { actor?.remove_effect_by_name(name); } catch (_) {} }

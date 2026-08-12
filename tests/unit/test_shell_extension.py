@@ -43,13 +43,22 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("gnome-customizer-indicator-lane",stylesheet)
 
     def test_panel_background_survives_the_overview_pseudo_state(self):
-        extension=(ROOT/"shell/extension.js").read_text()
+        extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
         self.assertIn("name:'gnome-customizer-panel-background'",extension)
         self.assertIn("Main.panel.insert_child_at_index(this._panelBackground,0)",extension)
         self.assertNotIn("Main.layoutManager.panelBox.insert_child_at_index(this._panelBackground,0)",extension)
         self.assertIn("backgroundStyle(this._settings, 'panel', opacity)",extension)
         self.assertIn("Main.panel.set_style(`background-color: transparent; color: ${text};`)",extension)
+        self.assertIn("Main.panel.add_style_class_name('gnome-customizer-panel')",extension)
+        self.assertIn("#panel.gnome-customizer-panel { background-color: transparent; }",stylesheet)
         self.assertNotIn("this._blur(Main.panel, 'gnome-customizer-panel-blur'",extension)
+
+    def test_panel_style_is_restored_after_overview_clears_it(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("Main.overview.connect('hidden', () => this._queuePanelStyleRestore())",extension)
+        self.assertIn("GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE",extension)
+        self.assertIn("Main.overview.disconnect(this._overviewHidden)",extension)
+        self.assertIn("GLib.Source.remove(this._panelRestoreSource)",extension)
 
     def test_corner_radius_is_independent_of_floating_margin(self):
         extension=(ROOT/"shell/extension.js").read_text()

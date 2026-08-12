@@ -1,3 +1,10 @@
+gnome-customizer (0.3.9) resolute; urgency=high
+
+  * Preserve custom top-bar transparency when Show Applications closes.
+  * Restore dynamic top-bar styling after GNOME Shell clears the panel style.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 21:20:00 -0500
+
 gnome-customizer (0.3.8) resolute; urgency=high
 
   * Keep the custom panel background inside the real panel so the top bar stays at the screen edge.
