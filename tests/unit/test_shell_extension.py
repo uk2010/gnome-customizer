@@ -69,6 +69,25 @@ class ShellExtensionTests(unittest.TestCase):
         extension=(ROOT/"shell/extension.js").read_text()
         self.assertIn("const margin = floating ? 2 : 0",extension)
 
+    def test_autohide_uses_a_fixed_edge_trigger_without_hover_oscillation(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("name:'gnome-customizer-dock-trigger'",extension)
+        self.assertIn("Main.layoutManager.addChrome(this._trigger)",extension)
+        self.assertIn("this._trigger.connect('enter-event', () => this._reveal())",extension)
+        self.assertIn("this.actor.connect('leave-event', () => this._scheduleConceal())",extension)
+        self.assertIn("!this.actor.hover && !this._trigger.hover",extension)
+        self.assertIn("GLib.timeout_add(GLib.PRIORITY_DEFAULT,120",extension)
+        self.assertNotIn("this.actor.connect('leave-event', () => this._conceal())",extension)
+        self.assertNotIn("this.actor.height+this._margin-4",extension)
+
+    def test_visible_dock_reserves_workarea_but_hidden_dock_releases_it(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("name:'gnome-customizer-dock-strut'",extension)
+        self.assertIn("Main.layoutManager.trackChrome(this._strut,{affectsStruts:enabled})",extension)
+        self.assertIn("this._setStrutEnabled(this.actor.visible && !hide)",extension)
+        self.assertIn("this._setStrutEnabled(this.actor.visible)",extension)
+        self.assertIn("if (win.get_maximized() !== 0) return true",extension)
+
     def test_overview_uses_blurred_wallpaper_backgrounds(self):
         extension = (ROOT / "shell/extension.js").read_text()
         schema = (ROOT / "shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()

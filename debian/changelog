@@ -1,3 +1,11 @@
+gnome-customizer (0.3.10) resolute; urgency=high
+
+  * Stop auto-hide and intelligent-hide hover oscillation.
+  * Reveal hidden docks from a stable three-pixel screen-edge trigger.
+  * Keep docks visible while the pointer is over either the dock or its edge trigger.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 21:35:00 -0500
+
 gnome-customizer (0.3.9) resolute; urgency=high
 
   * Preserve custom top-bar transparency when Show Applications closes.

@@ -30,8 +30,14 @@ class Dock {
         this._settings = settings;
         this._monitorIndex = monitorIndex;
         this._positionSource = 0;
+        this._concealSource = 0;
         this.actor = new St.BoxLayout({style_class: 'gnome-customizer-dock', reactive: true, track_hover: true});
         Main.layoutManager.addChrome(this.actor);
+        this._strut = new St.Widget({name:'gnome-customizer-dock-strut',reactive:false,opacity:0});
+        this._strutEnabled=false;
+        Main.layoutManager.addChrome(this._strut);
+        this._trigger = new St.Widget({name:'gnome-customizer-dock-trigger',reactive:true,track_hover:true});
+        Main.layoutManager.addChrome(this._trigger);
         this._signals = [
             [settings, settings.connect('changed', () => this.sync())],
             [Shell.AppSystem.get_default(), Shell.AppSystem.get_default().connect('app-state-changed', () => this._populate())],
@@ -44,7 +50,9 @@ class Dock {
             [this.actor, this.actor.connect('notify::height', () => this._queuePosition())],
         ];
         this.actor.connect('enter-event', () => this._reveal());
-        this.actor.connect('leave-event', () => this._conceal());
+        this.actor.connect('leave-event', () => this._scheduleConceal());
+        this._trigger.connect('enter-event', () => this._reveal());
+        this._trigger.connect('leave-event', () => this._scheduleConceal());
         this.sync();
     }
 
@@ -140,7 +148,9 @@ class Dock {
         this.actor.remove_effect_by_name('gnome-customizer-dock-blur');
         const sigma = this._settings.get_int('dock-blur');
         if (opacity > 0 && sigma > 0) this.actor.add_effect_with_name('gnome-customizer-dock-blur', new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness: 1.0, radius: sigma}));
-        this.actor.visible = this._settings.get_boolean('dock-enabled');
+        const enabled=this._settings.get_boolean('dock-enabled');
+        this.actor.visible=enabled;
+        this._trigger.visible=enabled && (this._settings.get_boolean('dock-autohide') || this._settings.get_boolean('dock-intellihide'));
         this._conceal();
     }
 
@@ -164,6 +174,27 @@ class Dock {
         x = Math.max(monitor.x, Math.min(Math.round(x), monitor.x + monitor.width - width));
         y = Math.max(monitor.y, Math.min(Math.round(y), monitor.y + monitor.height - height));
         this.actor.set_position(x, y);
+        if (this._position === 'left') {
+            this._strut.set_position(monitor.x,y);
+            this._strut.set_size(width+this._margin,height);
+        } else if (this._position === 'right') {
+            this._strut.set_position(x,y);
+            this._strut.set_size(width+this._margin,height);
+        } else {
+            this._strut.set_position(x,y);
+            this._strut.set_size(width,height+this._margin);
+        }
+        const edgeSize=3;
+        if (this._position === 'left') {
+            this._trigger.set_position(monitor.x,monitor.y);
+            this._trigger.set_size(edgeSize,monitor.height);
+        } else if (this._position === 'right') {
+            this._trigger.set_position(monitor.x+monitor.width-edgeSize,monitor.y);
+            this._trigger.set_size(edgeSize,monitor.height);
+        } else {
+            this._trigger.set_position(monitor.x,monitor.y+monitor.height-edgeSize);
+            this._trigger.set_size(monitor.width,edgeSize);
+        }
     }
 
     _queuePosition() {
@@ -177,30 +208,52 @@ class Dock {
 
     _reveal() {
         if (!this.actor) return;
+        if (this._concealSource) { GLib.Source.remove(this._concealSource); this._concealSource=0; }
+        this._setStrutEnabled(this.actor.visible);
         this.actor.ease({opacity: 255, translation_x: 0, translation_y: 0, duration: 180, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+    }
+    _scheduleConceal() {
+        if (this._concealSource || !this.actor) return;
+        this._concealSource=GLib.timeout_add(GLib.PRIORITY_DEFAULT,120,() => {
+            this._concealSource=0;
+            this._conceal();
+            return GLib.SOURCE_REMOVE;
+        });
     }
     _conceal() {
         if (!this.actor || !this._settings) return;
-        const hide = this._settings.get_boolean('dock-autohide') || (this._settings.get_boolean('dock-intellihide') && this._overlapsWindow());
+        const shouldHide=this._settings.get_boolean('dock-autohide') || (this._settings.get_boolean('dock-intellihide') && this._overlapsWindow());
+        const hide=shouldHide && !this.actor.hover && !this._trigger.hover;
         let translation_x=0,translation_y=0;
         if (hide) {
-            if (this._position==='left') translation_x=-(this.actor.width+this._margin-4);
-            else if (this._position==='right') translation_x=this.actor.width+this._margin-4;
-            else translation_y=this.actor.height+this._margin-4;
+            if (this._position==='left') translation_x=-(this.actor.width+this._margin);
+            else if (this._position==='right') translation_x=this.actor.width+this._margin;
+            else translation_y=this.actor.height+this._margin;
         }
-        this.actor.ease({opacity: hide ? 80 : 255, translation_x, translation_y, duration: 220, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+        this._setStrutEnabled(this.actor.visible && !hide);
+        this.actor.ease({opacity: hide ? 0 : 255, translation_x, translation_y, duration: 220, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+    }
+    _setStrutEnabled(enabled) {
+        if (!this._strut || this._strutEnabled === enabled) return;
+        Main.layoutManager.untrackChrome(this._strut);
+        Main.layoutManager.trackChrome(this._strut,{affectsStruts:enabled});
+        this._strutEnabled=enabled;
     }
     _overlapsWindow() {
         const [x, y] = this.actor.get_position(); const [w, h] = [this.actor.width,this.actor.height];
         return global.get_window_actors().some(a => {
             const win=a.metaWindow;
             if (!win || win.minimized || !win.showing_on_its_workspace() || win.get_monitor() !== this._monitorIndex) return false;
+            if (win.get_maximized() !== 0) return true;
             const r=win.get_frame_rect(); return r.x < x+w && r.x+r.width > x && r.y < y+h && r.y+r.height > y;
         });
     }
     destroy() {
         if (this._positionSource) { GLib.Source.remove(this._positionSource); this._positionSource=0; }
+        if (this._concealSource) { GLib.Source.remove(this._concealSource); this._concealSource=0; }
         for (const [object,id] of this._signals) { try { object.disconnect(id); } catch (_) {} }
+        this._trigger.destroy();this._trigger=null;
+        this._strut.destroy();this._strut=null;
         this.actor.destroy(); this.actor=null;
     }
 }
