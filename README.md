@@ -38,12 +38,12 @@ Build a native package:
 dpkg-buildpackage -us -uc -b
 ```
 
-Native amd64 and arm64 builders produce `gnome-customizer_0.3.19_amd64.deb` and `gnome-customizer_0.3.19_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
+Native amd64 and arm64 builders produce `gnome-customizer_0.3.20_amd64.deb` and `gnome-customizer_0.3.20_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
 
 ## Install and uninstall
 
 ```sh
-sudo apt install ./dist/gnome-customizer_0.3.19_amd64.deb
+sudo apt install ./dist/gnome-customizer_0.3.20_amd64.deb
 gnome-customizer
 ```
 
@@ -70,11 +70,9 @@ Format version 1 permits metadata, wallpapers, GTK/icon/cursor references, appli
 
 Imports enforce file count and expanded-size limits, reject traversal, absolute paths, backslashes, symlinks, duplicates and unknown files, validate strict UTF-8 JSON and all enums/bounds, decode every image, verify MIME/extension and dimensions, and extract through controlled paths.
 
-## Creating a theme
+## Saving a theme
 
-Open **Theme Builder**, enter the theme metadata, choose approved colors and images, and inspect the Desktop, Files, Overview, Menus, and Login previews. **Save Draft** keeps an editable local manifest; **Export Theme** creates a validated `.gctheme` with a generated preview. Existing `.gctheme` files can be opened with **Import for Editing**. Theme authors never need to write CSS or JSON; the full format and bounds are documented in [docs/theme-format.md](docs/theme-format.md).
-
-To capture the currently applied appearance without rebuilding it manually, open **Themes** and choose **Save as Theme**. Save and restore share one audited setting map: the archive includes mode and native accent, wallpaper images and presentation, fonts/icons/cursor, sound theme, clock and battery display, every Top Bar/Blur surface value, and every supported Ubuntu Dock/Dash-to-Dock control including placement and Panel Mode.
+To capture the currently applied appearance, open **Themes** and choose **Save as Theme**. Save and restore share one audited setting map: the archive includes mode and native accent, wallpaper images and presentation, fonts/icons/cursor, sound theme, clock and battery display, every Top Bar/Blur surface value, and every supported Ubuntu Dock/Dash-to-Dock control including placement and Panel Mode.
 
 Choose **Apply Theme** to restore a local or included theme immediately. Local imported and saved themes also have a trash button with confirmation; included samples are read-only.
 

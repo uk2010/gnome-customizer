@@ -1,3 +1,11 @@
+gnome-customizer (0.3.20) resolute; urgency=high
+
+  * Normalize GNOME wallpaper colors when saving the current appearance as a theme.
+  * Prevent an unsupported optional wallpaper color from blocking theme export.
+  * Remove the unreliable Theme Builder while retaining saved-theme workflows.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Wed, 12 Aug 2026 23:59:00 -0500
+
 gnome-customizer (0.3.19) resolute; urgency=high
 
   * Replace the misleading Stage Theme action with an immediate Apply Theme action.

@@ -73,6 +73,25 @@ class ThemeTests(unittest.TestCase):
     def test_dock_theme_allows_no_running_indicator(self):
         manifest={**BASE,"shell":{"dock":{"indicator_style":"none"}}}
         self.assertEqual(validate_manifest(manifest)["shell"]["dock"]["indicator_style"],"none")
+    def test_current_wallpaper_colors_are_normalized_for_export(self):
+        values={
+            ("org.gnome.desktop.background","primary-color"):"rgb(44, 0, 30)",
+            ("org.gnome.desktop.background","secondary-color"):"#111122223333",
+        }
+        class FakeSettings:
+            def supports(self,schema,key):return (schema,key) in values
+            def get(self,schema,key):return values[schema,key]
+            def schema(self,schema):return None
+        manifest,_=capture_current_theme(FakeSettings(),"Current","Tester")
+        self.assertEqual(manifest["desktop"]["wallpaper_primary_color"],"#2C001E")
+        self.assertEqual(manifest["desktop"]["wallpaper_secondary_color"],"#112233")
+    def test_unparseable_current_wallpaper_color_does_not_block_export(self):
+        class FakeSettings:
+            def supports(self,schema,key):return (schema,key)==("org.gnome.desktop.background","primary-color")
+            def get(self,schema,key):return "not a color"
+            def schema(self,schema):return None
+        manifest,_=capture_current_theme(FakeSettings(),"Current","Tester")
+        self.assertNotIn("wallpaper_primary_color",manifest["desktop"])
     def test_current_applied_appearance_is_captured_and_round_trips(self):
         wallpaper=Path(tempfile.mkstemp(suffix=".png")[1]);wallpaper.write_bytes(png());self.addCleanup(wallpaper.unlink,missing_ok=True)
         values={
@@ -101,7 +120,12 @@ class ThemeTests(unittest.TestCase):
         target=Path(tempfile.mkstemp(suffix=".gctheme")[1]);target.unlink();self.addCleanup(target.unlink,missing_ok=True)
         export_theme(manifest,assets,target);saved,archive=inspect_archive(target);archive.close();self.assertEqual(saved["shell"]["panel"]["opacity"],0)
     def test_themes_page_exposes_save_current_settings_action(self):
-        source=(Path(__file__).parents[2]/"src/gnome_customizer/pages/theme_builder.py").read_text()
+        source=(Path(__file__).parents[2]/"src/gnome_customizer/pages/themes.py").read_text()
         self.assertIn('title="Save Current Settings"',source);self.assertIn("capture_current_theme(self.settings",source);self.assertIn('label="Apply Theme"',source);self.assertIn('tooltip_text="Delete Theme"',source);self.assertNotIn('label="Stage Theme"',source)
+    def test_window_keeps_saved_themes_but_removes_theme_builder(self):
+        source=(Path(__file__).parents[2]/"src/gnome_customizer/window.py").read_text()
+        self.assertIn('("themes","Themes"',source)
+        self.assertNotIn('("builder","Theme Builder"',source)
+        self.assertNotIn('ThemeBuilderPage(',source)
 
 if __name__=="__main__":unittest.main()

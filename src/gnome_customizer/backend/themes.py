@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from functools import lru_cache
 from urllib.parse import unquote, urlparse
-from PIL import Image
+from PIL import Image, ImageColor
 
 from .constants import MIN_GNOME, THEMES_DIR
 
@@ -72,6 +72,22 @@ DOCK_FIELDS = set(DOCK_THEME_SETTINGS) | (SURFACE_FIELDS - {"indicator_style", "
 
 
 class ThemeError(ValueError): pass
+
+
+def _portable_color(value: Any) -> str | None:
+    """Convert color strings accepted by GNOME/GTK to the theme's RGB(A) form."""
+    if not isinstance(value, str): return None
+    if COLOR.fullmatch(value): return value
+    match = re.fullmatch(r"#([0-9a-fA-F]{9}|[0-9a-fA-F]{12})", value)
+    if match:
+        digits = match.group(1); width = len(digits) // 3; maximum = 16 ** width - 1
+        channels = (round(int(digits[index:index + width], 16) * 255 / maximum) for index in range(0, len(digits), width))
+        return "#" + "".join(f"{channel:02X}" for channel in channels)
+    try:
+        channels = ImageColor.getcolor(value, "RGBA")
+    except (TypeError, ValueError):
+        return None
+    return "#" + "".join(f"{channel:02X}" for channel in channels[:3]) + (f"{channels[3]:02X}" if channels[3] != 255 else "")
 
 
 @lru_cache(maxsize=1)
@@ -322,7 +338,12 @@ def capture_current_theme(settings, name: str, author: str) -> tuple[dict, dict[
     }
     desktop = manifest["desktop"]
     for field, (schema, key) in DESKTOP_THEME_SETTINGS.items():
-        if supports(schema, key): desktop[field] = get(schema, key)
+        if not supports(schema, key): continue
+        value = get(schema, key)
+        if field in {"wallpaper_primary_color", "wallpaper_secondary_color"}:
+            value = _portable_color(value)
+            if value is None: continue
+        desktop[field] = value
 
     assets: dict[str, Path] = {}
     background = "org.gnome.desktop.background"
