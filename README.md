@@ -7,7 +7,7 @@ It uses native GNOME settings as the single source of truth and never installs p
 ## Architecture
 
 - `src/gnome_customizer`: unprivileged Python/PyGObject application, dynamic GSettings backend, transactions, immutable wallpaper staging, previews, themes, and diagnostics.
-- `shell`: focused GJS companion installed as `gnome-customizer@io.github.gnomecustomizer`; owns a dock with a native Show Applications button, suppresses an existing Ubuntu/Dash-to-Dock actor while that dock is active, and controls supported blur and Shell surfaces.
+- `shell`: focused GJS companion installed as `gnome-customizer@io.github.gnomecustomizer`; controls supported blur and Shell surfaces. Dock controls write the installed Ubuntu Dock/Dash-to-Dock GSettings directly and never create or suppress a dock actor.
 - `helper`: root system-bus service. Every mutating call requires `io.github.gnomecustomizer.modify-system` authorization and accepts typed JSON values rather than commands or paths.
 - `data`: GSettings, D-Bus interface, PolicyKit policy, desktop/AppStream metadata, icon, theme schema, and samples.
 - `debian`: native Debian packaging with safe resource restoration during removal.
@@ -38,12 +38,12 @@ Build a native package:
 dpkg-buildpackage -us -uc -b
 ```
 
-Native amd64 and arm64 builders produce `gnome-customizer_0.3.12_amd64.deb` and `gnome-customizer_0.3.12_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
+Native amd64 and arm64 builders produce `gnome-customizer_0.3.13_amd64.deb` and `gnome-customizer_0.3.13_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
 
 ## Install and uninstall
 
 ```sh
-sudo apt install ./dist/gnome-customizer_0.3.12_amd64.deb
+sudo apt install ./dist/gnome-customizer_0.3.13_amd64.deb
 gnome-customizer
 ```
 

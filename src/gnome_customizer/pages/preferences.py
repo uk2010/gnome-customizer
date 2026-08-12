@@ -138,12 +138,42 @@ class PreferencesFactory:
         p=self.page("Login Power & Night Light");g=self.group(p,"Power");self.gdm_combo(g,"Power Button Action","org.gnome.settings-daemon.plugins.power","power-button-action");self.gdm_switch(g,"Power Saver on Low Battery","org.gnome.settings-daemon.plugins.power","power-saver-profile-on-low-battery");self.gdm_switch(g,"Dim Screen","org.gnome.settings-daemon.plugins.power","idle-dim");self.gdm_spin(g,"Dimmed Brightness","org.gnome.settings-daemon.plugins.power","idle-brightness",0,100);self.gdm_switch(g,"Ambient Light Sensor","org.gnome.settings-daemon.plugins.power","ambient-enabled");self.duration(g,"Blank Screen Delay (minutes)","org.gnome.desktop.session","idle-delay",gdm=True);self.gdm_combo(g,"AC Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-type");self.duration(g,"AC Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-timeout",gdm=True);self.gdm_combo(g,"Battery Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-type");self.duration(g,"Battery Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-timeout",gdm=True)
         g=self.group(p,"Night Light");self.gdm_switch(g,"Night Light","org.gnome.settings-daemon.plugins.color","night-light-enabled");self.gdm_spin(g,"Color Temperature","org.gnome.settings-daemon.plugins.color","night-light-temperature",1000,10000,100);self.gdm_switch(g,"Sunset to Sunrise","org.gnome.settings-daemon.plugins.color","night-light-schedule-automatic");self.time(g,"Custom Start","org.gnome.settings-daemon.plugins.color","night-light-schedule-from",gdm=True);self.time(g,"Custom End","org.gnome.settings-daemon.plugins.color","night-light-schedule-to",gdm=True);return p
     def shell(self,title,section):
-        p=self.page(title);g=self.group(p,section)
         schema="io.github.gnomecustomizer.shell"
-        if section=="Dock":
-            self.switch(g,"Enable Custom Dock",schema,"dock-enabled");self.combo(g,"Position",schema,"dock-position");self.switch(g,"Floating",schema,"dock-floating");self.color(g,"Background Color",schema,"dock-color");self.switch(g,"Gradient",schema,"dock-gradient-enabled");self.color(g,"Gradient End Color",schema,"dock-color2");self.combo(g,"Gradient Direction",schema,"dock-gradient-direction");self.spin(g,"Opacity",schema,"dock-opacity",0,1,.01);self.spin(g,"Corner Radius",schema,"dock-radius",0,32);self.spin(g,"Icon Size",schema,"dock-icon-size",24,96);self.spin(g,"Spacing",schema,"dock-spacing",0,24);self.combo(g,"Running Indicator",schema,"dock-indicator-style");self.switch(g,"Show Favorites",schema,"dock-show-favorites");self.switch(g,"Show Running Apps",schema,"dock-show-running");self.switch(g,"Show Applications",schema,"dock-show-apps");self.combo(g,"Show Applications Position",schema,"dock-show-apps-position");self.switch(g,"Auto-hide",schema,"dock-autohide");self.switch(g,"Intelligent Hide",schema,"dock-intellihide")
-        else:
-            for label,key in (("Panel Blur","panel-blur"),("Dock Blur","dock-blur"),("Menu Blur","menu-blur")):self.spin(g,label,schema,key,0,100)
-            overview=self.group(p,"Overview &amp; App Grid","Blurred wallpaper treatment behind workspaces, search, and applications");self.switch(overview,"Enable Overview Blur",schema,"overview-enabled");self.color(overview,"Backdrop Tint",schema,"overview-color");self.spin(overview,"Tint Opacity",schema,"overview-opacity",0,1,.01);self.spin(overview,"Blur Strength",schema,"overview-blur",0,100);self.spin(overview,"Brightness",schema,"overview-brightness",.2,1.5,.05);self.spin(overview,"Saturation",schema,"overview-saturation",0,1,.05)
-            menus=self.group(p,"Menus &amp; Popovers");self.switch(menus,"Enable Custom Menu Appearance",schema,"menu-enabled");self.color(menus,"Surface Color",schema,"menu-color");self.switch(menus,"Gradient",schema,"menu-gradient-enabled");self.color(menus,"Gradient End Color",schema,"menu-color2");self.combo(menus,"Gradient Direction",schema,"menu-gradient-direction");self.spin(menus,"Opacity",schema,"menu-opacity",.2,1,.01);self.spin(menus,"Corner Radius",schema,"menu-radius",0,32);self.color(menus,"Text Color",schema,"menu-text-color");self.color(menus,"Border Color",schema,"menu-border-color")
+        p=self.page(title);g=self.group(p,section)
+        for label,key in (("Panel Blur","panel-blur"),("Menu Blur","menu-blur")):self.spin(g,label,schema,key,0,100)
+        overview=self.group(p,"Overview &amp; App Grid","Blurred wallpaper treatment behind workspaces, search, and applications");self.switch(overview,"Enable Overview Blur",schema,"overview-enabled");self.color(overview,"Backdrop Tint",schema,"overview-color");self.spin(overview,"Tint Opacity",schema,"overview-opacity",0,1,.01);self.spin(overview,"Blur Strength",schema,"overview-blur",0,100);self.spin(overview,"Brightness",schema,"overview-brightness",.2,1.5,.05);self.spin(overview,"Saturation",schema,"overview-saturation",0,1,.05)
+        menus=self.group(p,"Menus &amp; Popovers");self.switch(menus,"Enable Custom Menu Appearance",schema,"menu-enabled");self.color(menus,"Surface Color",schema,"menu-color");self.switch(menus,"Gradient",schema,"menu-gradient-enabled");self.color(menus,"Gradient End Color",schema,"menu-color2");self.combo(menus,"Gradient Direction",schema,"menu-gradient-direction");self.spin(menus,"Opacity",schema,"menu-opacity",.2,1,.01);self.spin(menus,"Corner Radius",schema,"menu-radius",0,32);self.color(menus,"Text Color",schema,"menu-text-color");self.color(menus,"Border Color",schema,"menu-border-color")
+        return p
+
+    def native_dock(self):
+        p=self.page("Dock","Configures GNOME's installed Ubuntu Dock or Dash to Dock extension directly")
+        schema="org.gnome.shell.extensions.dash-to-dock"
+        if not self.backend.schema(schema):
+            g=self.group(p,"GNOME Dock")
+            g.add(Adw.ActionRow(title="Dock settings unavailable",subtitle="Install or enable Ubuntu Dock or Dash to Dock; GNOME Customizer does not create a replacement dock."))
+            return p
+        layout=self.group(p,"GNOME Dock","These are the dock extension's own GSettings values; no custom dock is created")
+        self.combo(layout,"Position",schema,"dock-position",{"TOP":"Top","RIGHT":"Right","BOTTOM":"Bottom","LEFT":"Left"},domain="shell")
+        self.switch(layout,"Panel Mode",schema,"extend-height",domain="shell",subtitle="Extend the dock across the screen edge")
+        self.spin(layout,"Icon Size",schema,"dash-max-icon-size",16,128,domain="shell")
+        self.switch(layout,"Fixed Icon Size",schema,"icon-size-fixed",domain="shell")
+        self.spin(layout,"Maximum Screen Fraction",schema,"height-fraction",.2,1,.05,domain="shell")
+        self.switch(layout,"Show on All Monitors",schema,"multi-monitor",domain="shell")
+        content=self.group(p,"Contents")
+        self.switch(content,"Show Favorites",schema,"show-favorites",domain="shell")
+        self.switch(content,"Show Running Apps",schema,"show-running",domain="shell")
+        self.switch(content,"Show Applications",schema,"show-show-apps-button",domain="shell")
+        self.switch(content,"Show Applications First",schema,"show-apps-at-top",domain="shell")
+        behavior=self.group(p,"Visibility")
+        self.switch(behavior,"Always Visible",schema,"dock-fixed",domain="shell")
+        self.switch(behavior,"Auto-hide",schema,"autohide",domain="shell")
+        self.switch(behavior,"Intelligent Hide",schema,"intellihide",domain="shell")
+        appearance=self.group(p,"Appearance")
+        self.combo(appearance,"Transparency",schema,"transparency-mode",{"DEFAULT":"Default","FIXED":"Fixed","DYNAMIC":"Dynamic"},domain="shell")
+        self.spin(appearance,"Background Opacity",schema,"background-opacity",0,1,.01,domain="shell")
+        self.switch(appearance,"Custom Background Color",schema,"custom-background-color",domain="shell")
+        self.color(appearance,"Background Color",schema,"background-color",domain="shell")
+        self.combo(appearance,"Running Indicator",schema,"running-indicator-style",domain="shell")
+        self.switch(appearance,"Use Built-in Theme",schema,"apply-custom-theme",domain="shell")
+        self.switch(appearance,"Straight Corners",schema,"force-straight-corner",domain="shell")
         return p

@@ -5,7 +5,7 @@ from gnome_customizer.backend.transactions import Change, ChangeManager, Transac
 from gnome_customizer.backend.wallpaper import wallpaper_keys
 
 class FakeSettings:
-    def __init__(self):self.values={('s','a'):'old',('s','b'):1,('org.gnome.shell','enabled-extensions'):['other@example'],('org.gnome.shell','disabled-extensions'):[],('org.gnome.shell','disable-user-extensions'):True,('io.github.gnomecustomizer.shell','dock-enabled'):False};self.fail=None
+    def __init__(self):self.values={('s','a'):'old',('s','b'):1,('org.gnome.shell','enabled-extensions'):['other@example'],('org.gnome.shell','disabled-extensions'):[],('org.gnome.shell','disable-user-extensions'):True,('org.gnome.shell.extensions.dash-to-dock','autohide'):False};self.fail=None
     def supports(self,s,k):return (s,k) in self.values
     def get(self,s,k):return self.values[s,k]
     def set(self,s,k,v):
@@ -26,11 +26,10 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(self.backend.values['s','a'],'old');self.assertEqual(self.store.original('desktop'),{})
     def test_extension_delta_preserves_unrelated_extensions(self):
         uuid='gnome-customizer@io.github.gnomecustomizer';self.manager.stage(Change('shell','org.gnome.shell','enabled-extensions',[uuid],'Companion'));self.backend.values['org.gnome.shell','enabled-extensions'].append('added-later@example');self.manager.apply();self.assertEqual(set(self.backend.values['org.gnome.shell','enabled-extensions']),{'other@example','added-later@example',uuid});self.manager.restore('shell');self.assertEqual(set(self.backend.values['org.gnome.shell','enabled-extensions']),{'other@example','added-later@example'})
-    def test_enabling_dock_automatically_enables_companion(self):
-        uuid='gnome-customizer@io.github.gnomecustomizer';self.backend.values['org.gnome.shell','disabled-extensions']=[uuid,'disabled@example']
-        self.manager.stage(Change('shell','io.github.gnomecustomizer.shell','dock-enabled',True,'Enable Custom Dock'))
-        self.assertIn(('org.gnome.shell','enabled-extensions'),self.manager.pending);self.assertIn(('org.gnome.shell','disabled-extensions'),self.manager.pending);self.assertIn(('org.gnome.shell','disable-user-extensions'),self.manager.pending)
-        self.assertEqual(self.manager.apply(),4);self.assertIn(uuid,self.backend.values['org.gnome.shell','enabled-extensions']);self.assertNotIn(uuid,self.backend.values['org.gnome.shell','disabled-extensions']);self.assertIn('disabled@example',self.backend.values['org.gnome.shell','disabled-extensions']);self.assertFalse(self.backend.values['org.gnome.shell','disable-user-extensions']);self.assertTrue(self.backend.values['io.github.gnomecustomizer.shell','dock-enabled'])
+    def test_native_dock_setting_does_not_enable_companion(self):
+        self.manager.stage(Change('shell','org.gnome.shell.extensions.dash-to-dock','autohide',True,'Auto-hide'))
+        self.assertEqual(set(self.manager.pending),{('org.gnome.shell.extensions.dash-to-dock','autohide')})
+        self.assertEqual(self.manager.apply(),1);self.assertTrue(self.backend.values['org.gnome.shell.extensions.dash-to-dock','autohide'])
     def test_restore_rolls_back_and_keeps_restore_state_on_failure(self):
         self.store.remember_original('desktop','s:a','old');self.store.remember_original('desktop','s:b',1);self.store.save();self.backend.values['s','a']='changed';self.backend.values['s','b']=2;self.backend.fail='b'
         with self.assertRaises(TransactionError):self.manager.restore('desktop')

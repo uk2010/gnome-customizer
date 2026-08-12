@@ -1,8 +1,1 @@
-.gnome-customizer-dock { padding: 8px; spacing: 8px; }
 #panel.gnome-customizer-panel { background-color: transparent; }
-.gnome-customizer-dock-button { padding: 4px; border-radius: 10px; }
-.gnome-customizer-dock-button:hover { background-color: rgba(255,255,255,.14); }
-.gnome-customizer-show-apps:checked { background-color: rgba(255,255,255,.22); }
-.gnome-customizer-indicator-lane { height: 7px; }
-.gnome-customizer-running-indicator { background-color: #ffffff; border: 1px solid rgba(0,0,0,.72); border-radius: 2px; }
-.gnome-customizer-running-indicator.dot { border-radius: 999px; }

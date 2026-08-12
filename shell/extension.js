@@ -6,7 +6,6 @@ import St from 'gi://St';
 
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 function colorWithOpacity(color, opacity) {
@@ -25,293 +24,28 @@ function backgroundStyle(settings, prefix, opacity=1) {
     return `background-gradient-direction: ${settings.get_string(`${prefix}-gradient-direction`)}; background-gradient-start: ${color}; background-gradient-end: ${end};`;
 }
 
-class Dock {
-    constructor(settings, monitorIndex) {
-        this._settings = settings;
-        this._monitorIndex = monitorIndex;
-        this._positionSource = 0;
-        this._concealSource = 0;
-        this.actor = new St.BoxLayout({style_class: 'gnome-customizer-dock', reactive: true, track_hover: true});
-        Main.layoutManager.addChrome(this.actor);
-        this._strut = new St.Widget({name:'gnome-customizer-dock-strut',reactive:false,opacity:0});
-        this._strutEnabled=false;
-        Main.layoutManager.addChrome(this._strut);
-        this._trigger = new St.Widget({name:'gnome-customizer-dock-trigger',reactive:true,track_hover:true});
-        Main.layoutManager.addChrome(this._trigger);
-        this._signals = [
-            [settings, settings.connect('changed', () => this.sync())],
-            [Shell.AppSystem.get_default(), Shell.AppSystem.get_default().connect('app-state-changed', () => this._populate())],
-            [global.display, global.display.connect('restacked', () => this._conceal())],
-            [global.display, global.display.connect('notify::focus-window', () => this._conceal())],
-            [Main.overview, Main.overview.connect('hidden', () => {
-                if (this._showAppsButton) this._showAppsButton.checked = false;
-            })],
-            [this.actor, this.actor.connect('notify::width', () => this._queuePosition())],
-            [this.actor, this.actor.connect('notify::height', () => this._queuePosition())],
-        ];
-        this.actor.connect('enter-event', () => this._reveal());
-        this.actor.connect('leave-event', () => this._scheduleConceal());
-        this._trigger.connect('enter-event', () => this._reveal());
-        this._trigger.connect('leave-event', () => this._scheduleConceal());
-        this.sync();
-    }
-
-    _apps() {
-        const apps = [];
-        if (this._settings.get_boolean('dock-show-favorites'))
-            apps.push(...global.settings.get_strv('favorite-apps').map(id => Shell.AppSystem.get_default().lookup_app(id)).filter(Boolean));
-        if (this._settings.get_boolean('dock-show-running')) {
-            for (const app of Shell.AppSystem.get_default().get_running())
-                if (!apps.includes(app)) apps.push(app);
-        }
-        return apps;
-    }
-
-    _populate() {
-        const showAppsChecked = this._showAppsButton?.checked ?? false;
-        this._showAppsButton = null;
-        this.actor.destroy_all_children();
-        const size = this._settings.get_int('dock-icon-size');
-        const indicatorStyle = this._settings.get_string('dock-indicator-style');
-        const showAppsFirst = this._settings.get_string('dock-show-apps-position') === 'first';
-        if (showAppsFirst) this._addShowAppsButton(size, showAppsChecked);
-        for (const app of this._apps()) {
-            const [content,indicatorLane] = this._iconContent(app.create_icon_texture(size),size);
-            if (app.state === Shell.AppState.RUNNING && indicatorStyle !== 'none') {
-                const width = indicatorStyle === 'dot' ? 7 : indicatorStyle === 'dash' ? 14 : Math.max(18,size-8);
-                const height = indicatorStyle === 'dot' ? 7 : indicatorStyle === 'dash' ? 5 : 4;
-                indicatorLane.set_child(new St.Widget({
-                    style_class: `gnome-customizer-running-indicator ${indicatorStyle}`,
-                    style: 'background-color: #ffffff; border: 1px solid rgba(0, 0, 0, 0.72);',
-                    width, height, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.START,
-                }));
-            }
-            const button = new St.Button({style_class: 'gnome-customizer-dock-button', can_focus: true, accessible_name: app.get_name(), child: content});
-            button.connect('clicked', () => app.activate());
-            this.actor.add_child(button);
-        }
-        if (!showAppsFirst) this._addShowAppsButton(size, showAppsChecked);
-        this._queuePosition();
-    }
-
-    _iconContent(icon,size) {
-        const content=new St.BoxLayout({orientation:Clutter.Orientation.VERTICAL,x_align:Clutter.ActorAlign.CENTER,style:'spacing: 0;'});
-        const indicatorLane=new St.Bin({
-            style_class:'gnome-customizer-indicator-lane',
-            x_align:Clutter.ActorAlign.CENTER,
-            y_align:Clutter.ActorAlign.START,
-            width:size,
-            height:7,
-        });
-        content.add_child(icon);
-        content.add_child(indicatorLane);
-        return [content,indicatorLane];
-    }
-
-    _addShowAppsButton(size, checked) {
-        if (!this._settings.get_boolean('dock-show-apps')) return;
-        const icon = new St.Icon({
-            icon_name: `view-app-grid-${Main.sessionMode.currentMode}-symbolic`,
-            icon_size: size,
-            style: 'color: #808080;',
-        });
-        const button = new St.Button({
-            style_class: 'gnome-customizer-dock-button gnome-customizer-show-apps show-apps',
-            toggle_mode: true,
-            can_focus: true,
-            accessible_name: 'Show Applications',
-            child: this._iconContent(icon,size)[0],
-        });
-        button.checked = checked && Main.overview.visible;
-        button.connect('clicked', () => {
-            if (button.checked) Main.overview.show(OverviewControls.ControlsState.APP_GRID);
-            else Main.overview.hide();
-        });
-        this._showAppsButton = button;
-        this.actor.add_child(button);
-    }
-
-    sync() {
-        const monitor = Main.layoutManager.monitors[this._monitorIndex];
-        if (!monitor) return;
-        const position = this._settings.get_string('dock-position');
-        const vertical = position !== 'bottom';
-        this.actor.orientation = vertical ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
-        const spacing = this._settings.get_int('dock-spacing');
-        const floating = this._settings.get_boolean('dock-floating');
-        const radius = this._settings.get_int('dock-radius');
-        const opacity = this._settings.get_double('dock-opacity');
-        this.actor.set_style(`spacing: ${spacing}px; border-radius: ${radius}px; ${backgroundStyle(this._settings, 'dock', opacity)}`);
-        this._populate();
-        const margin = floating ? 2 : 0; this._position=position; this._margin=margin;
-        this._positionActor();
-        this._queuePosition();
-        this.actor.remove_effect_by_name('gnome-customizer-dock-blur');
-        const sigma = this._settings.get_int('dock-blur');
-        if (opacity > 0 && sigma > 0) this.actor.add_effect_with_name('gnome-customizer-dock-blur', new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness: 1.0, radius: sigma}));
-        const enabled=this._settings.get_boolean('dock-enabled');
-        this.actor.visible=enabled;
-        this._trigger.visible=enabled && (this._settings.get_boolean('dock-autohide') || this._settings.get_boolean('dock-intellihide'));
-        this._conceal();
-    }
-
-    _positionActor() {
-        const monitor = Main.layoutManager.monitors[this._monitorIndex];
-        if (!monitor || !this.actor) return;
-        const [, , naturalWidth, naturalHeight] = this.actor.get_preferred_size();
-        const width = this.actor.width > 0 ? this.actor.width : naturalWidth;
-        const height = this.actor.height > 0 ? this.actor.height : naturalHeight;
-        let x, y;
-        if (this._position === 'left') {
-            x = monitor.x + this._margin;
-            y = monitor.y + (monitor.height - height) / 2;
-        } else if (this._position === 'right') {
-            x = monitor.x + monitor.width - width - this._margin;
-            y = monitor.y + (monitor.height - height) / 2;
-        } else {
-            x = monitor.x + (monitor.width - width) / 2;
-            y = monitor.y + monitor.height - height - this._margin;
-        }
-        x = Math.max(monitor.x, Math.min(Math.round(x), monitor.x + monitor.width - width));
-        y = Math.max(monitor.y, Math.min(Math.round(y), monitor.y + monitor.height - height));
-        this.actor.set_position(x, y);
-        if (this._position === 'left') {
-            this._strut.set_position(monitor.x,y);
-            this._strut.set_size(width+this._margin,height);
-        } else if (this._position === 'right') {
-            this._strut.set_position(x,y);
-            this._strut.set_size(width+this._margin,height);
-        } else {
-            this._strut.set_position(x,y);
-            this._strut.set_size(width,height+this._margin);
-        }
-        const edgeSize=3;
-        if (this._position === 'left') {
-            this._trigger.set_position(monitor.x,monitor.y);
-            this._trigger.set_size(edgeSize,monitor.height);
-        } else if (this._position === 'right') {
-            this._trigger.set_position(monitor.x+monitor.width-edgeSize,monitor.y);
-            this._trigger.set_size(edgeSize,monitor.height);
-        } else {
-            this._trigger.set_position(monitor.x,monitor.y+monitor.height-edgeSize);
-            this._trigger.set_size(monitor.width,edgeSize);
-        }
-    }
-
-    _queuePosition() {
-        if (this._positionSource || !this.actor) return;
-        this._positionSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._positionSource = 0;
-            if (this.actor) { this._positionActor(); this._conceal(); }
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _reveal() {
-        if (!this.actor) return;
-        if (this._concealSource) { GLib.Source.remove(this._concealSource); this._concealSource=0; }
-        this._syncStrut();
-        this.actor.ease({opacity: 255, translation_x: 0, translation_y: 0, duration: 180, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
-    }
-    _scheduleConceal() {
-        if (this._concealSource || !this.actor) return;
-        this._concealSource=GLib.timeout_add(GLib.PRIORITY_DEFAULT,120,() => {
-            this._concealSource=0;
-            this._conceal();
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-    _conceal() {
-        if (!this.actor || !this._settings) return;
-        const shouldHide=this._settings.get_boolean('dock-autohide') || (this._settings.get_boolean('dock-intellihide') && this._overlapsWindow());
-        const hide=shouldHide && !this.actor.hover && !this._trigger.hover;
-        let translation_x=0,translation_y=0;
-        if (hide) {
-            if (this._position==='left') translation_x=-(this.actor.width+this._margin);
-            else if (this._position==='right') translation_x=this.actor.width+this._margin;
-            else translation_y=this.actor.height+this._margin;
-        }
-        this._syncStrut();
-        this.actor.ease({opacity: hide ? 0 : 255, translation_x, translation_y, duration: 220, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
-    }
-    _syncStrut() {
-        const reserve=this.actor.visible &&
-            !this._settings.get_boolean('dock-autohide') &&
-            !this._settings.get_boolean('dock-intellihide');
-        this._setStrutEnabled(reserve);
-    }
-    _setStrutEnabled(enabled) {
-        if (!this._strut || this._strutEnabled === enabled) return;
-        Main.layoutManager.untrackChrome(this._strut);
-        Main.layoutManager.trackChrome(this._strut,{affectsStruts:enabled});
-        this._strutEnabled=enabled;
-    }
-    _overlapsWindow() {
-        const [x, y] = this.actor.get_position(); const [w, h] = [this.actor.width,this.actor.height];
-        return global.get_window_actors().some(a => {
-            const win=a.metaWindow;
-            if (!win || win.minimized || !win.showing_on_its_workspace() || win.get_monitor() !== this._monitorIndex) return false;
-            if (win.get_maximized() !== 0) return true;
-            const r=win.get_frame_rect(); return r.x < x+w && r.x+r.width > x && r.y < y+h && r.y+r.height > y;
-        });
-    }
-    destroy() {
-        if (this._positionSource) { GLib.Source.remove(this._positionSource); this._positionSource=0; }
-        if (this._concealSource) { GLib.Source.remove(this._concealSource); this._concealSource=0; }
-        for (const [object,id] of this._signals) { try { object.disconnect(id); } catch (_) {} }
-        this._trigger.destroy();this._trigger=null;
-        this._strut.destroy();this._strut=null;
-        this.actor.destroy(); this.actor=null;
-    }
-}
-
 export default class CustomizerExtension extends Extension {
     enable() {
-        this._settings = this.getSettings(); this._docks = []; this._effects = []; this._menuActors = new Map(); this._suppressedDocks = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0;
+        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0;
         this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style();
         this._changed = this._settings.connect('changed', () => this._sync());
-        this._monitors = Main.layoutManager.connect('monitors-changed', () => { this._rebuildDocks(); this._rebuildOverviewBackgrounds(); });
+        this._monitors = Main.layoutManager.connect('monitors-changed', () => this._rebuildOverviewBackgrounds());
         this._overviewShowing = Main.overview.connect('showing', () => this._lowerOverviewBackground());
         this._overviewHidden = Main.overview.connect('hidden', () => this._queuePanelStyleRestore());
-        this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) { this._styleMenus(); this._syncExternalDocks(); } return GLib.SOURCE_REMOVE; }));
+        this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) this._styleMenus(); return GLib.SOURCE_REMOVE; }));
         this._panelBackground=new St.Widget({name:'gnome-customizer-panel-background',reactive:false});
         this._panelBackground.add_constraint(new Clutter.BindConstraint({source:Main.panel,coordinate:Clutter.BindCoordinate.SIZE}));
         // Keep the background inside the panel. Adding it to panelBox makes it
         // a layout sibling of the real panel and pushes the top bar downward.
         Main.panel.insert_child_at_index(this._panelBackground,0);
-        this._rebuildDocks(); this._rebuildOverviewBackgrounds(); this._sync();
+        this._rebuildOverviewBackgrounds(); this._sync();
     }
-    _rebuildDocks() { this._docks?.forEach(d => d.destroy()); this._docks = Main.layoutManager.monitors.map((_, i) => new Dock(this._settings, i)); }
     _blur(actor, name, sigma, brightness=1.0) {
         actor.remove_effect_by_name(name);
         if (sigma > 0) {
             const effect = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness, radius: sigma});
             actor.add_effect_with_name(name, effect);
             if (!this._effects.some(([existing, effectName]) => existing === actor && effectName === name)) this._effects.push([actor,name]);
-        }
-    }
-    _externalDockActors() {
-        const actors=[];
-        const visit=actor => {
-            if (actor?.get_name?.() === 'dashtodockContainer') actors.push(actor);
-            for (const child of actor?.get_children?.() ?? []) visit(child);
-        };
-        visit(Main.uiGroup);return actors;
-    }
-    _restoreExternalDocks() {
-        for (const [actor,record] of this._suppressedDocks) {
-            try { actor.disconnect(record.visibleId); actor.disconnect(record.destroyId); actor.reactive=record.reactive; actor.visible=record.visible; } catch (_) {}
-        }
-        this._suppressedDocks.clear();
-    }
-    _syncExternalDocks() {
-        if (!this._settings.get_boolean('dock-enabled')) { this._restoreExternalDocks(); return; }
-        for (const actor of this._externalDockActors()) {
-            if (this._suppressedDocks.has(actor)) continue;
-            const record={visible:actor.visible,reactive:actor.reactive,visibleId:0,destroyId:0};
-            record.visibleId=actor.connect('notify::visible', () => { if (this._settings?.get_boolean('dock-enabled') && actor.visible) actor.hide(); });
-            record.destroyId=actor.connect('destroy', () => this._suppressedDocks?.delete(actor));
-            this._suppressedDocks.set(actor,record);actor.reactive=false;actor.hide();console.log('GNOME Customizer: suppressed an existing dock while the custom dock is enabled');
         }
     }
     _styleMenus() {
@@ -419,18 +153,18 @@ export default class CustomizerExtension extends Extension {
             Main.panel.set_style(this._panelStyle);
         }
         this._syncOverviewBackgrounds();
-        this._styleMenus(); this._docks.forEach(d => d.sync()); this._syncExternalDocks();
+        this._styleMenus();
     }
     disable() {
         if (this._panelRestoreSource) { GLib.Source.remove(this._panelRestoreSource); this._panelRestoreSource=0; }
         this._settings.disconnect(this._changed); Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.uiGroup.disconnect(this._uiAdded);
-        this._docks.forEach(d => d.destroy()); this._docks=[]; this._restoreExternalDocks(); this._destroyOverviewBackgrounds();
+        this._destroyOverviewBackgrounds();
         this._panelBackground.destroy(); this._panelBackground=null;
         Main.panel.remove_style_class_name('gnome-customizer-panel');
         Main.panel.set_style(this._panelStyle);
         Main.layoutManager.overviewGroup.set_style(this._overviewStyle);
         for (const [actor,name] of this._effects) { try { actor?.remove_effect_by_name(name); } catch (_) {} }
         this._restoreMenus();
-        this._effects=[]; this._menuActors=new Map(); this._suppressedDocks=new Map(); this._settings=null;
+        this._effects=[]; this._menuActors=new Map(); this._settings=null;
     }
 }

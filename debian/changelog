@@ -1,3 +1,11 @@
+gnome-customizer (0.3.13) resolute; urgency=high
+
+  * Remove the replacement dock and stop suppressing Ubuntu Dock or Dash to Dock.
+  * Configure the installed GNOME dock extension directly through its native settings.
+  * Apply supported dock theme values without enabling the Shell companion.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Wed, 12 Aug 2026 15:00:00 -0500
+
 gnome-customizer (0.3.12) resolute; urgency=high
 
   * Keep the Ubuntu Show Applications icon color fixed across light and dark modes.

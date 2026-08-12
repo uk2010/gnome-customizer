@@ -6,42 +6,21 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ShellExtensionTests(unittest.TestCase):
-    def test_custom_dock_keeps_show_applications_button(self):
+    def test_companion_does_not_create_or_suppress_a_dock(self):
         extension = (ROOT / "shell/extension.js").read_text()
+        stylesheet = (ROOT / "shell/stylesheet.css").read_text()
         schema = (ROOT / "shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
-        self.assertIn("dock-show-apps", schema)
-        self.assertIn("dock-show-apps-position", schema)
-        self.assertIn("view-app-grid-${Main.sessionMode.currentMode}-symbolic", extension)
-        self.assertIn("ControlsState.APP_GRID", extension)
-        self.assertIn("get_boolean('dock-show-apps')", extension)
-        self.assertIn("Main.overview.hide()", extension)
-        self.assertIn("toggle_mode: true", extension)
+        for legacy in ("class Dock", "gnome-customizer-dock", "dashtodockContainer", "_syncExternalDocks", "dock-enabled"):
+            self.assertNotIn(legacy, extension)
+        self.assertNotIn("gnome-customizer-dock", stylesheet)
+        self.assertNotIn("dock-enabled", schema)
 
-    def test_show_applications_keeps_native_ubuntu_icon_color_in_every_mode(self):
-        extension=(ROOT/"shell/extension.js").read_text()
-        self.assertIn("`view-app-grid-${Main.sessionMode.currentMode}-symbolic`",extension)
-        self.assertIn("style: 'color: #808080;'",extension)
-        self.assertNotIn("changed::color-scheme",extension)
-        self.assertNotIn("icon.set_style",extension)
-
-    def test_running_indicator_has_visible_shell_compatible_style(self):
-        extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
-        self.assertIn("app.state === Shell.AppState.RUNNING",extension)
-        self.assertIn("indicatorStyle !== 'none'",extension)
-        self.assertIn('<choice value="none"/>',schema)
-        self.assertIn("indicatorStyle === 'dot' ? 7",extension)
-        self.assertIn("background-color: #ffffff",extension)
-        self.assertNotIn("background-color: currentColor",stylesheet)
-
-    def test_every_dock_icon_reserves_a_fixed_indicator_lane(self):
-        extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
-        self.assertIn("_iconContent(app.create_icon_texture(size),size)",extension)
-        self.assertIn("child: this._iconContent(icon,size)[0]",extension)
-        self.assertIn("height:7",extension)
-        self.assertIn("style:'spacing: 0;'",extension)
-        self.assertIn("y_align:Clutter.ActorAlign.START",extension)
-        self.assertIn("indicatorLane.set_child",extension)
-        self.assertIn("gnome-customizer-indicator-lane",stylesheet)
+    def test_dock_page_uses_native_dash_to_dock_settings(self):
+        preferences = (ROOT / "src/gnome_customizer/pages/preferences.py").read_text()
+        self.assertIn('schema="org.gnome.shell.extensions.dash-to-dock"', preferences)
+        for key in ("dock-position", "dash-max-icon-size", "show-favorites", "show-running", "show-show-apps-button", "dock-fixed", "autohide", "intellihide", "background-opacity"):
+            self.assertIn(f'"{key}"', preferences)
+        self.assertNotIn('"Enable Custom Dock"', preferences)
 
     def test_panel_background_survives_the_overview_pseudo_state(self):
         extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
@@ -60,37 +39,6 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE",extension)
         self.assertIn("Main.overview.disconnect(this._overviewHidden)",extension)
         self.assertIn("GLib.Source.remove(this._panelRestoreSource)",extension)
-
-    def test_corner_radius_is_independent_of_floating_margin(self):
-        extension=(ROOT/"shell/extension.js").read_text()
-        self.assertIn("const radius = this._settings.get_int('dock-radius');",extension)
-        self.assertNotIn("floating ? this._settings.get_int('dock-radius') : 0",extension)
-
-    def test_floating_dock_stays_close_to_the_screen_edge(self):
-        extension=(ROOT/"shell/extension.js").read_text()
-        self.assertIn("const margin = floating ? 2 : 0",extension)
-
-    def test_autohide_uses_a_fixed_edge_trigger_without_hover_oscillation(self):
-        extension=(ROOT/"shell/extension.js").read_text()
-        self.assertIn("name:'gnome-customizer-dock-trigger'",extension)
-        self.assertIn("Main.layoutManager.addChrome(this._trigger)",extension)
-        self.assertIn("this._trigger.connect('enter-event', () => this._reveal())",extension)
-        self.assertIn("this.actor.connect('leave-event', () => this._scheduleConceal())",extension)
-        self.assertIn("!this.actor.hover && !this._trigger.hover",extension)
-        self.assertIn("GLib.timeout_add(GLib.PRIORITY_DEFAULT,120",extension)
-        self.assertNotIn("this.actor.connect('leave-event', () => this._conceal())",extension)
-        self.assertNotIn("this.actor.height+this._margin-4",extension)
-
-    def test_only_permanently_visible_dock_reserves_workarea(self):
-        extension=(ROOT/"shell/extension.js").read_text()
-        self.assertIn("name:'gnome-customizer-dock-strut'",extension)
-        self.assertIn("Main.layoutManager.trackChrome(this._strut,{affectsStruts:enabled})",extension)
-        self.assertIn("const reserve=this.actor.visible &&",extension)
-        self.assertIn("!this._settings.get_boolean('dock-autohide')",extension)
-        self.assertIn("!this._settings.get_boolean('dock-intellihide')",extension)
-        self.assertIn("this._setStrutEnabled(reserve)",extension)
-        self.assertNotIn("this._setStrutEnabled(this.actor.visible && !hide)",extension)
-        self.assertIn("if (win.get_maximized() !== 0) return true",extension)
 
     def test_overview_uses_blurred_wallpaper_backgrounds(self):
         extension = (ROOT / "shell/extension.js").read_text()
@@ -115,26 +63,10 @@ class ShellExtensionTests(unittest.TestCase):
 
     def test_surface_opacity_is_applied_to_background_alpha(self):
         extension = (ROOT / "shell/extension.js").read_text()
-        schema = (ROOT / "shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
-        preferences = (ROOT / "src/gnome_customizer/pages/preferences.py").read_text()
-        self.assertIn('<key name="dock-opacity" type="d"><range min="0.0" max="1.0"/>',schema)
-        self.assertIn('self.spin(g,"Opacity",schema,"dock-opacity",0,1,.01)',preferences)
         self.assertIn("function colorWithOpacity", extension)
-        self.assertIn("backgroundStyle(this._settings, 'dock', opacity)", extension)
         self.assertIn("colorWithOpacity(color, opacity)", extension)
         self.assertIn("if (opacity <= 0) return 'background-color: transparent;'",extension)
-        self.assertIn("if (opacity > 0 && sigma > 0)",extension)
-        self.assertNotIn("backgroundStyle(this._settings, 'dock')} opacity:", extension)
         self.assertNotIn("backgroundStyle(this._settings, 'panel')} opacity:", extension)
-
-    def test_dock_reanchors_after_shell_allocates_its_final_size(self):
-        extension = (ROOT / "shell/extension.js").read_text()
-        self.assertIn("notify::width", extension)
-        self.assertIn("notify::height", extension)
-        self.assertIn("_queuePosition()", extension)
-        self.assertIn("this.actor.height > 0 ? this.actor.height : naturalHeight", extension)
-        self.assertIn("monitor.y + monitor.height - height - this._margin", extension)
-        self.assertIn("if (!this.actor || !this._settings) return;", extension)
 
 
 if __name__ == "__main__":

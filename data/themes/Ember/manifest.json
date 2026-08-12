@@ -16,7 +16,7 @@
   },
   "shell": {
     "panel": {"color": "#241814", "opacity": 0.9, "blur": 16, "text_color": "#FFF8F3"},
-    "dock": {"color": "#2B1B17", "opacity": 0.86, "blur": 20, "corner_radius": 16, "indicator_style": "dash"},
+    "dock": {"color": "#2B1B17", "opacity": 0.86, "indicator_style": "dash"},
     "menus": {"color": "#261A17", "opacity": 0.95, "blur": 14, "corner_radius": 12},
     "overview": {"color": "#3A1C12", "opacity": 0.3, "blur": 30, "brightness": 0.7, "saturation": 0.78}
   },
