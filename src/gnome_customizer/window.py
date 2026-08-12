@@ -13,7 +13,7 @@ from .backend.settings import SettingsBackend, yaru_theme_for_accent
 from .backend.state import StateStore
 from .backend.transactions import ChangeManager, TransactionError
 from .backend.system_proxy import SystemHelperProxy
-from .backend.themes import validate_manifest
+from .backend.themes import DESKTOP_THEME_SETTINGS, DOCK_THEME_SETTINGS, SHELL_SURFACE_SETTINGS, validate_manifest
 from .backend.wallpaper import wallpaper_keys
 from .pages.preferences import PreferencesFactory
 from .pages.theme_builder import ThemeBuilderPage, ThemesPage
@@ -74,9 +74,10 @@ class CustomizerWindow(Adw.ApplicationWindow):
                 if candidate.is_symlink():raise ValueError("Theme files changed after import; symbolic links are not allowed")
                 if candidate.is_file():files.add(candidate.relative_to(directory).as_posix())
             manifest=validate_manifest(json.loads((directory/"manifest.json").read_text(encoding="utf-8")),files);desktop=manifest.get("desktop",{})
-            mapping={"color_scheme":("org.gnome.desktop.interface","color-scheme"),"accent":("org.gnome.desktop.interface","accent-color"),"icons":("org.gnome.desktop.interface","icon-theme"),"cursor":("org.gnome.desktop.interface","cursor-theme"),"gtk_theme":("org.gnome.desktop.interface","gtk-theme")}
-            for key,(schema,setting) in mapping.items():
+            for key,(schema,setting) in DESKTOP_THEME_SETTINGS.items():
                 if key in desktop and self.settings.supports(schema,setting):self.changes.stage(Change("desktop",schema,setting,desktop[key],f"Theme {key}"))
+            if "color_scheme" in desktop and self.settings.supports("org.gnome.shell.ubuntu","color-scheme"):
+                self.changes.stage(Change("desktop","org.gnome.shell.ubuntu","color-scheme",desktop["color_scheme"],"Theme Ubuntu color scheme"))
             for field,key in (("wallpaper","picture-uri"),("wallpaper_dark","picture-uri-dark")):
                 if field in desktop:
                     source=self._theme_asset(directory,desktop[field]);mime=self._validate_image(source);dest=copy_managed_image(source,ASSETS_DIR,"theme-"+field,mime)
@@ -84,26 +85,25 @@ class CustomizerWindow(Adw.ApplicationWindow):
                     if field=="wallpaper" and "wallpaper_dark" not in desktop:
                         keys=wallpaper_keys(dark_override=False,supports_dark=self.settings.supports("org.gnome.desktop.background","picture-uri-dark"))
                     for target in keys:self.changes.stage(Change("desktop","org.gnome.desktop.background",target,dest.as_uri(),f"Theme {field}"))
-            shell=manifest.get("shell",{});schema="io.github.gnomecustomizer.shell";surface_maps={"panel":{"color":"panel-color","color1":"panel-color","color2":"panel-color2","opacity":"panel-opacity","blur":"panel-blur","text_color":"panel-text-color","corner_radius":"panel-radius"},"menus":{"color":"menu-color","color1":"menu-color","color2":"menu-color2","opacity":"menu-opacity","blur":"menu-blur","corner_radius":"menu-radius","text_color":"menu-text-color","border_color":"menu-border-color"},"overview":{"color":"overview-color","opacity":"overview-opacity","blur":"overview-blur","brightness":"overview-brightness","saturation":"overview-saturation","hover_color":"overview-hover-color","hover_opacity":"overview-hover-opacity"}}
-            if any(shell.get(surface) for surface in ("panel","menus","overview")):self._stage_extension(True,"gnome-customizer@io.github.gnomecustomizer")
-            for surface,fields in surface_maps.items():
-                if shell.get(surface):
-                    enabled_key={"panel":"panel-enabled","menus":"menu-enabled","overview":"overview-enabled"}[surface]
-                    enabled=shell[surface].get("enabled",True)
-                    if self.settings.supports(schema,enabled_key):self.changes.stage(Change("shell",schema,enabled_key,enabled,f"Theme {surface} enabled"))
+            shell=manifest.get("shell",{});schema="io.github.gnomecustomizer.shell"
+            if any(shell.get(surface,{}).get("enabled",True) for surface in ("panel","menus","overview") if shell.get(surface)):self._stage_extension(True,"gnome-customizer@io.github.gnomecustomizer")
+            for surface,fields in SHELL_SURFACE_SETTINGS.items():
                 for prop,key in fields.items():
                     if prop in shell.get(surface,{}) and self.settings.supports(schema,key):self.changes.stage(Change("shell",schema,key,shell[surface][prop],f"Theme {surface} {prop}"))
+                legacy_color=shell.get(surface,{}).get("color1")
+                if legacy_color and "color" not in shell[surface] and self.settings.supports(schema,fields["color"]):self.changes.stage(Change("shell",schema,fields["color"],legacy_color,f"Theme {surface} color"))
                 if surface in {"panel","menus"} and shell.get(surface):
                     prefix="menu" if surface=="menus" else surface;gradient=shell[surface].get("background_type")=="gradient";self.changes.stage(Change("shell",schema,f"{prefix}-gradient-enabled",gradient,f"Theme {surface} gradient"))
                     if "gradient_angle" in shell[surface]:self.changes.stage(Change("shell",schema,f"{prefix}-gradient-direction","vertical" if 45<=shell[surface]["gradient_angle"]<=135 else "horizontal",f"Theme {surface} gradient direction"))
             dock=shell.get("dock",{});dock_schema="org.gnome.shell.extensions.dash-to-dock"
             if dock and self.settings.schema(dock_schema):
-                native_dock={"color":"background-color","color1":"background-color","opacity":"background-opacity","icon_size":"dash-max-icon-size"}
-                for prop,key in native_dock.items():
-                    if prop in dock and self.settings.supports(dock_schema,key):self.changes.stage(Change("shell",dock_schema,key,dock[prop],f"Theme dock {prop}"))
-                if ("color" in dock or "color1" in dock) and self.settings.supports(dock_schema,"custom-background-color"):self.changes.stage(Change("shell",dock_schema,"custom-background-color",True,"Theme dock color"))
-                if "opacity" in dock and self.settings.supports(dock_schema,"transparency-mode"):self.changes.stage(Change("shell",dock_schema,"transparency-mode","FIXED","Theme dock transparency"))
-                indicator={"dot":"DOT","dash":"DASHES","line":"SOLID"}.get(dock.get("indicator_style"))
+                for prop,key in DOCK_THEME_SETTINGS.items():
+                    if prop in dock and not (prop == "indicator_style" and dock[prop] in {"none","dot","dash","line"}) and self.settings.supports(dock_schema,key):self.changes.stage(Change("shell",dock_schema,key,dock[prop],f"Theme dock {prop}"))
+                # Version-1 themes exported before complete native Dock snapshots used these lossy aliases.
+                if "color1" in dock and "color" not in dock and self.settings.supports(dock_schema,"background-color"):self.changes.stage(Change("shell",dock_schema,"background-color",dock["color1"],"Theme dock color"))
+                if ("color" in dock or "color1" in dock) and "custom_color" not in dock and self.settings.supports(dock_schema,"custom-background-color"):self.changes.stage(Change("shell",dock_schema,"custom-background-color",True,"Theme dock color"))
+                if "opacity" in dock and "transparency" not in dock and self.settings.supports(dock_schema,"transparency-mode"):self.changes.stage(Change("shell",dock_schema,"transparency-mode","FIXED","Theme dock transparency"))
+                indicator={"dot":"DOTS","dash":"DASHES","line":"SOLID"}.get(dock.get("indicator_style"))
                 if indicator and self.settings.supports(dock_schema,"running-indicator-style"):self.changes.stage(Change("shell",dock_schema,"running-indicator-style",indicator,"Theme dock indicator"))
             login=manifest.get("login",{})
             for role in ("wallpaper","logo"):

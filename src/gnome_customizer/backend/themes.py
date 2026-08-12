@@ -29,6 +29,46 @@ SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 ACCENTS = {"blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate", "brown"}
 SURFACE_FIELDS = {"enabled", "background_type", "color", "color1", "color2", "gradient_angle", "opacity", "blur", "brightness", "saturation", "hover_color", "hover_opacity", "text_color", "muted_text_color", "selected_color", "border_color", "corner_radius", "shadow_strength", "icon_size", "spacing", "indicator_style"}
 APPLICATION_FIELDS = {"window_color", "view_color", "sidebar_color", "headerbar_color", "card_color", "popover_color", "dialog_color", "text_color", "muted_text_color", "accent_color", "accent_text_color", "border_color", "corner_radius", "shadow_strength"}
+DESKTOP_THEME_SETTINGS = {
+    "color_scheme": ("org.gnome.desktop.interface", "color-scheme"),
+    "accent": ("org.gnome.desktop.interface", "accent-color"),
+    "icons": ("org.gnome.desktop.interface", "icon-theme"),
+    "cursor": ("org.gnome.desktop.interface", "cursor-theme"),
+    "gtk_theme": ("org.gnome.desktop.interface", "gtk-theme"),
+    "cursor_size": ("org.gnome.desktop.interface", "cursor-size"),
+    "text_scale": ("org.gnome.desktop.interface", "text-scaling-factor"),
+    "font": ("org.gnome.desktop.interface", "font-name"),
+    "font_antialiasing": ("org.gnome.desktop.interface", "font-antialiasing"),
+    "font_hinting": ("org.gnome.desktop.interface", "font-hinting"),
+    "wallpaper_options": ("org.gnome.desktop.background", "picture-options"),
+    "wallpaper_shading": ("org.gnome.desktop.background", "color-shading-type"),
+    "wallpaper_primary_color": ("org.gnome.desktop.background", "primary-color"),
+    "wallpaper_secondary_color": ("org.gnome.desktop.background", "secondary-color"),
+    "clock_format": ("org.gnome.desktop.interface", "clock-format"),
+    "clock_show_date": ("org.gnome.desktop.interface", "clock-show-date"),
+    "clock_show_weekday": ("org.gnome.desktop.interface", "clock-show-weekday"),
+    "clock_show_seconds": ("org.gnome.desktop.interface", "clock-show-seconds"),
+    "battery_percentage": ("org.gnome.desktop.interface", "show-battery-percentage"),
+    "sound_theme": ("org.gnome.desktop.sound", "theme-name"),
+}
+DOCK_THEME_SETTINGS = {
+    "position": "dock-position", "panel_mode": "extend-height",
+    "icon_size": "dash-max-icon-size", "icon_size_fixed": "icon-size-fixed",
+    "height_fraction": "height-fraction", "multi_monitor": "multi-monitor",
+    "show_favorites": "show-favorites", "show_running": "show-running",
+    "show_applications": "show-show-apps-button", "show_applications_first": "show-apps-at-top",
+    "always_visible": "dock-fixed", "autohide": "autohide", "intellihide": "intellihide",
+    "transparency": "transparency-mode", "opacity": "background-opacity",
+    "custom_color": "custom-background-color", "color": "background-color",
+    "indicator_style": "running-indicator-style", "built_in_theme": "apply-custom-theme",
+    "straight_corners": "force-straight-corner",
+}
+SHELL_SURFACE_SETTINGS = {
+    "panel": {"enabled": "panel-enabled", "color": "panel-color", "color2": "panel-color2", "opacity": "panel-opacity", "blur": "panel-blur", "text_color": "panel-text-color", "corner_radius": "panel-radius"},
+    "menus": {"enabled": "menu-enabled", "color": "menu-color", "color2": "menu-color2", "opacity": "menu-opacity", "blur": "menu-blur", "text_color": "menu-text-color", "border_color": "menu-border-color", "corner_radius": "menu-radius"},
+    "overview": {"enabled": "overview-enabled", "color": "overview-color", "opacity": "overview-opacity", "blur": "overview-blur", "brightness": "overview-brightness", "saturation": "overview-saturation", "hover_color": "overview-hover-color", "hover_opacity": "overview-hover-opacity"},
+}
+DOCK_FIELDS = set(DOCK_THEME_SETTINGS) | (SURFACE_FIELDS - {"indicator_style", "icon_size", "opacity", "color"})
 
 
 class ThemeError(ValueError): pass
@@ -92,6 +132,23 @@ def _surface(obj: Any, where: str):
     if "indicator_style" in obj and obj["indicator_style"] not in {"none", "dot", "dash", "line"}: raise ThemeError(f"Invalid indicator style at {where}")
 
 
+def _dock(obj: Any, where: str):
+    if not isinstance(obj, dict): raise ThemeError(f"{where} must be an object")
+    _known(obj, DOCK_FIELDS, where)
+    legacy = {field: value for field, value in obj.items() if field in SURFACE_FIELDS}
+    if legacy.get("indicator_style") in {"DEFAULT", "DOTS", "SQUARES", "DASHES", "SEGMENTED", "SOLID", "CILIORA", "METRO", "BINARY", "DOT"}: legacy.pop("indicator_style")
+    _surface(legacy, where)
+    booleans = {"panel_mode", "icon_size_fixed", "multi_monitor", "show_favorites", "show_running", "show_applications", "show_applications_first", "always_visible", "autohide", "intellihide", "custom_color", "built_in_theme", "straight_corners"}
+    for field in booleans:
+        if field in obj and not isinstance(obj[field], bool): raise ThemeError(f"{where}.{field} must be true or false")
+    if "position" in obj and obj["position"] not in {"TOP", "RIGHT", "BOTTOM", "LEFT"}: raise ThemeError(f"Invalid dock position at {where}")
+    if "transparency" in obj and obj["transparency"] not in {"DEFAULT", "FIXED", "DYNAMIC"}: raise ThemeError(f"Invalid dock transparency at {where}")
+    if "indicator_style" in obj and obj["indicator_style"] not in {"DEFAULT", "DOTS", "SQUARES", "DASHES", "SEGMENTED", "SOLID", "CILIORA", "METRO", "BINARY", "DOT", "none", "dot", "dash", "line"}: raise ThemeError(f"Invalid dock indicator at {where}")
+    if "color" in obj and (not isinstance(obj["color"], str) or not COLOR.fullmatch(obj["color"])): raise ThemeError(f"Invalid color at {where}.color")
+    for field, bounds in {"icon_size": (16,128,True), "height_fraction": (.2,1,False), "opacity": (0,1,False)}.items():
+        if field in obj: _number(obj[field], f"{where}.{field}", *bounds)
+
+
 def validate_application_palette(value: Any, require_complete=False) -> dict:
     if not isinstance(value, dict):raise ThemeError("applications must be an object")
     _known(value, APPLICATION_FIELDS, "applications")
@@ -131,18 +188,30 @@ def validate_manifest(manifest: Any, assets: set[str] | None = None, gnome=None)
     if "preview" in manifest: refs.append(_asset(manifest["preview"], "preview"))
     desktop = manifest.get("desktop", {})
     if not isinstance(desktop, dict): raise ThemeError("desktop must be an object")
-    _known(desktop, {"color_scheme", "accent", "wallpaper", "wallpaper_dark", "icons", "cursor", "gtk_theme"}, "desktop")
+    _known(desktop, set(DESKTOP_THEME_SETTINGS) | {"wallpaper", "wallpaper_dark"}, "desktop")
     if "color_scheme" in desktop and desktop["color_scheme"] not in {"default", "prefer-light", "prefer-dark"}: raise ThemeError("Invalid color scheme")
     if "accent" in desktop and desktop["accent"] not in ACCENTS: raise ThemeError("Invalid accent")
     for key in ("wallpaper", "wallpaper_dark"):
         if key in desktop: refs.append(_asset(desktop[key], f"desktop.{key}"))
-    for key in ("icons", "cursor", "gtk_theme"):
+    for key in ("icons", "cursor", "gtk_theme", "font", "sound_theme"):
         if key in desktop: _text(desktop[key], f"desktop.{key}", 100, True)
+    if "cursor_size" in desktop: _number(desktop["cursor_size"], "desktop.cursor_size", 8, 128, True)
+    if "text_scale" in desktop: _number(desktop["text_scale"], "desktop.text_scale", .5, 3)
+    if "font_antialiasing" in desktop and desktop["font_antialiasing"] not in {"none", "grayscale", "rgba"}: raise ThemeError("Invalid font antialiasing")
+    if "font_hinting" in desktop and desktop["font_hinting"] not in {"none", "slight", "medium", "full"}: raise ThemeError("Invalid font hinting")
+    if "wallpaper_options" in desktop and desktop["wallpaper_options"] not in {"none", "wallpaper", "centered", "scaled", "stretched", "zoom", "spanned"}: raise ThemeError("Invalid wallpaper placement")
+    if "wallpaper_shading" in desktop and desktop["wallpaper_shading"] not in {"solid", "vertical", "horizontal"}: raise ThemeError("Invalid wallpaper shading")
+    for key in ("wallpaper_primary_color", "wallpaper_secondary_color"):
+        if key in desktop and (not isinstance(desktop[key], str) or not COLOR.fullmatch(desktop[key])): raise ThemeError(f"Invalid color at desktop.{key}")
+    if "clock_format" in desktop and desktop["clock_format"] not in {"12h", "24h"}: raise ThemeError("Invalid clock format")
+    for key in ("clock_show_date", "clock_show_weekday", "clock_show_seconds", "battery_percentage"):
+        if key in desktop and not isinstance(desktop[key], bool): raise ThemeError(f"desktop.{key} must be true or false")
     if "applications" in manifest:validate_application_palette(manifest["applications"])
     shell = manifest.get("shell", {})
     if not isinstance(shell, dict): raise ThemeError("shell must be an object")
     _known(shell, {"panel", "dock", "menus", "overview"}, "shell")
-    for key, value in shell.items(): _surface(value, f"shell.{key}")
+    for key, value in shell.items():
+        (_dock if key == "dock" else _surface)(value, f"shell.{key}")
     login = manifest.get("login", {})
     if not isinstance(login, dict): raise ThemeError("login must be an object")
     _known(login, {"wallpaper", "background_color", "accent", "logo", "panel"}, "login")
@@ -241,9 +310,8 @@ def capture_current_theme(settings, name: str, author: str) -> tuple[dict, dict[
         "minimum_gnome": "50.1", "maximum_tested_gnome": "50.x", "desktop": {},
     }
     desktop = manifest["desktop"]
-    interface = "org.gnome.desktop.interface"
-    for field, key in (("color_scheme", "color-scheme"), ("accent", "accent-color"), ("icons", "icon-theme"), ("cursor", "cursor-theme"), ("gtk_theme", "gtk-theme")):
-        if supports(interface, key): desktop[field] = get(interface, key)
+    for field, (schema, key) in DESKTOP_THEME_SETTINGS.items():
+        if supports(schema, key): desktop[field] = get(schema, key)
 
     assets: dict[str, Path] = {}
     background = "org.gnome.desktop.background"
@@ -257,36 +325,21 @@ def capture_current_theme(settings, name: str, author: str) -> tuple[dict, dict[
 
     shell_schema = "io.github.gnomecustomizer.shell"
     shell: dict[str, dict] = {}
-    surface_specs = {
-        "panel": ("panel", {"color": "color", "color2": "color2", "opacity": "opacity", "blur": "blur", "text_color": "text-color", "corner_radius": "radius"}),
-        "menus": ("menu", {"color": "color", "color2": "color2", "opacity": "opacity", "blur": "blur", "text_color": "text-color", "border_color": "border-color", "corner_radius": "radius"}),
-        "overview": ("overview", {"color": "color", "opacity": "opacity", "blur": "blur", "brightness": "brightness", "saturation": "saturation", "hover_color": "hover-color", "hover_opacity": "hover-opacity"}),
-    }
-    for section, (prefix, fields) in surface_specs.items():
-        enabled_key = f"{prefix}-enabled"
+    for section, fields in SHELL_SURFACE_SETTINGS.items():
+        prefix = "menu" if section == "menus" else section
+        enabled_key = fields["enabled"]
         if not supports(shell_schema, enabled_key): continue
-        enabled = get(shell_schema, enabled_key)
-        surface = {"enabled": enabled}
-        if enabled or section == "overview":
-            surface.update({field: get(shell_schema, f"{prefix}-{suffix}") for field, suffix in fields.items() if supports(shell_schema, f"{prefix}-{suffix}")})
-        if enabled and section in {"panel", "menus"} and supports(shell_schema, f"{prefix}-gradient-enabled"):
+        surface = {field: get(shell_schema, key) for field, key in fields.items() if supports(shell_schema, key)}
+        if section in {"panel", "menus"} and supports(shell_schema, f"{prefix}-gradient-enabled"):
             gradient = get(shell_schema, f"{prefix}-gradient-enabled")
             surface["background_type"] = "gradient" if gradient else "solid"
-            if gradient and supports(shell_schema, f"{prefix}-gradient-direction"):
+            if supports(shell_schema, f"{prefix}-gradient-direction"):
                 surface["gradient_angle"] = 90 if get(shell_schema, f"{prefix}-gradient-direction") == "vertical" else 0
         shell[section] = surface
 
     dock_schema = "org.gnome.shell.extensions.dash-to-dock"
     if settings.schema(dock_schema):
-        dock: dict[str, Any] = {}
-        if supports(dock_schema, "custom-background-color") and get(dock_schema, "custom-background-color") and supports(dock_schema, "background-color"):
-            dock["color"] = get(dock_schema, "background-color")
-        if supports(dock_schema, "transparency-mode") and get(dock_schema, "transparency-mode") == "FIXED" and supports(dock_schema, "background-opacity"):
-            dock["opacity"] = get(dock_schema, "background-opacity")
-        if supports(dock_schema, "dash-max-icon-size"): dock["icon_size"] = get(dock_schema, "dash-max-icon-size")
-        if supports(dock_schema, "running-indicator-style"):
-            indicator = {"DOT": "dot", "DOTS": "dot", "DASHES": "dash", "SOLID": "line"}.get(get(dock_schema, "running-indicator-style"))
-            if indicator: dock["indicator_style"] = indicator
+        dock = {field: get(dock_schema, key) for field, key in DOCK_THEME_SETTINGS.items() if supports(dock_schema, key)}
         if dock: shell["dock"] = dock
     if shell: manifest["shell"] = shell
     validate_manifest(manifest, set(assets))

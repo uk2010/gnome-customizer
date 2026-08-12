@@ -13,7 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib
 
 from gnome_customizer.window import CustomizerWindow
-from gnome_customizer.backend.themes import capture_current_theme, export_theme, import_theme, inspect_archive
+from gnome_customizer.backend.themes import DESKTOP_THEME_SETTINGS, DOCK_THEME_SETTINGS, SHELL_SURFACE_SETTINGS, capture_current_theme, export_theme, import_theme, inspect_archive
 
 
 def walk(widget):
@@ -106,6 +106,10 @@ def main() -> None:
     if not save_row:
         raise SystemExit("Themes page does not expose Save Current Settings")
     with tempfile.TemporaryDirectory(prefix="gnome-customizer-current-theme-") as temporary:
+        expected_desktop = {field: window.settings.get(schema, key) for field, (schema, key) in DESKTOP_THEME_SETTINGS.items() if window.settings.supports(schema, key)}
+        expected_shell = {surface: {field: window.settings.get("io.github.gnomecustomizer.shell", key) for field, key in fields.items() if window.settings.supports("io.github.gnomecustomizer.shell", key)} for surface, fields in SHELL_SURFACE_SETTINGS.items()}
+        dock_schema = "org.gnome.shell.extensions.dash-to-dock"
+        expected_dock = {field: window.settings.get(dock_schema, key) for field, key in DOCK_THEME_SETTINGS.items() if window.settings.supports(dock_schema, key)} if window.settings.schema(dock_schema) else {}
         manifest, assets = capture_current_theme(window.settings, "Runtime Current Theme", "Runtime Test")
         overview = manifest.get("shell", {}).get("overview", {})
         if (overview.get("hover_color"), overview.get("hover_opacity")) != ("#123456", 0.35):
@@ -115,13 +119,47 @@ def main() -> None:
         archive.close()
         if saved.get("desktop", {}).get("accent") != "blue":
             raise SystemExit("Saved current theme did not round-trip the applied native accent")
+        for field, value in expected_desktop.items():
+            if saved.get("desktop", {}).get(field) != value:
+                raise SystemExit(f"Saved current theme lost desktop setting {field}: {saved.get('desktop', {}).get(field)!r} != {value!r}")
+        for field, value in expected_dock.items():
+            if saved.get("shell", {}).get("dock", {}).get(field) != value:
+                raise SystemExit(f"Saved current theme lost Dock setting {field}: {saved.get('shell', {}).get('dock', {}).get(field)!r} != {value!r}")
+        for surface, fields in expected_shell.items():
+            for field, value in fields.items():
+                if saved.get("shell", {}).get(surface, {}).get(field) != value:
+                    raise SystemExit(f"Saved current theme lost Shell setting {surface}.{field}")
         imported = import_theme(archive_path, Path(temporary) / "themes")
         window._stage_theme(imported)
         staged_hover = window.changes.pending.get(("io.github.gnomecustomizer.shell", "overview-hover-color"))
         staged_menu = window.changes.pending.get(("io.github.gnomecustomizer.shell", "menu-enabled"))
         if not staged_hover or staged_hover.value != "#123456" or not staged_menu or staged_menu.value is not False:
             raise SystemExit("Applying the saved current theme did not restore hover tint and disabled surfaces")
-        window.changes.discard()
+        for field, (schema, key) in DESKTOP_THEME_SETTINGS.items():
+            if field in expected_desktop and (not (pending := window.changes.pending.get((schema, key))) or pending.value != expected_desktop[field]):
+                raise SystemExit(f"Applying the saved theme did not stage desktop setting {field}")
+        for field, key in DOCK_THEME_SETTINGS.items():
+            if field in expected_dock and (not (pending := window.changes.pending.get((dock_schema, key))) or pending.value != expected_dock[field]):
+                raise SystemExit(f"Applying the saved theme did not stage Dock setting {field}")
+        for surface, fields in SHELL_SURFACE_SETTINGS.items():
+            for field, key in fields.items():
+                if field in expected_shell[surface] and (not (pending := window.changes.pending.get(("io.github.gnomecustomizer.shell", key))) or pending.value != expected_shell[surface][field]):
+                    raise SystemExit(f"Applying the saved theme did not stage Shell setting {surface}.{field}")
+        window._apply()
+        apply_loop = GLib.MainLoop()
+        GLib.timeout_add(500, lambda: (apply_loop.quit(), GLib.SOURCE_REMOVE)[1])
+        apply_loop.run()
+        Gio.Settings.sync()
+        for field, (schema, key) in DESKTOP_THEME_SETTINGS.items():
+            if field in expected_desktop and window.settings.get(schema, key) != expected_desktop[field]:
+                raise SystemExit(f"Restored desktop setting did not verify after Apply: {field}")
+        for field, key in DOCK_THEME_SETTINGS.items():
+            if field in expected_dock and window.settings.get(dock_schema, key) != expected_dock[field]:
+                raise SystemExit(f"Restored Dock setting did not verify after Apply: {field}")
+        for surface, fields in SHELL_SURFACE_SETTINGS.items():
+            for field, key in fields.items():
+                if field in expected_shell[surface] and window.settings.get("io.github.gnomecustomizer.shell", key) != expected_shell[surface][field]:
+                    raise SystemExit(f"Restored Shell setting did not verify after Apply: {surface}.{field}")
     window.destroy()
     print("Appearance accent runtime passed: native accent, folder icons, and light/dark themes match GNOME Settings")
 

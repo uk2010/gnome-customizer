@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 
 from gnome_customizer.backend.settings import SettingsBackend, yaru_theme_for_accent
+from gnome_customizer.backend.themes import SHELL_SURFACE_SETTINGS
 
 
 class AppearanceModeTests(unittest.TestCase):
@@ -14,8 +15,8 @@ class AppearanceModeTests(unittest.TestCase):
     def test_legacy_implicit_shell_surface_is_migrated_to_opt_in(self):
         source=(Path(__file__).parents[2]/"src/gnome_customizer/window.py").read_text()
         self.assertIn('self.settings.set(schema,"overview-enabled",False)',source)
-        self.assertIn('"panel":"panel-enabled"',source)
-        self.assertIn('"menus":"menu-enabled"',source)
+        self.assertEqual(SHELL_SURFACE_SETTINGS["panel"]["enabled"],"panel-enabled")
+        self.assertEqual(SHELL_SURFACE_SETTINGS["menus"]["enabled"],"menu-enabled")
 
     def test_gnome_50_yaru_accent_mapping_in_light_and_dark(self):
         source=(Path(__file__).parents[2]/"src/gnome_customizer/window.py").read_text()
