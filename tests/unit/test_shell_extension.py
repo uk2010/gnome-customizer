@@ -80,12 +80,15 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertNotIn("this.actor.connect('leave-event', () => this._conceal())",extension)
         self.assertNotIn("this.actor.height+this._margin-4",extension)
 
-    def test_visible_dock_reserves_workarea_but_hidden_dock_releases_it(self):
+    def test_only_permanently_visible_dock_reserves_workarea(self):
         extension=(ROOT/"shell/extension.js").read_text()
         self.assertIn("name:'gnome-customizer-dock-strut'",extension)
         self.assertIn("Main.layoutManager.trackChrome(this._strut,{affectsStruts:enabled})",extension)
-        self.assertIn("this._setStrutEnabled(this.actor.visible && !hide)",extension)
-        self.assertIn("this._setStrutEnabled(this.actor.visible)",extension)
+        self.assertIn("const reserve=this.actor.visible &&",extension)
+        self.assertIn("!this._settings.get_boolean('dock-autohide')",extension)
+        self.assertIn("!this._settings.get_boolean('dock-intellihide')",extension)
+        self.assertIn("this._setStrutEnabled(reserve)",extension)
+        self.assertNotIn("this._setStrutEnabled(this.actor.visible && !hide)",extension)
         self.assertIn("if (win.get_maximized() !== 0) return true",extension)
 
     def test_overview_uses_blurred_wallpaper_backgrounds(self):

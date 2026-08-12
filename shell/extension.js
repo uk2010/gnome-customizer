@@ -209,7 +209,7 @@ class Dock {
     _reveal() {
         if (!this.actor) return;
         if (this._concealSource) { GLib.Source.remove(this._concealSource); this._concealSource=0; }
-        this._setStrutEnabled(this.actor.visible);
+        this._syncStrut();
         this.actor.ease({opacity: 255, translation_x: 0, translation_y: 0, duration: 180, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
     }
     _scheduleConceal() {
@@ -230,8 +230,14 @@ class Dock {
             else if (this._position==='right') translation_x=this.actor.width+this._margin;
             else translation_y=this.actor.height+this._margin;
         }
-        this._setStrutEnabled(this.actor.visible && !hide);
+        this._syncStrut();
         this.actor.ease({opacity: hide ? 0 : 255, translation_x, translation_y, duration: 220, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+    }
+    _syncStrut() {
+        const reserve=this.actor.visible &&
+            !this._settings.get_boolean('dock-autohide') &&
+            !this._settings.get_boolean('dock-intellihide');
+        this._setStrutEnabled(reserve);
     }
     _setStrutEnabled(enabled) {
         if (!this._strut || this._strutEnabled === enabled) return;

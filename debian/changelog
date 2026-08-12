@@ -1,3 +1,11 @@
+gnome-customizer (0.3.11) resolute; urgency=high
+
+  * Let maximized windows use the full screen in auto-hide modes.
+  * Reveal auto-hidden and intelligently hidden docks over windows without resizing them.
+  * Reserve dock-height work area only when both hide modes are disabled.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 21:45:00 -0500
+
 gnome-customizer (0.3.10) resolute; urgency=high
 
   * Stop auto-hide and intelligent-hide hover oscillation.

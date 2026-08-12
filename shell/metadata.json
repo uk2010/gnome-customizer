@@ -4,6 +4,6 @@
   "description": "Focused dock, blur, and Shell appearance renderer for GNOME Customizer",
   "shell-version": ["50"],
   "settings-schema": "io.github.gnomecustomizer.shell",
-  "version": 18,
+  "version": 19,
   "url": "https://github.com/uk2010/gnome-customizer"
 }
