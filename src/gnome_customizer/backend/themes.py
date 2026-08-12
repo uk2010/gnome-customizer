@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 from functools import lru_cache
+from urllib.parse import unquote, urlparse
 from PIL import Image
 
 from .constants import MIN_GNOME, THEMES_DIR
@@ -26,7 +27,7 @@ ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 ACCENTS = {"blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate", "brown"}
-SURFACE_FIELDS = {"background_type", "color", "color1", "color2", "gradient_angle", "opacity", "blur", "brightness", "saturation", "text_color", "muted_text_color", "selected_color", "border_color", "corner_radius", "shadow_strength", "icon_size", "spacing", "indicator_style"}
+SURFACE_FIELDS = {"enabled", "background_type", "color", "color1", "color2", "gradient_angle", "opacity", "blur", "brightness", "saturation", "hover_color", "hover_opacity", "text_color", "muted_text_color", "selected_color", "border_color", "corner_radius", "shadow_strength", "icon_size", "spacing", "indicator_style"}
 APPLICATION_FIELDS = {"window_color", "view_color", "sidebar_color", "headerbar_color", "card_color", "popover_color", "dialog_color", "text_color", "muted_text_color", "accent_color", "accent_text_color", "border_color", "corner_radius", "shadow_strength"}
 
 
@@ -81,9 +82,10 @@ def _contrast(first: str, second: str) -> float:
 def _surface(obj: Any, where: str):
     if not isinstance(obj, dict): raise ThemeError(f"{where} must be an object")
     _known(obj, SURFACE_FIELDS, where)
-    for field in ("color", "color1", "color2", "text_color", "muted_text_color", "selected_color", "border_color"):
+    if "enabled" in obj and not isinstance(obj["enabled"], bool): raise ThemeError(f"{where}.enabled must be true or false")
+    for field in ("color", "color1", "color2", "hover_color", "text_color", "muted_text_color", "selected_color", "border_color"):
         if field in obj and (not isinstance(obj[field], str) or not COLOR.fullmatch(obj[field])): raise ThemeError(f"Invalid color at {where}.{field}")
-    bounds = {"gradient_angle": (0,360,True), "opacity": (0 if where=="shell.dock" else .1,1,False), "blur": (0,100,True), "brightness": (.2,1.5,False), "saturation": (0,2,False), "corner_radius": (0,32,True), "shadow_strength": (0,1,False), "icon_size": (24,96,True), "spacing": (0,24,True)}
+    bounds = {"gradient_angle": (0,360,True), "opacity": (0,1,False), "blur": (0,100,True), "brightness": (.2,1.5,False), "saturation": (0,2,False), "hover_opacity": (0,1,False), "corner_radius": (0,32,True), "shadow_strength": (0,1,False), "icon_size": (16,128,True), "spacing": (0,24,True)}
     for field, (low, high, integer) in bounds.items():
         if field in obj: _number(obj[field], f"{where}.{field}", low, high, integer)
     if "background_type" in obj and obj["background_type"] not in {"solid", "gradient"}: raise ThemeError(f"Invalid background type at {where}")
@@ -228,3 +230,64 @@ def export_theme(manifest: dict, assets: dict[str, Path], target: Path) -> Path:
     finally:
         try: os.unlink(tmp)
         except FileNotFoundError: pass
+
+
+def capture_current_theme(settings, name: str, author: str) -> tuple[dict, dict[str, Path]]:
+    """Capture the currently applied appearance settings as a portable theme."""
+    get, supports = settings.get, settings.supports
+    manifest = {
+        "format_version": 1, "name": name, "author": author,
+        "description": "Saved from the currently applied GNOME Customizer settings.",
+        "minimum_gnome": "50.1", "maximum_tested_gnome": "50.x", "desktop": {},
+    }
+    desktop = manifest["desktop"]
+    interface = "org.gnome.desktop.interface"
+    for field, key in (("color_scheme", "color-scheme"), ("accent", "accent-color"), ("icons", "icon-theme"), ("cursor", "cursor-theme"), ("gtk_theme", "gtk-theme")):
+        if supports(interface, key): desktop[field] = get(interface, key)
+
+    assets: dict[str, Path] = {}
+    background = "org.gnome.desktop.background"
+    for field, key, asset_name in (("wallpaper", "picture-uri", "wallpaper"), ("wallpaper_dark", "picture-uri-dark", "wallpaper-dark")):
+        if not supports(background, key): continue
+        parsed = urlparse(get(background, key))
+        source = Path(unquote(parsed.path)) if parsed.scheme == "file" and not parsed.netloc else None
+        if source and source.is_file() and source.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS:
+            archive_name = f"assets/{asset_name}{source.suffix.lower()}"
+            desktop[field], assets[archive_name] = archive_name, source
+
+    shell_schema = "io.github.gnomecustomizer.shell"
+    shell: dict[str, dict] = {}
+    surface_specs = {
+        "panel": ("panel", {"color": "color", "color2": "color2", "opacity": "opacity", "blur": "blur", "text_color": "text-color", "corner_radius": "radius"}),
+        "menus": ("menu", {"color": "color", "color2": "color2", "opacity": "opacity", "blur": "blur", "text_color": "text-color", "border_color": "border-color", "corner_radius": "radius"}),
+        "overview": ("overview", {"color": "color", "opacity": "opacity", "blur": "blur", "brightness": "brightness", "saturation": "saturation", "hover_color": "hover-color", "hover_opacity": "hover-opacity"}),
+    }
+    for section, (prefix, fields) in surface_specs.items():
+        enabled_key = f"{prefix}-enabled"
+        if not supports(shell_schema, enabled_key): continue
+        enabled = get(shell_schema, enabled_key)
+        surface = {"enabled": enabled}
+        if enabled or section == "overview":
+            surface.update({field: get(shell_schema, f"{prefix}-{suffix}") for field, suffix in fields.items() if supports(shell_schema, f"{prefix}-{suffix}")})
+        if enabled and section in {"panel", "menus"} and supports(shell_schema, f"{prefix}-gradient-enabled"):
+            gradient = get(shell_schema, f"{prefix}-gradient-enabled")
+            surface["background_type"] = "gradient" if gradient else "solid"
+            if gradient and supports(shell_schema, f"{prefix}-gradient-direction"):
+                surface["gradient_angle"] = 90 if get(shell_schema, f"{prefix}-gradient-direction") == "vertical" else 0
+        shell[section] = surface
+
+    dock_schema = "org.gnome.shell.extensions.dash-to-dock"
+    if settings.schema(dock_schema):
+        dock: dict[str, Any] = {}
+        if supports(dock_schema, "custom-background-color") and get(dock_schema, "custom-background-color") and supports(dock_schema, "background-color"):
+            dock["color"] = get(dock_schema, "background-color")
+        if supports(dock_schema, "transparency-mode") and get(dock_schema, "transparency-mode") == "FIXED" and supports(dock_schema, "background-opacity"):
+            dock["opacity"] = get(dock_schema, "background-opacity")
+        if supports(dock_schema, "dash-max-icon-size"): dock["icon_size"] = get(dock_schema, "dash-max-icon-size")
+        if supports(dock_schema, "running-indicator-style"):
+            indicator = {"DOT": "dot", "DOTS": "dot", "DASHES": "dash", "SOLID": "line"}.get(get(dock_schema, "running-indicator-style"))
+            if indicator: dock["indicator_style"] = indicator
+        if dock: shell["dock"] = dock
+    if shell: manifest["shell"] = shell
+    validate_manifest(manifest, set(assets))
+    return manifest, assets

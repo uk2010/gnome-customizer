@@ -4,7 +4,7 @@ import json, tempfile, threading
 from pathlib import Path
 import cairo
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
-from ..backend.themes import compatibility_warnings, export_theme, import_theme, ThemeError
+from ..backend.themes import capture_current_theme, compatibility_warnings, export_theme, import_theme, ThemeError
 from ..color import color_button, css_rgba, hex_color, rgba
 
 
@@ -24,9 +24,9 @@ class ThemeBuilderPage(Gtk.Box):
         for title,key,default in (("Window","window_color","#18181C"),("Content View","view_color","#111114"),("Sidebar","sidebar_color","#202027"),("Header Bar","headerbar_color","#24242C"),("Cards","card_color","#292932"),("Popovers &amp; Menus","popover_color","#2D2D37"),("Dialogs","dialog_color","#24242C"),("Text","text_color","#F4F4F6"),("Muted Text","muted_text_color","#B6B6C2"),("Selection","accent_color","#3066D6"),("Selected Text","accent_text_color","#FFFFFF"),("Borders","border_color","#444451")):self._entry(apps,title,("applications",key),default)
         self._spin(apps,"Corner Radius",("applications","corner_radius"),0,32,1,12);self._spin(apps,"Shadow Strength",("applications","shadow_strength"),0,1,.05,.35)
         panel=self._group(editor,"Top Bar");self._combo(panel,"Background",("shell","panel","background_type"),["solid","gradient"],"solid");self._entry(panel,"Background Color",("shell","panel","color"),"#16161A");self._entry(panel,"Gradient End",("shell","panel","color2"),"#303044");self._spin(panel,"Gradient Angle",("shell","panel","gradient_angle"),0,360,1,90);self._entry(panel,"Text Color",("shell","panel","text_color"),"#FFFFFF");self._spin(panel,"Opacity",("shell","panel","opacity"),.1,1,.01,.88);self._spin(panel,"Blur",("shell","panel","blur"),0,100,1,20);self._spin(panel,"Corner Radius",("shell","panel","corner_radius"),0,32,1,0)
-        dock=self._group(editor,"GNOME Dock");self._entry(dock,"Background Color",("shell","dock","color"),"#202026");self._spin(dock,"Opacity",("shell","dock","opacity"),0,1,.01,.82);self._spin(dock,"Icon Size",("shell","dock","icon_size"),24,96,1,48);self._combo(dock,"Indicator",("shell","dock","indicator_style"),["dot","dash","line"],"dot")
+        dock=self._group(editor,"GNOME Dock");self._entry(dock,"Background Color",("shell","dock","color"),"#202026");self._spin(dock,"Opacity",("shell","dock","opacity"),0,1,.01,.82);self._spin(dock,"Icon Size",("shell","dock","icon_size"),16,128,1,48);self._combo(dock,"Indicator",("shell","dock","indicator_style"),["dot","dash","line"],"dot")
         menus=self._group(editor,"Menus &amp; Popovers");self._combo(menus,"Background",("shell","menus","background_type"),["solid","gradient"],"solid");self._entry(menus,"Surface Color",("shell","menus","color"),"#202026");self._entry(menus,"Gradient End",("shell","menus","color2"),"#303044");self._spin(menus,"Gradient Angle",("shell","menus","gradient_angle"),0,360,1,90);self._entry(menus,"Text Color",("shell","menus","text_color"),"#FFFFFF");self._entry(menus,"Border Color",("shell","menus","border_color"),"#444452");self._spin(menus,"Opacity",("shell","menus","opacity"),.2,1,.01,.94);self._spin(menus,"Blur",("shell","menus","blur"),0,100,1,16);self._spin(menus,"Corner Radius",("shell","menus","corner_radius"),0,32,1,14)
-        overview=self._group(editor,"Overview &amp; Blur");self._entry(overview,"Backdrop Tint",("shell","overview","color"),"#18243A");self._spin(overview,"Tint Opacity",("shell","overview","opacity"),0,1,.01,.28);self._spin(overview,"Blur",("shell","overview","blur"),0,100,1,30);self._spin(overview,"Brightness",("shell","overview","brightness"),.2,1.5,.05,.75);self._spin(overview,"Saturation",("shell","overview","saturation"),0,1,.05,.85)
+        overview=self._group(editor,"Overview &amp; Blur");self._entry(overview,"Backdrop Tint",("shell","overview","color"),"#18243A");self._spin(overview,"Tint Opacity",("shell","overview","opacity"),0,1,.01,.28);self._spin(overview,"Blur",("shell","overview","blur"),0,100,1,30);self._spin(overview,"Brightness",("shell","overview","brightness"),.2,1.5,.05,.75);self._spin(overview,"Saturation",("shell","overview","saturation"),0,1,.05,.85);self._entry(overview,"Hover Background Tint",("shell","overview","hover_color"),"#FFFFFF");self._spin(overview,"Hover Background Opacity",("shell","overview","hover_opacity"),0,1,.05,1)
         login=self._group(editor,"Login Screen");self._entry(login,"Background Color",("login","background_color"),"#203050");self._combo(login,"Accent",("login","accent"),["blue","teal","green","yellow","orange","red","pink","purple","slate","brown"],"blue");self._asset(login,"Wallpaper",("login","wallpaper"),"login-wallpaper");self._asset(login,"Logo",("login","logo"),"login-logo")
         preview_box=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8,hexpand=True,vexpand=True);split.set_end_child(preview_box);self.preview_stack=Adw.ViewStack();self._preview_pictures={};self._preview_logos={};switcher=Adw.ViewSwitcher(stack=self.preview_stack,halign=Gtk.Align.FILL,hexpand=True);preview_box.append(switcher);preview_box.append(self.preview_stack);preview_box.append(Gtk.Label(label="Blur and transparency are approximated in the preview.",wrap=True,xalign=0,css_classes=["dim-label"]))
         for name,title in (("desktop","Desktop"),("apps","App Preview"),("overview","Overview"),("menus","Menus"),("login","Login")):self.preview_stack.add_titled(self._preview(name),name,title)
@@ -143,8 +143,10 @@ class ThemeBuilderPage(Gtk.Box):
 
 
 class ThemesPage(Adw.PreferencesPage):
-    def __init__(self,toast,apply_theme=None):
-        super().__init__(title="Themes",description="Import and share validated appearance-only themes");self.toast=toast;self.apply_theme=apply_theme;self.group=Adw.PreferencesGroup(title="Local Themes");self.add(self.group)
+    def __init__(self,toast,apply_theme=None,settings=None):
+        super().__init__(title="Themes",description="Import, save, and share validated appearance-only themes");self.toast=toast;self.apply_theme=apply_theme;self.settings=settings;self.group=Adw.PreferencesGroup(title="Local Themes");self.add(self.group)
+        if settings:
+            save=Adw.ActionRow(title="Save Current Settings",subtitle="Export the currently applied desktop, Shell, and dock appearance as a reusable theme");save_button=Gtk.Button(label="Save as Theme",valign=Gtk.Align.CENTER,css_classes=["suggested-action"]);save_button.connect("clicked",self._save_current);save.add_suffix(save_button);self.group.add(save)
         row=Adw.ActionRow(title="Import .gctheme",subtitle="Archives are validated before extraction");button=Gtk.Button(label="Choose File",valign=Gtk.Align.CENTER);button.connect("clicked",self._choose);row.add_suffix(button);self.group.add(row)
         self.samples=Adw.PreferencesGroup(title="Included Samples",description="Safe themes shipped with GNOME Customizer");self.add(self.samples);self._sample_temp=tempfile.TemporaryDirectory(prefix="gnome-customizer-samples-")
         from ..backend.constants import THEMES_DIR
@@ -159,6 +161,19 @@ class ThemesPage(Adw.PreferencesPage):
             try:GLib.idle_add(self._add_theme,import_theme(archive,Path(self._sample_temp.name)),self.samples)
             except Exception as exc:GLib.idle_add(self.toast,f"Sample theme error: {exc}")
     def _choose(self,*_):Gtk.FileDialog(title="Import Theme").open(self.get_root(),None,self._done)
+    def _save_current(self,*_):Gtk.FileDialog(title="Save Current Settings as Theme",initial_name="Current Settings.gctheme").save(self.get_root(),None,self._save_current_done)
+    def _save_current_done(self,dialog,result):
+        try:
+            target=Path(dialog.save_finish(result).get_path());name=target.stem.strip() or "Current Settings";author=GLib.get_real_name()
+            if not author or author == "Unknown":author=GLib.get_user_name() or "GNOME User"
+            manifest,assets=capture_current_theme(self.settings,name,author)
+            threading.Thread(target=self._save_current_worker,args=(manifest,assets,target),daemon=True).start()
+        except GLib.Error:pass
+        except Exception as exc:self.toast(str(exc))
+    def _save_current_worker(self,manifest,assets,target):
+        try:
+            archive=export_theme(manifest,assets,target);directory=import_theme(archive);GLib.idle_add(self._add_theme,directory);GLib.idle_add(self.toast,f"Saved {manifest['name']} as a reusable theme")
+        except Exception as exc:GLib.idle_add(self.toast,str(exc))
     def _done(self,dialog,result):
         try:path=Path(dialog.open_finish(result).get_path());threading.Thread(target=self._import_worker,args=(path,),daemon=True).start()
         except GLib.Error:pass

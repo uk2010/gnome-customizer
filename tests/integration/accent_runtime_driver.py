@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import tempfile
 
 import gi
 
@@ -12,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib
 
 from gnome_customizer.window import CustomizerWindow
+from gnome_customizer.backend.themes import capture_current_theme, export_theme, import_theme, inspect_archive
 
 
 def walk(widget):
@@ -34,6 +36,11 @@ def main() -> None:
     if not app.register(None):
         raise SystemExit("Could not register accent runtime test application")
     window = CustomizerWindow(app)
+    shell_settings = Gio.Settings.new("io.github.gnomecustomizer.shell")
+    shell_settings.set_boolean("overview-enabled", True)
+    shell_settings.set_string("overview-hover-color", "#123456")
+    shell_settings.set_double("overview-hover-opacity", 0.35)
+    Gio.Settings.sync()
     accent = next(
         widget for widget in walk(window)
         if isinstance(widget, Adw.ComboRow) and widget.get_title() == "Accent Color"
@@ -92,6 +99,29 @@ def main() -> None:
         raise SystemExit("The GNOME-selected Yaru folder icon assets are not installed")
     if hashlib.sha256(blue_folder.read_bytes()).digest() == hashlib.sha256(red_folder.read_bytes()).digest():
         raise SystemExit("The selected blue and red Yaru folder assets are unexpectedly identical")
+    save_row = next(
+        widget for widget in walk(window)
+        if isinstance(widget, Adw.ActionRow) and widget.get_title() == "Save Current Settings"
+    )
+    if not save_row:
+        raise SystemExit("Themes page does not expose Save Current Settings")
+    with tempfile.TemporaryDirectory(prefix="gnome-customizer-current-theme-") as temporary:
+        manifest, assets = capture_current_theme(window.settings, "Runtime Current Theme", "Runtime Test")
+        overview = manifest.get("shell", {}).get("overview", {})
+        if (overview.get("hover_color"), overview.get("hover_opacity")) != ("#123456", 0.35):
+            raise SystemExit(f"Current theme did not capture hover background settings: {overview!r}")
+        archive_path = export_theme(manifest, assets, Path(temporary) / "current.gctheme")
+        saved, archive = inspect_archive(archive_path)
+        archive.close()
+        if saved.get("desktop", {}).get("accent") != "blue":
+            raise SystemExit("Saved current theme did not round-trip the applied native accent")
+        imported = import_theme(archive_path, Path(temporary) / "themes")
+        window._stage_theme(imported)
+        staged_hover = window.changes.pending.get(("io.github.gnomecustomizer.shell", "overview-hover-color"))
+        staged_menu = window.changes.pending.get(("io.github.gnomecustomizer.shell", "menu-enabled"))
+        if not staged_hover or staged_hover.value != "#123456" or not staged_menu or staged_menu.value is not False:
+            raise SystemExit("Applying the saved current theme did not restore hover tint and disabled surfaces")
+        window.changes.discard()
     window.destroy()
     print("Appearance accent runtime passed: native accent, folder icons, and light/dark themes match GNOME Settings")
 

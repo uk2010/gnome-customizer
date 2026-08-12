@@ -18,6 +18,7 @@
     <key name="overview-brightness" type="d"><range min="0.2" max="1.5"/><default>0.75</default></key>
     <key name="overview-saturation" type="d"><range min="0.0" max="2.0"/><default>0.85</default></key>
     <key name="overview-hover-opacity" type="d"><range min="0.0" max="1.0"/><default>1.0</default></key>
+    <key name="overview-hover-color" type="s"><default>'#FFFFFF'</default></key>
     <key name="menu-blur" type="i"><range min="0" max="100"/><default>16</default></key>
     <key name="menu-enabled" type="b"><default>false</default></key>
     <key name="menu-color" type="s"><default>'#202026'</default></key>

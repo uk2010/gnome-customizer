@@ -1,3 +1,12 @@
+gnome-customizer (0.3.17) resolute; urgency=high
+
+  * Save the currently applied appearance as a reusable .gctheme archive.
+  * Round-trip desktop themes, wallpapers, Shell surface states, and dock appearance.
+  * Apply opacity to overview hover backgrounds instead of fading application icons.
+  * Add an independent tint color for overview and app-grid hover backgrounds.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Wed, 12 Aug 2026 21:30:00 -0500
+
 gnome-customizer (0.3.16) resolute; urgency=high
 
   * Match Ubuntu GNOME 50's native accent-to-Yaru theme mapping exactly.
