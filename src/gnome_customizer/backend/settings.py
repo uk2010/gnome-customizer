@@ -11,6 +11,21 @@ class SettingsError(RuntimeError):
     pass
 
 
+YARU_ACCENT_VARIANTS = {
+    "bark", "blue", "magenta", "olive", "prussiangreen", "purple",
+    "red", "sage", "viridian", "wartybrown", "yellow",
+}
+
+
+def neutral_yaru_theme(name: str, dark: bool) -> str:
+    """Return GNOME 50's neutral Yaru theme for a legacy accent variant."""
+    suffix = "-dark" if name.endswith("-dark") else ""
+    accent = name.removeprefix("Yaru-").removesuffix(suffix)
+    if name.startswith("Yaru-") and accent in YARU_ACCENT_VARIANTS:
+        return "Yaru-dark" if dark else "Yaru"
+    return name
+
+
 class SettingsBackend:
     """Schema-aware GSettings access; unsupported keys never become controls."""
 

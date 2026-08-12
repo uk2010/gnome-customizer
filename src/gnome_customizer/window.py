@@ -9,7 +9,7 @@ from .backend.constants import ASSETS_DIR
 from .backend.assets import copy_managed_image, remove_managed_images
 from .backend.app_theme import ApplicationThemeManager
 from .backend.transactions import Change
-from .backend.settings import SettingsBackend
+from .backend.settings import SettingsBackend, neutral_yaru_theme
 from .backend.state import StateStore
 from .backend.transactions import ChangeManager, TransactionError
 from .backend.system_proxy import SystemHelperProxy
@@ -49,15 +49,15 @@ class CustomizerWindow(Adw.ApplicationWindow):
         if token in managed:managed.remove(token)
         self.state.data[marker]=True;self.state.save()
     def _migrate_native_theme_ownership(self):
-        """Remove dark Yaru names left pinned by legacy releases when GNOME is light."""
-        marker="native_theme_ownership_v1"
+        """Remove legacy Yaru accent variants so GNOME 50's accent key is authoritative."""
+        marker="native_accent_ownership_v2"
         if self.state.data.get(marker):return
         schema="org.gnome.desktop.interface"
-        if self.settings.get(schema,"color-scheme")=="prefer-light":
-            roots={"gtk-theme":Path("/usr/share/themes"),"icon-theme":Path("/usr/share/icons")}
-            for key,root in roots.items():
-                current=self.settings.get(schema,key)
-                if current.startswith("Yaru") and current.endswith("-dark") and (root/current[:-5]).is_dir():self.settings.set(schema,key,current[:-5])
+        dark=self.settings.get(schema,"color-scheme")=="prefer-dark"
+        roots={"gtk-theme":Path("/usr/share/themes"),"icon-theme":Path("/usr/share/icons")}
+        for key,root in roots.items():
+            current=self.settings.get(schema,key);target=neutral_yaru_theme(current,dark)
+            if target!=current and (root/target).is_dir():self.settings.set(schema,key,target)
         self.state.data[marker]=True;self.state.save()
     def toast(self,text):self.toast_overlay.add_toast(Adw.Toast(title=str(text),timeout=4))
     def _add(self,name,widget):self.content.add_named(widget,name)

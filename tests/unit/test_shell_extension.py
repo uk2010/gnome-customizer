@@ -54,9 +54,18 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;'", extension)
         self.assertIn("y:monitor.y+0.5,z_position:1", extension)
         self.assertIn("radius:sigma*scale", extension)
-        self.assertIn("Main.overview.connect('showing', () => this._lowerOverviewBackground())", extension)
+        self.assertIn("Main.overview.connect('showing', () => { this._lowerOverviewBackground();this._queueOverviewIconScan(); })", extension)
         for key in ("overview-enabled", "overview-opacity", "overview-brightness", "overview-saturation"):
             self.assertIn(key, schema)
+
+    def test_overview_icon_hover_opacity_is_applied_and_restored(self):
+        extension=(ROOT/"shell/extension.js").read_text();preferences=(ROOT/"src/gnome_customizer/pages/preferences.py").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
+        self.assertIn('name="overview-hover-opacity"',schema)
+        self.assertIn('"Hovered Icon Opacity",schema,"overview-hover-opacity"',preferences)
+        self.assertIn("classes.includes('overview-tile') || classes.includes('grid-search-result')",extension)
+        self.assertIn("actor.connect('notify::hover'",extension)
+        self.assertIn("get_double('overview-hover-opacity')*255",extension)
+        self.assertIn("record.icon.set_opacity(record.opacity)",extension)
 
     def test_unenabled_surfaces_leave_gnome_shell_in_control(self):
         extension=(ROOT/"shell/extension.js").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()

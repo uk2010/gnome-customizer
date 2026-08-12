@@ -34,4 +34,4 @@ Run the real compositor smoke test on a GNOME 50 development host:
 python3 tests/integration/check_shell_runtime.py
 ```
 
-It starts an isolated headless GNOME Shell with a virtual monitor, verifies that the companion becomes active without extension errors, confirms panel and overview blur effects, and exercises disable/re-enable cleanup.
+It starts an isolated headless GNOME Shell with a virtual monitor, drives the real Appearance accent control through Apply, verifies the native GNOME accent value and Yaru migration, confirms panel and overview blur effects, finds real overview icons for hover-opacity control, and exercises disable/re-enable cleanup.

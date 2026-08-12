@@ -1,3 +1,12 @@
+gnome-customizer (0.3.15) resolute; urgency=high
+
+  * Keep GNOME 50's native accent-color setting authoritative.
+  * Migrate stale colored Yaru GTK and icon variants to neutral Yaru themes.
+  * Add configurable opacity for hovered overview and app-grid icons.
+  * Exercise the real Appearance accent control and Apply path in GNOME Shell.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Wed, 12 Aug 2026 18:00:00 -0500
+
 gnome-customizer (0.3.14) resolute; urgency=high
 
   * Apply top-bar color, opacity, radius, and blur directly to GNOME's panel.

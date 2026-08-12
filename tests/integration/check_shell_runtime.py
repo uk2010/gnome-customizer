@@ -43,6 +43,7 @@ def main() -> None:
         extension = base / "data/gnome-shell/extensions" / UUID
         extension.mkdir(parents=True)
         (base / "config").mkdir()
+        (base / "home").mkdir()
         (base / "runtime").mkdir(mode=0o700)
         (base / "schemas").mkdir()
         for name in ("extension.js", "metadata.json", "stylesheet.css"):
@@ -67,6 +68,7 @@ gsettings set io.github.gnomecustomizer.shell panel-opacity 1.0
 gsettings set io.github.gnomecustomizer.shell panel-blur 20
 gsettings set io.github.gnomecustomizer.shell overview-enabled true
 gsettings set io.github.gnomecustomizer.shell overview-blur 30
+gsettings set io.github.gnomecustomizer.shell overview-hover-opacity 0.35
 gnome-shell --wayland --headless --virtual-monitor 1024x768 --no-x11 >"$SMOKE_ROOT/shell.log" 2>&1 &
 shell_pid=$!
 cleanup() { kill "$shell_pid" 2>/dev/null || true; wait "$shell_pid" 2>/dev/null || true; }
@@ -79,15 +81,7 @@ done
 $ready
 sleep 2
 export WAYLAND_DISPLAY=wayland-0
-PYTHONPATH="$PYTHON_SOURCE" python3 -m gnome_customizer >"$SMOKE_ROOT/app.log" 2>&1 &
-app_pid=$!
-sleep 2
-if ! kill -0 "$app_pid" 2>/dev/null; then
-    wait "$app_pid"
-    exit 1
-fi
-kill "$app_pid"
-wait "$app_pid" 2>/dev/null || true
+GDK_DEBUG=no-portals PYTHONPATH="$PYTHON_SOURCE" python3 "$ACCENT_DRIVER" >"$SMOKE_ROOT/app.log" 2>&1
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Extensions.GetExtensionInfo gnome-customizer@io.github.gnomecustomizer >"$SMOKE_ROOT/info-before.log"
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Extensions.GetExtensionErrors gnome-customizer@io.github.gnomecustomizer >"$SMOKE_ROOT/errors-before.log"
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Extensions.DisableExtension gnome-customizer@io.github.gnomecustomizer >"$SMOKE_ROOT/disable.log"
@@ -99,7 +93,9 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
 '''
         environment = os.environ.copy()
         environment["SMOKE_ROOT"] = str(base)
+        environment["HOME"] = str(base / "home")
         environment["PYTHON_SOURCE"] = str(python_source)
+        environment["ACCENT_DRIVER"] = str(ROOT / "tests/integration/accent_runtime_driver.py")
         completed = subprocess.run(
             ["dbus-run-session", "--", "bash", "-c", script],
             env=environment,
@@ -109,7 +105,12 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
             timeout=30,
         )
         if completed.returncode:
-            raise SystemExit(f"Headless GNOME Shell harness failed:\n{completed.stdout}\n{completed.stderr}")
+            app_log = (base / "app.log").read_text(errors="replace") if (base / "app.log").exists() else "(no app log)"
+            shell_log = (base / "shell.log").read_text(errors="replace") if (base / "shell.log").exists() else "(no shell log)"
+            raise SystemExit(
+                f"Headless GNOME Shell harness failed:\n{completed.stdout}\n{completed.stderr}"
+                f"\nApplication log:\n{app_log}\nShell log:\n{shell_log}"
+            )
 
         before = (base / "info-before.log").read_text()
         after = (base / "info-after.log").read_text()
@@ -128,13 +129,17 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
             raise SystemExit("The real GNOME panel did not receive its configured style and blur effect")
         if "GNOME Customizer: overview applied (blur=30, monitors=1)" not in shell_log:
             raise SystemExit("The overview did not receive its configured per-monitor blur")
+        if not re.search(r"GNOME Customizer: overview hover icons tracked \([1-9][0-9]*\)", shell_log):
+            raise SystemExit("GNOME Shell did not expose any overview icons to the hover-opacity controller")
         forbidden = re.compile(r"JS ERROR|TypeError|ReferenceError|gnome-customizer-panel-background|needs an allocation|assertion 'width >= 1'", re.I)
         problems = [line for line in shell_log.splitlines() if forbidden.search(line)]
         if problems:
             raise SystemExit("Companion emitted runtime errors:\n" + "\n".join(problems))
         if re.search(r"Traceback|SettingsError|Gtk-ERROR|Gdk-ERROR", app_log, re.I):
             raise SystemExit("GNOME Customizer application failed under the test compositor:\n" + app_log)
-        print("GNOME runtime check passed: app pages launched, panel/overview effects applied, disable/re-enable clean")
+        if "Appearance accent runtime passed" not in app_log:
+            raise SystemExit("The Appearance accent end-to-end check did not complete:\n" + app_log)
+        print("GNOME runtime check passed: native accent, panel/overview effects, and disable/re-enable clean")
 
 
 if __name__ == "__main__":

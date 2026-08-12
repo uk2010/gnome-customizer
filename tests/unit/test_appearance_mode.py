@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from gnome_customizer.backend.settings import SettingsBackend
+from gnome_customizer.backend.settings import SettingsBackend, neutral_yaru_theme
 
 
 class AppearanceModeTests(unittest.TestCase):
@@ -17,10 +17,21 @@ class AppearanceModeTests(unittest.TestCase):
         self.assertIn('"panel":"panel-enabled"',source)
         self.assertIn('"menus":"menu-enabled"',source)
 
-    def test_legacy_dark_yaru_names_are_unpinned_in_light_mode(self):
+    def test_legacy_yaru_accent_variants_are_unpinned_for_native_accent(self):
         source=(Path(__file__).parents[2]/"src/gnome_customizer/window.py").read_text()
-        self.assertIn('marker="native_theme_ownership_v1"',source)
-        self.assertIn('current.endswith("-dark")',source)
+        self.assertIn('marker="native_accent_ownership_v2"',source)
+        self.assertEqual(neutral_yaru_theme("Yaru-blue-dark",True),"Yaru-dark")
+        self.assertEqual(neutral_yaru_theme("Yaru-red",False),"Yaru")
+        self.assertEqual(neutral_yaru_theme("Yaru-wartybrown-dark",False),"Yaru")
+        self.assertEqual(neutral_yaru_theme("Yaru-dark",True),"Yaru-dark")
+        self.assertEqual(neutral_yaru_theme("Adwaita-dark",True),"Adwaita-dark")
+
+    def test_accent_control_uses_only_gnome_50_native_setting(self):
+        source=(Path(__file__).parents[2]/"src/gnome_customizer/pages/preferences.py").read_text()
+        accent_line=next(line for line in source.splitlines() if 'self.combo(g,"Accent Color"' in line)
+        self.assertIn('"org.gnome.desktop.interface","accent-color"',accent_line)
+        self.assertNotIn("gtk-theme",accent_line)
+        self.assertNotIn("icon-theme",accent_line)
 
     def test_ubuntu_wallpaper_defaults_are_real_image_uris(self):
         backend=SettingsBackend()

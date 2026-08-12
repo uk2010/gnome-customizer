@@ -26,7 +26,7 @@ function backgroundStyle(settings, prefix, opacity=1) {
 
 export default class CustomizerExtension extends Extension {
     enable() {
-        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._started = false;
+        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewIconActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._overviewScanSource = 0; this._started = false;
         this._changed = this._settings.connect('changed', () => this._sync());
         this._startupComplete = 0;
         if (Main.layoutManager._startingUp)
@@ -40,10 +40,54 @@ export default class CustomizerExtension extends Extension {
         this._started=true;
         this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style();
         this._monitors = Main.layoutManager.connect('monitors-changed', () => this._rebuildOverviewBackgrounds());
-        this._overviewShowing = Main.overview.connect('showing', () => this._lowerOverviewBackground());
+        this._overviewShowing = Main.overview.connect('showing', () => { this._lowerOverviewBackground();this._queueOverviewIconScan(); });
         this._overviewHidden = Main.overview.connect('hidden', () => this._queuePanelStyleRestore());
+        this._overviewAdded = Main.layoutManager.overviewGroup.connect('child-added', () => this._queueOverviewIconScan());
         this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) this._styleMenus(); return GLib.SOURCE_REMOVE; }));
         this._rebuildOverviewBackgrounds(); this._sync();
+    }
+    _findOverviewIcon(actor) {
+        if (actor.get_style_class_name?.()?.split(' ').includes('overview-icon')) return actor;
+        for (const child of actor.get_children?.() ?? []) {
+            const found=this._findOverviewIcon(child);if (found) return found;
+        }
+        return null;
+    }
+    _queueOverviewIconScan() {
+        if (this._overviewScanSource || !this._settings) return;
+        this._overviewScanSource=GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._overviewScanSource=0;if (this._settings) this._styleOverviewIcons();return GLib.SOURCE_REMOVE;
+        });
+    }
+    _styleOverviewIcons() {
+        const visit=actor => {
+            const classes=actor.get_style_class_name?.()?.split(' ') ?? [];
+            if ((classes.includes('overview-tile') || classes.includes('grid-search-result')) && !this._overviewIconActors.has(actor)) {
+                const icon=this._findOverviewIcon(actor);
+                if (icon) {
+                    const record={icon,opacity:icon.opacity,hoverId:0,destroyId:0};
+                    record.hoverId=actor.connect('notify::hover', () => this._syncOverviewIcon(actor));
+                    record.destroyId=actor.connect('destroy', () => this._overviewIconActors?.delete(actor));
+                    this._overviewIconActors.set(actor,record);
+                }
+            }
+            for (const child of actor.get_children?.() ?? []) visit(child);
+        };
+        visit(Main.layoutManager.overviewGroup);
+        for (const actor of this._overviewIconActors.keys()) this._syncOverviewIcon(actor);
+        const count=this._overviewIconActors.size;
+        if (count !== this._overviewIconDiagnostic) { this._overviewIconDiagnostic=count;if (count) console.log(`GNOME Customizer: overview hover icons tracked (${count})`); }
+    }
+    _syncOverviewIcon(actor) {
+        const record=this._overviewIconActors.get(actor);if (!record) return;
+        const hovered=actor.get_hover?.() ?? actor.hover;
+        record.icon.set_opacity(hovered ? Math.round(this._settings.get_double('overview-hover-opacity')*255) : record.opacity);
+    }
+    _restoreOverviewIcons() {
+        for (const [actor,record] of this._overviewIconActors) {
+            try { actor.disconnect(record.hoverId);actor.disconnect(record.destroyId);record.icon.set_opacity(record.opacity); } catch (_) {}
+        }
+        this._overviewIconActors.clear();
     }
     _blur(actor, name, sigma, brightness=1.0) {
         actor.remove_effect_by_name(name);
@@ -178,15 +222,18 @@ export default class CustomizerExtension extends Extension {
         if (!this._started) return;
         this._syncPanel();
         this._syncOverviewBackgrounds();
+        this._styleOverviewIcons();
         this._styleMenus();
     }
     disable() {
         if (this._startupComplete) { Main.layoutManager.disconnect(this._startupComplete); this._startupComplete=0; }
         if (this._panelRestoreSource) { GLib.Source.remove(this._panelRestoreSource); this._panelRestoreSource=0; }
+        if (this._overviewScanSource) { GLib.Source.remove(this._overviewScanSource); this._overviewScanSource=0; }
         this._settings.disconnect(this._changed);
         if (!this._started) { this._settings=null; return; }
-        Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.uiGroup.disconnect(this._uiAdded);
+        Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.layoutManager.overviewGroup.disconnect(this._overviewAdded); Main.uiGroup.disconnect(this._uiAdded);
         this._destroyOverviewBackgrounds();
+        this._restoreOverviewIcons();
         Main.panel.remove_effect_by_name('gnome-customizer-panel-blur');
         Main.panel.set_style(this._panelStyle);
         Main.layoutManager.overviewGroup.set_style(this._overviewStyle);
