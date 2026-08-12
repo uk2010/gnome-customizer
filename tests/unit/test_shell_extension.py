@@ -36,14 +36,17 @@ class ShellExtensionTests(unittest.TestCase):
         extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
         self.assertIn("_iconContent(app.create_icon_texture(size),size)",extension)
         self.assertIn("child: this._iconContent(icon,size)[0]",extension)
-        self.assertIn("height:9",extension)
+        self.assertIn("height:7",extension)
+        self.assertIn("style:'spacing: 0;'",extension)
+        self.assertIn("y_align:Clutter.ActorAlign.START",extension)
         self.assertIn("indicatorLane.set_child",extension)
         self.assertIn("gnome-customizer-indicator-lane",stylesheet)
 
     def test_panel_background_survives_the_overview_pseudo_state(self):
         extension=(ROOT/"shell/extension.js").read_text()
         self.assertIn("name:'gnome-customizer-panel-background'",extension)
-        self.assertIn("Main.layoutManager.panelBox.insert_child_at_index(this._panelBackground,0)",extension)
+        self.assertIn("Main.panel.insert_child_at_index(this._panelBackground,0)",extension)
+        self.assertNotIn("Main.layoutManager.panelBox.insert_child_at_index(this._panelBackground,0)",extension)
         self.assertIn("backgroundStyle(this._settings, 'panel', opacity)",extension)
         self.assertIn("Main.panel.set_style(`background-color: transparent; color: ${text};`)",extension)
         self.assertNotIn("this._blur(Main.panel, 'gnome-customizer-panel-blur'",extension)
@@ -52,6 +55,10 @@ class ShellExtensionTests(unittest.TestCase):
         extension=(ROOT/"shell/extension.js").read_text()
         self.assertIn("const radius = this._settings.get_int('dock-radius');",extension)
         self.assertNotIn("floating ? this._settings.get_int('dock-radius') : 0",extension)
+
+    def test_floating_dock_stays_close_to_the_screen_edge(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("const margin = floating ? 2 : 0",extension)
 
     def test_overview_uses_blurred_wallpaper_backgrounds(self):
         extension = (ROOT / "shell/extension.js").read_text()

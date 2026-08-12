@@ -1,3 +1,11 @@
+gnome-customizer (0.3.8) resolute; urgency=high
+
+  * Keep the custom panel background inside the real panel so the top bar stays at the screen edge.
+  * Move floating docks closer to the bottom edge without shifting icons upward.
+  * Place running-app indicators directly beneath their icons.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 21:00:00 -0500
+
 gnome-customizer (0.3.7) resolute; urgency=high
 
   * Preserve custom top-bar opacity in Overview and Show Applications.

@@ -75,7 +75,7 @@ class Dock {
                 indicatorLane.set_child(new St.Widget({
                     style_class: `gnome-customizer-running-indicator ${indicatorStyle}`,
                     style: 'background-color: #ffffff; border: 1px solid rgba(0, 0, 0, 0.72);',
-                    width, height, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER,
+                    width, height, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.START,
                 }));
             }
             const button = new St.Button({style_class: 'gnome-customizer-dock-button', can_focus: true, accessible_name: app.get_name(), child: content});
@@ -87,13 +87,13 @@ class Dock {
     }
 
     _iconContent(icon,size) {
-        const content=new St.BoxLayout({orientation:Clutter.Orientation.VERTICAL,x_align:Clutter.ActorAlign.CENTER,style:'spacing: 3px;'});
+        const content=new St.BoxLayout({orientation:Clutter.Orientation.VERTICAL,x_align:Clutter.ActorAlign.CENTER,style:'spacing: 0;'});
         const indicatorLane=new St.Bin({
             style_class:'gnome-customizer-indicator-lane',
             x_align:Clutter.ActorAlign.CENTER,
-            y_align:Clutter.ActorAlign.CENTER,
+            y_align:Clutter.ActorAlign.START,
             width:size,
-            height:9,
+            height:7,
         });
         content.add_child(icon);
         content.add_child(indicatorLane);
@@ -134,7 +134,7 @@ class Dock {
         const opacity = this._settings.get_double('dock-opacity');
         this.actor.set_style(`spacing: ${spacing}px; border-radius: ${radius}px; ${backgroundStyle(this._settings, 'dock', opacity)}`);
         this._populate();
-        const margin = floating ? 12 : 0; this._position=position; this._margin=margin;
+        const margin = floating ? 2 : 0; this._position=position; this._margin=margin;
         this._positionActor();
         this._queuePosition();
         this.actor.remove_effect_by_name('gnome-customizer-dock-blur');
@@ -214,8 +214,10 @@ export default class CustomizerExtension extends Extension {
         this._overviewShowing = Main.overview.connect('showing', () => this._lowerOverviewBackground());
         this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) { this._styleMenus(); this._syncExternalDocks(); } return GLib.SOURCE_REMOVE; }));
         this._panelBackground=new St.Widget({name:'gnome-customizer-panel-background',reactive:false});
-        this._panelBackground.add_constraint(new Clutter.BindConstraint({source:Main.panel,coordinate:Clutter.BindCoordinate.ALL}));
-        Main.layoutManager.panelBox.insert_child_at_index(this._panelBackground,0);
+        this._panelBackground.add_constraint(new Clutter.BindConstraint({source:Main.panel,coordinate:Clutter.BindCoordinate.SIZE}));
+        // Keep the background inside the panel. Adding it to panelBox makes it
+        // a layout sibling of the real panel and pushes the top bar downward.
+        Main.panel.insert_child_at_index(this._panelBackground,0);
         this._rebuildDocks(); this._rebuildOverviewBackgrounds(); this._sync();
     }
     _rebuildDocks() { this._docks?.forEach(d => d.destroy()); this._docks = Main.layoutManager.monitors.map((_, i) => new Dock(this._settings, i)); }

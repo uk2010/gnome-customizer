@@ -11,4 +11,4 @@ class CustomizerApplication(Adw.Application):
     def do_activate(self):
         window=self.props.active_window or CustomizerWindow(self);window.present()
     def _about(self,*_):
-        dialog=Adw.AboutDialog(application_name="GNOME Customizer",application_icon=APP_ID,developer_name="GNOME Customizer Contributors",version="0.3.7",website="https://github.com/uk2010/gnome-customizer",issue_url="https://github.com/uk2010/gnome-customizer/issues",license_type=Gtk.License.GPL_3_0);dialog.present(self.props.active_window)
+        dialog=Adw.AboutDialog(application_name="GNOME Customizer",application_icon=APP_ID,developer_name="GNOME Customizer Contributors",version="0.3.8",website="https://github.com/uk2010/gnome-customizer",issue_url="https://github.com/uk2010/gnome-customizer/issues",license_type=Gtk.License.GPL_3_0);dialog.present(self.props.active_window)
