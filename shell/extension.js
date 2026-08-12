@@ -113,6 +113,7 @@ class Dock {
         const icon = new St.Icon({
             icon_name: `view-app-grid-${Main.sessionMode.currentMode}-symbolic`,
             icon_size: size,
+            style: 'color: #808080;',
         });
         const button = new St.Button({
             style_class: 'gnome-customizer-dock-button gnome-customizer-show-apps show-apps',

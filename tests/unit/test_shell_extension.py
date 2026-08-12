@@ -17,9 +17,10 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("Main.overview.hide()", extension)
         self.assertIn("toggle_mode: true", extension)
 
-    def test_show_applications_uses_unchanged_native_ubuntu_icon(self):
+    def test_show_applications_keeps_native_ubuntu_icon_color_in_every_mode(self):
         extension=(ROOT/"shell/extension.js").read_text()
         self.assertIn("`view-app-grid-${Main.sessionMode.currentMode}-symbolic`",extension)
+        self.assertIn("style: 'color: #808080;'",extension)
         self.assertNotIn("changed::color-scheme",extension)
         self.assertNotIn("icon.set_style",extension)
 

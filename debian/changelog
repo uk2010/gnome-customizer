@@ -1,3 +1,10 @@
+gnome-customizer (0.3.12) resolute; urgency=high
+
+  * Keep the Ubuntu Show Applications icon color fixed across light and dark modes.
+  * Preserve the native Ubuntu icon shape and original gray fill.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Tue, 11 Aug 2026 22:00:00 -0500
+
 gnome-customizer (0.3.11) resolute; urgency=high
 
   * Let maximized windows use the full screen in auto-hide modes.
