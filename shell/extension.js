@@ -26,23 +26,28 @@ function backgroundStyle(settings, prefix, opacity=1) {
 
 export default class CustomizerExtension extends Extension {
     enable() {
-        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0;
-        this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style();
+        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._started = false;
         this._changed = this._settings.connect('changed', () => this._sync());
+        this._startupComplete = 0;
+        if (Main.layoutManager._startingUp)
+            this._startupComplete = Main.layoutManager.connect('startup-complete', () => this._start());
+        else
+            this._start();
+    }
+    _start() {
+        if (!this._settings || this._started) return;
+        if (this._startupComplete) { Main.layoutManager.disconnect(this._startupComplete); this._startupComplete=0; }
+        this._started=true;
+        this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style();
         this._monitors = Main.layoutManager.connect('monitors-changed', () => this._rebuildOverviewBackgrounds());
         this._overviewShowing = Main.overview.connect('showing', () => this._lowerOverviewBackground());
         this._overviewHidden = Main.overview.connect('hidden', () => this._queuePanelStyleRestore());
         this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) this._styleMenus(); return GLib.SOURCE_REMOVE; }));
-        this._panelBackground=new St.Widget({name:'gnome-customizer-panel-background',reactive:false});
-        this._panelBackground.add_constraint(new Clutter.BindConstraint({source:Main.panel,coordinate:Clutter.BindCoordinate.SIZE}));
-        // Keep the background inside the panel. Adding it to panelBox makes it
-        // a layout sibling of the real panel and pushes the top bar downward.
-        Main.panel.insert_child_at_index(this._panelBackground,0);
         this._rebuildOverviewBackgrounds(); this._sync();
     }
     _blur(actor, name, sigma, brightness=1.0) {
         actor.remove_effect_by_name(name);
-        if (sigma > 0) {
+        if (sigma > 0 && actor.width > 0 && actor.height > 0) {
             const effect = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness, radius: sigma});
             actor.add_effect_with_name(name, effect);
             if (!this._effects.some(([existing, effectName]) => existing === actor && effectName === name)) this._effects.push([actor,name]);
@@ -50,25 +55,42 @@ export default class CustomizerExtension extends Extension {
     }
     _styleMenus() {
         if (!this._settings.get_boolean('menu-enabled')) { this._restoreMenus(); return; }
-        const opacity=this._settings.get_double('menu-opacity'), radius=this._settings.get_int('menu-radius'), sigma=this._settings.get_int('menu-blur'), text=this._settings.get_string('menu-text-color'), border=this._settings.get_string('menu-border-color');
         const visit = actor => {
             if (actor.get_style_class_name?.()?.split(' ').includes('popup-menu-content')) {
                 if (!this._menuActors.has(actor)) {
-                    this._menuActors.set(actor,actor.get_style());
-                    actor.connect('destroy', () => {
+                    const record={style:actor.get_style(),mappedId:0,destroyId:0,source:0};
+                    record.mappedId=actor.connect('notify::mapped', () => this._queueMenuStyle(actor));
+                    record.destroyId=actor.connect('destroy', () => {
+                        if (record.source) GLib.Source.remove(record.source);
                         this._menuActors?.delete(actor);
                         this._effects = this._effects?.filter(([item]) => item !== actor) ?? [];
                     });
+                    this._menuActors.set(actor,record);
                 }
-                actor.set_style(`${backgroundStyle(this._settings, 'menu', opacity)} border-radius: ${radius}px; color: ${text}; border: 1px solid ${border};`);
-                this._blur(actor, 'gnome-customizer-menu-blur', sigma);
+                this._syncMenuActor(actor);
             }
             for (const child of actor.get_children?.() ?? []) visit(child);
         }; visit(Main.uiGroup);
     }
+    _queueMenuStyle(actor) {
+        const record=this._menuActors.get(actor);
+        if (!record || record.source) return;
+        record.source=GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            record.source=0;if (this._settings?.get_boolean('menu-enabled')) this._syncMenuActor(actor);return GLib.SOURCE_REMOVE;
+        });
+    }
+    _syncMenuActor(actor) {
+        const opacity=this._settings.get_double('menu-opacity'), radius=this._settings.get_int('menu-radius'), sigma=this._settings.get_int('menu-blur'), text=this._settings.get_string('menu-text-color'), border=this._settings.get_string('menu-border-color');
+        actor.set_style(`${backgroundStyle(this._settings, 'menu', opacity)} border-radius: ${radius}px; color: ${text}; border: 1px solid ${border};`);
+        this._blur(actor, 'gnome-customizer-menu-blur', sigma);
+    }
     _restoreMenus() {
-        for (const [actor,style] of this._menuActors) {
-            try { actor?.remove_effect_by_name('gnome-customizer-menu-blur'); actor?.set_style(style); } catch (_) {}
+        for (const [actor,record] of this._menuActors) {
+            try {
+                if (record.source) GLib.Source.remove(record.source);
+                actor.disconnect(record.mappedId);actor.disconnect(record.destroyId);
+                actor.remove_effect_by_name('gnome-customizer-menu-blur');actor.set_style(record.style);
+            } catch (_) {}
         }
         this._menuActors.clear();
     }
@@ -124,6 +146,8 @@ export default class CustomizerExtension extends Extension {
             tint.set_style(`background-color: ${colorWithOpacity(color, opacity)};`);
         }
         Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
+        const diagnostic=`${enabled}:${sigma}:${this._overviewBackgrounds.length}`;
+        if (diagnostic !== this._overviewDiagnostic) { this._overviewDiagnostic=diagnostic;if (enabled) console.log(`GNOME Customizer: overview applied (blur=${sigma}, monitors=${this._overviewBackgrounds.length})`); }
     }
     _queuePanelStyleRestore() {
         if (this._panelRestoreSource || !this._settings) return;
@@ -131,36 +155,39 @@ export default class CustomizerExtension extends Extension {
         // `hidden`, so restore our dynamic text style on the following idle.
         this._panelRestoreSource=GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._panelRestoreSource=0;
-            if (this._settings?.get_boolean('panel-enabled')) {
-                const text=this._settings.get_string('panel-text-color');
-                Main.panel.set_style(`background-color: transparent; color: ${text};`);
-            }
+            if (this._settings) this._syncPanel();
             return GLib.SOURCE_REMOVE;
         });
     }
-    _sync() {
+    _syncPanel() {
         if (this._settings.get_boolean('panel-enabled')) {
             const opacity=this._settings.get_double('panel-opacity'), text=this._settings.get_string('panel-text-color');
-            Main.panel.add_style_class_name('gnome-customizer-panel');
-            this._panelBackground.visible=true;
-            this._panelBackground.set_style(`${backgroundStyle(this._settings, 'panel', opacity)} border-radius: ${this._settings.get_int('panel-radius')}px;`);
-            Main.panel.set_style(`background-color: transparent; color: ${text};`);
-            this._blur(this._panelBackground, 'gnome-customizer-panel-blur', opacity>0 ? this._settings.get_int('panel-blur') : 0);
+            const style=`${backgroundStyle(this._settings, 'panel', opacity)} border-radius: ${this._settings.get_int('panel-radius')}px; color: ${text};`;
+            Main.panel.set_style(style);
+            this._blur(Main.panel, 'gnome-customizer-panel-blur', opacity>0 ? this._settings.get_int('panel-blur') : 0);
+            const styleApplied=Main.panel.get_style()===style, effectApplied=Boolean(Main.panel.get_effect('gnome-customizer-panel-blur'));
+            const diagnostic=`${opacity}:${this._settings.get_int('panel-blur')}:${styleApplied}:${effectApplied}`;
+            if (diagnostic !== this._panelDiagnostic) { this._panelDiagnostic=diagnostic;console.log(`GNOME Customizer: panel applied (opacity=${opacity}, blur=${this._settings.get_int('panel-blur')}, style=${styleApplied}, effect=${effectApplied})`); }
         } else {
-            Main.panel.remove_style_class_name('gnome-customizer-panel');
-            this._panelBackground.remove_effect_by_name('gnome-customizer-panel-blur');
-            this._panelBackground.visible=false;
+            Main.panel.remove_effect_by_name('gnome-customizer-panel-blur');
             Main.panel.set_style(this._panelStyle);
+            this._panelDiagnostic='disabled';
         }
+    }
+    _sync() {
+        if (!this._started) return;
+        this._syncPanel();
         this._syncOverviewBackgrounds();
         this._styleMenus();
     }
     disable() {
+        if (this._startupComplete) { Main.layoutManager.disconnect(this._startupComplete); this._startupComplete=0; }
         if (this._panelRestoreSource) { GLib.Source.remove(this._panelRestoreSource); this._panelRestoreSource=0; }
-        this._settings.disconnect(this._changed); Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.uiGroup.disconnect(this._uiAdded);
+        this._settings.disconnect(this._changed);
+        if (!this._started) { this._settings=null; return; }
+        Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.uiGroup.disconnect(this._uiAdded);
         this._destroyOverviewBackgrounds();
-        this._panelBackground.destroy(); this._panelBackground=null;
-        Main.panel.remove_style_class_name('gnome-customizer-panel');
+        Main.panel.remove_effect_by_name('gnome-customizer-panel-blur');
         Main.panel.set_style(this._panelStyle);
         Main.layoutManager.overviewGroup.set_style(this._overviewStyle);
         for (const [actor,name] of this._effects) { try { actor?.remove_effect_by_name(name); } catch (_) {} }

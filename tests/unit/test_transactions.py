@@ -5,7 +5,7 @@ from gnome_customizer.backend.transactions import Change, ChangeManager, Transac
 from gnome_customizer.backend.wallpaper import wallpaper_keys
 
 class FakeSettings:
-    def __init__(self):self.values={('s','a'):'old',('s','b'):1,('org.gnome.shell','enabled-extensions'):['other@example'],('org.gnome.shell','disabled-extensions'):[],('org.gnome.shell','disable-user-extensions'):True,('org.gnome.shell.extensions.dash-to-dock','autohide'):False};self.fail=None
+    def __init__(self):self.values={('s','a'):'old',('s','b'):1,('org.gnome.shell','enabled-extensions'):['other@example'],('org.gnome.shell','disabled-extensions'):[],('org.gnome.shell','disable-user-extensions'):True,('org.gnome.shell.extensions.dash-to-dock','autohide'):False,('io.github.gnomecustomizer.shell','panel-enabled'):False};self.fail=None
     def supports(self,s,k):return (s,k) in self.values
     def get(self,s,k):return self.values[s,k]
     def set(self,s,k,v):
@@ -30,6 +30,10 @@ class TransactionTests(unittest.TestCase):
         self.manager.stage(Change('shell','org.gnome.shell.extensions.dash-to-dock','autohide',True,'Auto-hide'))
         self.assertEqual(set(self.manager.pending),{('org.gnome.shell.extensions.dash-to-dock','autohide')})
         self.assertEqual(self.manager.apply(),1);self.assertTrue(self.backend.values['org.gnome.shell.extensions.dash-to-dock','autohide'])
+    def test_shell_surface_setting_enables_companion(self):
+        uuid='gnome-customizer@io.github.gnomecustomizer';self.backend.values['org.gnome.shell','disabled-extensions']=[uuid,'disabled@example']
+        self.manager.stage(Change('shell','io.github.gnomecustomizer.shell','panel-enabled',True,'Panel'))
+        self.assertEqual(self.manager.apply(),4);self.assertIn(uuid,self.backend.values['org.gnome.shell','enabled-extensions']);self.assertNotIn(uuid,self.backend.values['org.gnome.shell','disabled-extensions']);self.assertFalse(self.backend.values['org.gnome.shell','disable-user-extensions']);self.assertTrue(self.backend.values['io.github.gnomecustomizer.shell','panel-enabled'])
     def test_restore_rolls_back_and_keeps_restore_state_on_failure(self):
         self.store.remember_original('desktop','s:a','old');self.store.remember_original('desktop','s:b',1);self.store.save();self.backend.values['s','a']='changed';self.backend.values['s','b']=2;self.backend.fail='b'
         with self.assertRaises(TransactionError):self.manager.restore('desktop')

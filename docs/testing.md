@@ -28,3 +28,10 @@ Packages on native amd64 and arm64: clean install, upgrade, remove, purge, activ
 - The full application constructs with all detected GNOME 50 schemas under an isolated display (15 Desktop pages, 7 Login Screen pages, 45 Theme Builder controls, four previews, and zero startup-staged changes). Wide and collapsed navigation layouts were exercised without GTK/Libadwaita layout warnings.
 - An isolated headless GNOME Shell 50.1 Wayland compositor loaded the packaged companion, applied live dock position/indicator/overview changes, disabled it, re-enabled it, and shut down without companion errors or critical warnings. Visual multi-monitor/overlap behavior remains on the native interactive checklist.
 - Live GDM authentication, logout appearance, and package lifecycle remain intentionally listed above for native release-machine verification; automated tests do not alter the developer's active login screen or session.
+Run the real compositor smoke test on a GNOME 50 development host:
+
+```sh
+python3 tests/integration/check_shell_runtime.py
+```
+
+It starts an isolated headless GNOME Shell with a virtual monitor, verifies that the companion becomes active without extension errors, confirms panel and overview blur effects, and exercises disable/re-enable cleanup.

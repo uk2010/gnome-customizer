@@ -1,3 +1,12 @@
+gnome-customizer (0.3.14) resolute; urgency=high
+
+  * Apply top-bar color, opacity, radius, and blur directly to GNOME's panel.
+  * Wait for Shell startup and reapply popup blur when menus are mapped.
+  * Enable the companion automatically when a Shell surface setting is applied.
+  * Add an isolated real-GNOME-Shell lifecycle and visual-effect smoke test.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Wed, 12 Aug 2026 17:30:00 -0500
+
 gnome-customizer (0.3.13) resolute; urgency=high
 
   * Remove the replacement dock and stop suppressing Ubuntu Dock or Dash to Dock.

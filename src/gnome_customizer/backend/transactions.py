@@ -35,6 +35,22 @@ class ChangeManager:
     def stage(self, change: Change) -> None:
         if not self.settings.supports(change.schema, change.key):
             raise TransactionError(f"{change.label} is not supported on this system")
+        if change.schema == "io.github.gnomecustomizer.shell":
+            enabled = list(self.settings.get("org.gnome.shell", "enabled-extensions"))
+            if COMPANION_UUID not in enabled:
+                enabled.append(COMPANION_UUID)
+            self.pending[("org.gnome.shell", "enabled-extensions")] = Change(
+                "shell", "org.gnome.shell", "enabled-extensions", enabled, "Shell Companion"
+            )
+            if self.settings.supports("org.gnome.shell", "disable-user-extensions"):
+                self.pending[("org.gnome.shell", "disable-user-extensions")] = Change(
+                    "shell", "org.gnome.shell", "disable-user-extensions", False, "Shell Extensions"
+                )
+            if self.settings.supports("org.gnome.shell", "disabled-extensions"):
+                disabled = [item for item in self.settings.get("org.gnome.shell", "disabled-extensions") if item != COMPANION_UUID]
+                self.pending[("org.gnome.shell", "disabled-extensions")] = Change(
+                    "shell", "org.gnome.shell", "disabled-extensions", disabled, "Shell Companion"
+                )
         self.pending[(change.schema, change.key)] = change
         self._notify()
 

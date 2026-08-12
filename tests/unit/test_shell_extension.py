@@ -22,16 +22,21 @@ class ShellExtensionTests(unittest.TestCase):
             self.assertIn(f'"{key}"', preferences)
         self.assertNotIn('"Enable Custom Dock"', preferences)
 
-    def test_panel_background_survives_the_overview_pseudo_state(self):
+    def test_real_panel_is_styled_and_restored_after_overview(self):
         extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
-        self.assertIn("name:'gnome-customizer-panel-background'",extension)
-        self.assertIn("Main.panel.insert_child_at_index(this._panelBackground,0)",extension)
-        self.assertNotIn("Main.layoutManager.panelBox.insert_child_at_index(this._panelBackground,0)",extension)
+        self.assertNotIn("gnome-customizer-panel-background",extension)
         self.assertIn("backgroundStyle(this._settings, 'panel', opacity)",extension)
-        self.assertIn("Main.panel.set_style(`background-color: transparent; color: ${text};`)",extension)
-        self.assertIn("Main.panel.add_style_class_name('gnome-customizer-panel')",extension)
-        self.assertIn("#panel.gnome-customizer-panel { background-color: transparent; }",stylesheet)
-        self.assertNotIn("this._blur(Main.panel, 'gnome-customizer-panel-blur'",extension)
+        self.assertIn("const style=`${backgroundStyle(this._settings, 'panel', opacity)}",extension)
+        self.assertIn("Main.panel.set_style(style);",extension)
+        self.assertIn("this._blur(Main.panel, 'gnome-customizer-panel-blur'",extension)
+        self.assertEqual(stylesheet.strip(),"")
+
+    def test_shell_surfaces_wait_for_startup_and_blur_requires_allocation(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("if (Main.layoutManager._startingUp)",extension)
+        self.assertIn("Main.layoutManager.connect('startup-complete', () => this._start())",extension)
+        self.assertIn("if (!this._started) return;",extension)
+        self.assertIn("sigma > 0 && actor.width > 0 && actor.height > 0",extension)
 
     def test_panel_style_is_restored_after_overview_clears_it(self):
         extension=(ROOT/"shell/extension.js").read_text()
@@ -67,6 +72,12 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("colorWithOpacity(color, opacity)", extension)
         self.assertIn("if (opacity <= 0) return 'background-color: transparent;'",extension)
         self.assertNotIn("backgroundStyle(this._settings, 'panel')} opacity:", extension)
+
+    def test_menu_blur_is_reapplied_when_a_popup_maps(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("actor.connect('notify::mapped', () => this._queueMenuStyle(actor))",extension)
+        self.assertIn("this._syncMenuActor(actor)",extension)
+        self.assertIn("actor.disconnect(record.mappedId);actor.disconnect(record.destroyId)",extension)
 
 
 if __name__ == "__main__":
