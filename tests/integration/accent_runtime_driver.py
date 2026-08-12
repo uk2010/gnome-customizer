@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
+
 import gi
 
 gi.require_version("Adw", "1")
@@ -40,6 +43,12 @@ def main() -> None:
     pending = window.changes.pending.get(("org.gnome.desktop.interface", "accent-color"))
     if not pending or pending.value != "red":
         raise SystemExit("Appearance accent control did not stage the selected native value")
+    staged_themes = (
+        window.changes.pending.get(("org.gnome.desktop.interface", "gtk-theme")).value,
+        window.changes.pending.get(("org.gnome.desktop.interface", "icon-theme")).value,
+    )
+    if staged_themes != ("Yaru-red-dark", "Yaru-red-dark"):
+        raise SystemExit(f"Appearance accent did not stage GNOME's dark folder theme: {staged_themes!r}")
     window._apply()
 
     loop = GLib.MainLoop()
@@ -50,11 +59,41 @@ def main() -> None:
         settings.get_string("gtk-theme"),
         settings.get_string("icon-theme"),
     )
-    expected = ("red", "Yaru-dark", "Yaru-dark")
+    expected = ("red", "Yaru-red-dark", "Yaru-red-dark")
     if actual != expected:
         raise SystemExit(f"Native accent runtime mismatch: expected {expected!r}, got {actual!r}")
+    accent.set_selected(choices.index("blue"))
+    scheme = next(
+        widget for widget in walk(window)
+        if isinstance(widget, Adw.ComboRow) and widget.get_title() == "Color Scheme"
+    )
+    schemes = window.settings.choices("org.gnome.desktop.interface", "color-scheme")
+    scheme.set_selected(schemes.index("default"))
+    light = (
+        window.changes.pending[("org.gnome.desktop.interface", "gtk-theme")].value,
+        window.changes.pending[("org.gnome.desktop.interface", "icon-theme")].value,
+    )
+    if light != ("Yaru-blue", "Yaru-blue"):
+        raise SystemExit(f"Light mode did not remap GNOME's folder theme: {light!r}")
+    window._apply()
+    Gio.Settings.sync()
+    actual_light = (
+        settings.get_string("accent-color"),
+        settings.get_string("color-scheme"),
+        settings.get_string("gtk-theme"),
+        settings.get_string("icon-theme"),
+    )
+    expected_light = ("blue", "default", "Yaru-blue", "Yaru-blue")
+    if actual_light != expected_light:
+        raise SystemExit(f"Light accent runtime mismatch: expected {expected_light!r}, got {actual_light!r}")
+    blue_folder = Path("/usr/share/icons/Yaru-blue/48x48/places/folder.png")
+    red_folder = Path("/usr/share/icons/Yaru-red-dark/48x48/places/folder.png")
+    if not blue_folder.is_file() or not red_folder.is_file():
+        raise SystemExit("The GNOME-selected Yaru folder icon assets are not installed")
+    if hashlib.sha256(blue_folder.read_bytes()).digest() == hashlib.sha256(red_folder.read_bytes()).digest():
+        raise SystemExit("The selected blue and red Yaru folder assets are unexpectedly identical")
     window.destroy()
-    print("Appearance accent runtime passed: control and Apply wrote GNOME's native red accent")
+    print("Appearance accent runtime passed: native accent, folder icons, and light/dark themes match GNOME Settings")
 
 
 if __name__ == "__main__":

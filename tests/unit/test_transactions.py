@@ -5,7 +5,7 @@ from gnome_customizer.backend.transactions import Change, ChangeManager, Transac
 from gnome_customizer.backend.wallpaper import wallpaper_keys
 
 class FakeSettings:
-    def __init__(self):self.values={('s','a'):'old',('s','b'):1,('org.gnome.shell','enabled-extensions'):['other@example'],('org.gnome.shell','disabled-extensions'):[],('org.gnome.shell','disable-user-extensions'):True,('org.gnome.shell.extensions.dash-to-dock','autohide'):False,('io.github.gnomecustomizer.shell','panel-enabled'):False};self.fail=None
+    def __init__(self):self.values={('s','a'):'old',('s','b'):1,('org.gnome.shell','enabled-extensions'):['other@example'],('org.gnome.shell','disabled-extensions'):[],('org.gnome.shell','disable-user-extensions'):True,('org.gnome.shell.extensions.dash-to-dock','autohide'):False,('io.github.gnomecustomizer.shell','panel-enabled'):False,('org.gnome.desktop.interface','accent-color'):'blue',('org.gnome.desktop.interface','color-scheme'):'default',('org.gnome.desktop.interface','gtk-theme'):'Yaru-blue',('org.gnome.desktop.interface','icon-theme'):'Yaru-blue'};self.fail=None
     def supports(self,s,k):return (s,k) in self.values
     def get(self,s,k):return self.values[s,k]
     def set(self,s,k,v):
@@ -30,6 +30,24 @@ class TransactionTests(unittest.TestCase):
         self.manager.stage(Change('shell','org.gnome.shell.extensions.dash-to-dock','autohide',True,'Auto-hide'))
         self.assertEqual(set(self.manager.pending),{('org.gnome.shell.extensions.dash-to-dock','autohide')})
         self.assertEqual(self.manager.apply(),1);self.assertTrue(self.backend.values['org.gnome.shell.extensions.dash-to-dock','autohide'])
+    def test_native_accent_updates_yaru_gtk_and_folder_icons(self):
+        self.manager.stage(Change('desktop','org.gnome.desktop.interface','accent-color','red','Accent Color'))
+        self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','gtk-theme')].value,'Yaru-red')
+        self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','icon-theme')].value,'Yaru-red')
+        self.assertEqual(self.manager.apply(),3)
+    def test_dark_and_light_modes_remap_the_current_accent(self):
+        self.manager.stage(Change('desktop','org.gnome.desktop.interface','accent-color','pink','Accent Color'))
+        self.manager.stage(Change('desktop','org.gnome.desktop.interface','color-scheme','prefer-dark','Color Scheme'))
+        self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','gtk-theme')].value,'Yaru-magenta-dark')
+        self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','icon-theme')].value,'Yaru-magenta-dark')
+        self.manager.stage(Change('desktop','org.gnome.desktop.interface','color-scheme','default','Color Scheme'))
+        self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','gtk-theme')].value,'Yaru-magenta')
+        self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','icon-theme')].value,'Yaru-magenta')
+    def test_native_accent_preserves_non_yaru_icon_theme_like_gnome_settings(self):
+        self.backend.values[('org.gnome.desktop.interface','icon-theme')]='Papirus'
+        self.manager.stage(Change('desktop','org.gnome.desktop.interface','accent-color','green','Accent Color'))
+        self.assertNotIn(('org.gnome.desktop.interface','icon-theme'),self.manager.pending)
+        self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','gtk-theme')].value,'Yaru-olive')
     def test_shell_surface_setting_enables_companion(self):
         uuid='gnome-customizer@io.github.gnomecustomizer';self.backend.values['org.gnome.shell','disabled-extensions']=[uuid,'disabled@example']
         self.manager.stage(Change('shell','io.github.gnomecustomizer.shell','panel-enabled',True,'Panel'))

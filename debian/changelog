@@ -1,3 +1,12 @@
+gnome-customizer (0.3.16) resolute; urgency=high
+
+  * Match Ubuntu GNOME 50's native accent-to-Yaru theme mapping exactly.
+  * Keep GTK, folder icons, and light/dark variants synchronized on Apply.
+  * Repair neutral Yaru themes left behind by the 0.3.15 regression.
+  * Verify accent folder assets and both appearance modes in real GNOME Shell.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Wed, 12 Aug 2026 19:00:00 -0500
+
 gnome-customizer (0.3.15) resolute; urgency=high
 
   * Keep GNOME 50's native accent-color setting authoritative.

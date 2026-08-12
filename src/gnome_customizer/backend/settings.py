@@ -11,19 +11,28 @@ class SettingsError(RuntimeError):
     pass
 
 
-YARU_ACCENT_VARIANTS = {
-    "bark", "blue", "magenta", "olive", "prussiangreen", "purple",
-    "red", "sage", "viridian", "wartybrown", "yellow",
+YARU_ACCENT_SUFFIX = {
+    # This is Ubuntu's GNOME 50 / patched Libadwaita mapping.  The names are
+    # Yaru's installed theme variants, not guesses derived from the enum.
+    "blue": "blue",
+    "teal": "prussiangreen",
+    "green": "olive",
+    "yellow": "yellow",
+    "orange": None,
+    "red": "red",
+    "pink": "magenta",
+    "purple": "purple",
+    "slate": "sage",
+    "brown": "wartybrown",
 }
 
 
-def neutral_yaru_theme(name: str, dark: bool) -> str:
-    """Return GNOME 50's neutral Yaru theme for a legacy accent variant."""
-    suffix = "-dark" if name.endswith("-dark") else ""
-    accent = name.removeprefix("Yaru-").removesuffix(suffix)
-    if name.startswith("Yaru-") and accent in YARU_ACCENT_VARIANTS:
-        return "Yaru-dark" if dark else "Yaru"
-    return name
+def yaru_theme_for_accent(accent: str, dark: bool) -> str:
+    """Return the Yaru GTK/icon theme selected by Ubuntu's GNOME 50 panel."""
+    if accent not in YARU_ACCENT_SUFFIX:
+        raise ValueError(f"Unsupported GNOME accent: {accent}")
+    suffix = YARU_ACCENT_SUFFIX[accent]
+    return "Yaru" + (f"-{suffix}" if suffix else "") + ("-dark" if dark else "")
 
 
 class SettingsBackend:

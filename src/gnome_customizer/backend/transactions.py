@@ -5,7 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from .settings import SettingsBackend
+from .settings import SettingsBackend, yaru_theme_for_accent
 from .state import StateStore
 
 COMPANION_UUID = "gnome-customizer@io.github.gnomecustomizer"
@@ -52,7 +52,24 @@ class ChangeManager:
                     "shell", "org.gnome.shell", "disabled-extensions", disabled, "Shell Companion"
                 )
         self.pending[(change.schema, change.key)] = change
+        if change.schema == "org.gnome.desktop.interface" and change.key in {"accent-color", "color-scheme"}:
+            accent = change.value if change.key == "accent-color" else self._effective_interface_value("accent-color")
+            scheme = change.value if change.key == "color-scheme" else self._effective_interface_value("color-scheme")
+            theme = yaru_theme_for_accent(accent, scheme == "prefer-dark")
+            self._stage_interface_companion("gtk-theme", theme, "GNOME GTK Theme")
+            icon_theme = self._effective_interface_value("icon-theme")
+            if isinstance(icon_theme, str) and icon_theme.startswith("Yaru"):
+                self._stage_interface_companion("icon-theme", theme, "GNOME Folder Icons")
         self._notify()
+
+    def _effective_interface_value(self, key: str) -> Any:
+        pending = self.pending.get(("org.gnome.desktop.interface", key))
+        return pending.value if pending else self.settings.get("org.gnome.desktop.interface", key)
+
+    def _stage_interface_companion(self, key: str, value: str, label: str) -> None:
+        schema = "org.gnome.desktop.interface"
+        if self.settings.supports(schema, key):
+            self.pending[(schema, key)] = Change("desktop", schema, key, value, label)
 
     def discard(self) -> None:
         self.pending.clear(); self._notify()
