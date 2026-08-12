@@ -4,7 +4,7 @@ import json, tempfile, threading
 from pathlib import Path
 import cairo
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
-from ..backend.themes import capture_current_theme, compatibility_warnings, export_theme, import_theme, ThemeError
+from ..backend.themes import capture_current_theme, compatibility_warnings, delete_theme, export_theme, import_theme, ThemeError
 from ..color import color_button, css_rgba, hex_color, rgba
 
 
@@ -144,7 +144,7 @@ class ThemeBuilderPage(Gtk.Box):
 
 class ThemesPage(Adw.PreferencesPage):
     def __init__(self,toast,apply_theme=None,settings=None):
-        super().__init__(title="Themes",description="Import, save, and share validated appearance-only themes");self.toast=toast;self.apply_theme=apply_theme;self.settings=settings;self.group=Adw.PreferencesGroup(title="Local Themes");self.add(self.group)
+        super().__init__(title="Themes",description="Import, apply, delete, and share validated appearance-only themes");self.toast=toast;self.apply_theme=apply_theme;self.settings=settings;self.group=Adw.PreferencesGroup(title="Local Themes");self.add(self.group);self._theme_rows={}
         if settings:
             save=Adw.ActionRow(title="Save Current Settings",subtitle="Export the currently applied desktop, Shell, and dock appearance as a reusable theme");save_button=Gtk.Button(label="Save as Theme",valign=Gtk.Align.CENTER,css_classes=["suggested-action"]);save_button.connect("clicked",self._save_current);save.add_suffix(save_button);self.group.add(save)
         row=Adw.ActionRow(title="Import .gctheme",subtitle="Archives are validated before extraction");button=Gtk.Button(label="Choose File",valign=Gtk.Align.CENTER);button.connect("clicked",self._choose);row.add_suffix(button);self.group.add(row)
@@ -186,8 +186,21 @@ class ThemesPage(Adw.PreferencesPage):
     def _add_theme(self,directory,group=None):
         try:manifest=json.loads((directory/"manifest.json").read_text())
         except Exception:return
+        local=group is None;key=str(directory.resolve())
+        if local and key in self._theme_rows:self.group.remove(self._theme_rows[key])
         row=Adw.ActionRow(title=manifest.get("name","Unnamed Theme"),subtitle=f"by {manifest.get('author','Unknown')}")
         if self.apply_theme:
-            button=Gtk.Button(label="Stage Theme",valign=Gtk.Align.CENTER);button.connect("clicked",lambda *_:self.apply_theme(directory));row.add_suffix(button)
+            button=Gtk.Button(label="Apply Theme",valign=Gtk.Align.CENTER,css_classes=["suggested-action"]);button.connect("clicked",lambda *_:self.apply_theme(directory));row.add_suffix(button)
+        if local:
+            delete=Gtk.Button(icon_name="user-trash-symbolic",tooltip_text="Delete Theme",valign=Gtk.Align.CENTER,css_classes=["destructive-action"]);delete.connect("clicked",lambda *_:self._confirm_delete(directory,row,key));row.add_suffix(delete);self._theme_rows[key]=row
         (group or self.group).add(row)
         return GLib.SOURCE_REMOVE
+    def _confirm_delete(self,directory,row,key):
+        dialog=Adw.AlertDialog(heading=f"Delete {row.get_title()}?",body="This removes the imported local copy of the theme. A separately exported .gctheme file is not removed.");dialog.add_response("cancel","Cancel");dialog.add_response("delete","Delete");dialog.set_response_appearance("delete",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:self._delete(directory,row,key) if response=="delete" else None);dialog.present(self.get_root())
+    def _delete(self,directory,row,key):threading.Thread(target=self._delete_worker,args=(directory,row,key),daemon=True).start()
+    def _delete_worker(self,directory,row,key):
+        try:delete_theme(directory);GLib.idle_add(self._deleted,row,key)
+        except Exception as exc:GLib.idle_add(self.toast,str(exc))
+    def _deleted(self,row,key):
+        if self._theme_rows.get(key) is row:self._theme_rows.pop(key,None);self.group.remove(row)
+        self.toast("Theme deleted");return GLib.SOURCE_REMOVE

@@ -287,6 +287,17 @@ def import_theme(path: Path, destination: Path = THEMES_DIR) -> Path:
         if temp.exists(): shutil.rmtree(temp)
 
 
+def delete_theme(directory: Path, destination: Path = THEMES_DIR) -> None:
+    """Delete exactly one imported theme directory and nothing outside the theme store."""
+    root = destination.resolve()
+    if directory.is_symlink(): raise ThemeError("Symbolic-link themes cannot be deleted")
+    try: target = directory.resolve(strict=True)
+    except OSError as exc: raise ThemeError("Theme is already missing") from exc
+    if target.parent != root or not target.is_dir() or not (target / "manifest.json").is_file():
+        raise ThemeError("Only an imported local theme can be deleted")
+    shutil.rmtree(target)
+
+
 def export_theme(manifest: dict, assets: dict[str, Path], target: Path) -> Path:
     validate_manifest(manifest, set(assets))
     target = target.with_suffix(".gctheme")

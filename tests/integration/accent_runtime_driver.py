@@ -10,7 +10,7 @@ import tempfile
 import gi
 
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib
+from gi.repository import Adw, Gio, GLib, Gtk
 
 from gnome_customizer.window import CustomizerWindow
 from gnome_customizer.backend.themes import DESKTOP_THEME_SETTINGS, DOCK_THEME_SETTINGS, SHELL_SURFACE_SETTINGS, capture_current_theme, export_theme, import_theme, inspect_archive
@@ -129,7 +129,13 @@ def main() -> None:
             for field, value in fields.items():
                 if saved.get("shell", {}).get(surface, {}).get(field) != value:
                     raise SystemExit(f"Saved current theme lost Shell setting {surface}.{field}")
-        imported = import_theme(archive_path, Path(temporary) / "themes")
+        imported = import_theme(archive_path)
+        window.settings.set("org.gnome.desktop.interface", "accent-color", "red")
+        window.settings.set("io.github.gnomecustomizer.shell", "overview-hover-color", "#654321")
+        if "position" in expected_dock:
+            window.settings.set(dock_schema, DOCK_THEME_SETTINGS["position"], "TOP" if expected_dock["position"] != "TOP" else "LEFT")
+        if "panel_mode" in expected_dock:
+            window.settings.set(dock_schema, DOCK_THEME_SETTINGS["panel_mode"], not expected_dock["panel_mode"])
         window._stage_theme(imported)
         staged_hover = window.changes.pending.get(("io.github.gnomecustomizer.shell", "overview-hover-color"))
         staged_menu = window.changes.pending.get(("io.github.gnomecustomizer.shell", "menu-enabled"))
@@ -145,7 +151,15 @@ def main() -> None:
             for field, key in fields.items():
                 if field in expected_shell[surface] and (not (pending := window.changes.pending.get(("io.github.gnomecustomizer.shell", key))) or pending.value != expected_shell[surface][field]):
                     raise SystemExit(f"Applying the saved theme did not stage Shell setting {surface}.{field}")
-        window._apply()
+        window.changes.discard()
+        themes_page = window.content.get_child_by_name("themes")
+        themes_page._add_theme(imported)
+        theme_row = next(widget for widget in walk(themes_page) if isinstance(widget, Adw.ActionRow) and widget.get_title() == "Runtime Current Theme")
+        apply_button = next((widget for widget in walk(theme_row) if isinstance(widget, Gtk.Button) and widget.get_label() == "Apply Theme"), None)
+        delete_button = next((widget for widget in walk(theme_row) if isinstance(widget, Gtk.Button) and widget.get_tooltip_text() == "Delete Theme"), None)
+        if not apply_button or not delete_button:
+            raise SystemExit("Local theme row does not expose Apply Theme and Delete Theme actions")
+        apply_button.emit("clicked")
         apply_loop = GLib.MainLoop()
         GLib.timeout_add(500, lambda: (apply_loop.quit(), GLib.SOURCE_REMOVE)[1])
         apply_loop.run()
@@ -160,6 +174,12 @@ def main() -> None:
             for field, key in fields.items():
                 if field in expected_shell[surface] and window.settings.get("io.github.gnomecustomizer.shell", key) != expected_shell[surface][field]:
                     raise SystemExit(f"Restored Shell setting did not verify after Apply: {surface}.{field}")
+        themes_page._delete(imported, theme_row, str(imported.resolve()))
+        delete_loop = GLib.MainLoop()
+        GLib.timeout_add(500, lambda: (delete_loop.quit(), GLib.SOURCE_REMOVE)[1])
+        delete_loop.run()
+        if imported.exists():
+            raise SystemExit("Delete Theme did not remove the imported local theme")
     window.destroy()
     print("Appearance accent runtime passed: native accent, folder icons, and light/dark themes match GNOME Settings")
 

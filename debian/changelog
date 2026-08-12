@@ -1,3 +1,12 @@
+gnome-customizer (0.3.19) resolute; urgency=high
+
+  * Replace the misleading Stage Theme action with an immediate Apply Theme action.
+  * Add confirmed deletion for imported and saved local themes.
+  * Keep included sample themes protected from deletion.
+  * Test restoration after deliberately changing accent, Shell, and native Dock values.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Wed, 12 Aug 2026 23:45:00 -0500
+
 gnome-customizer (0.3.18) resolute; urgency=high
 
   * Save and restore every supported desktop appearance and layout setting.

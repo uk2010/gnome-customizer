@@ -3,7 +3,7 @@ from pathlib import Path
 from PIL import Image
 from unittest.mock import patch
 from gnome_customizer.backend import themes
-from gnome_customizer.backend.themes import DESKTOP_THEME_SETTINGS, DOCK_THEME_SETTINGS, SHELL_SURFACE_SETTINGS, ThemeError, capture_current_theme, compatibility_warnings, export_theme, inspect_archive, validate_manifest, import_theme
+from gnome_customizer.backend.themes import DESKTOP_THEME_SETTINGS, DOCK_THEME_SETTINGS, SHELL_SURFACE_SETTINGS, ThemeError, capture_current_theme, compatibility_warnings, delete_theme, export_theme, inspect_archive, validate_manifest, import_theme
 
 BASE={"format_version":1,"name":"Safe Theme","author":"Tester","minimum_gnome":"50.1","desktop":{"accent":"blue"}}
 
@@ -51,6 +51,11 @@ class ThemeTests(unittest.TestCase):
     def test_import(self):
         m={**BASE,"id":"safe","preview":"assets/a.png"};p=self.archive({"manifest.json":json.dumps(m),"assets/a.png":png()});dest=Path(tempfile.mkdtemp());self.addCleanup(__import__('shutil').rmtree,dest)
         self.assertTrue((import_theme(p,dest)/"manifest.json").is_file())
+    def test_delete_removes_only_an_imported_local_theme(self):
+        p=self.archive({"manifest.json":json.dumps({**BASE,"id":"delete-me"})});dest=Path(tempfile.mkdtemp());self.addCleanup(__import__('shutil').rmtree,dest,ignore_errors=True);theme=import_theme(p,dest)
+        delete_theme(theme,dest);self.assertFalse(theme.exists())
+        outside=Path(tempfile.mkdtemp());self.addCleanup(__import__('shutil').rmtree,outside,ignore_errors=True);(outside/"manifest.json").write_text(json.dumps(BASE))
+        with self.assertRaisesRegex(ThemeError,"Only an imported local theme"):delete_theme(outside,dest)
     def test_newer_gnome_rejected(self):
         with self.assertRaisesRegex(ThemeError,"requires GNOME 51.0"):validate_manifest({**BASE,"minimum_gnome":"51.0"})
     def test_untested_newer_gnome_warns(self):self.assertTrue(compatibility_warnings({**BASE,"maximum_tested_gnome":"50.3"},(50,4)))
@@ -97,6 +102,6 @@ class ThemeTests(unittest.TestCase):
         export_theme(manifest,assets,target);saved,archive=inspect_archive(target);archive.close();self.assertEqual(saved["shell"]["panel"]["opacity"],0)
     def test_themes_page_exposes_save_current_settings_action(self):
         source=(Path(__file__).parents[2]/"src/gnome_customizer/pages/theme_builder.py").read_text()
-        self.assertIn('title="Save Current Settings"',source);self.assertIn("capture_current_theme(self.settings",source)
+        self.assertIn('title="Save Current Settings"',source);self.assertIn("capture_current_theme(self.settings",source);self.assertIn('label="Apply Theme"',source);self.assertIn('tooltip_text="Delete Theme"',source);self.assertNotIn('label="Stage Theme"',source)
 
 if __name__=="__main__":unittest.main()
