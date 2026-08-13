@@ -51,7 +51,7 @@ class HelperTests(unittest.TestCase):
         self.service.restore_monitors({});self.assertFalse(helper.MONITORS.exists())
     def test_monitor_transaction_writes_and_verifies_exact_layout(self):
         xml='<monitors version="2"><configuration><logicalmonitor><x>1440</x></logicalmonitor></configuration></monitors>'
-        result=self.service.transaction({"monitors":xml})
+        with patch.object(helper,"gdm_user",return_value=None):result=self.service.transaction({"monitors":xml})
         self.assertEqual(helper.MONITORS.read_bytes(),xml.encode());self.assertEqual(result["sha256"],__import__('hashlib').sha256(xml.encode()).hexdigest())
     def test_production_monitor_path_uses_gdm_account_home(self):
         account=type("Account",(),{"pw_dir":"/srv/gdm-test","pw_uid":123,"pw_gid":456})()
