@@ -1,3 +1,9 @@
+gnome-customizer (1.0) resolute; urgency=high
+
+  * Promote the verified 0.3.30 implementation to the 1.0 stable release.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 18:45:00 -0500
+
 gnome-customizer (0.3.30) resolute; urgency=high
 
   * Keep overview blur at the wallpaper's native brightness when tint is zero.
