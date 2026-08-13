@@ -298,7 +298,23 @@ class CustomizerWindow(Adw.ApplicationWindow):
             self.factory.gdm_switch(g,title,"org.gnome.desktop.interface",key)
         return p
     def _displays(self):
-        p=Adw.PreferencesPage(title="Displays");g=Adw.PreferencesGroup(title="Login Screen Layout",description="Copies the current user layout without changing the active session");p.add(g);r=Adw.ActionRow(title="Apply My Current Display Layout",subtitle="Source: ~/.config/monitors.xml");b=Gtk.Button(label="Stage",valign=Gtk.Align.CENTER);b.connect("clicked",lambda *_:self._stage_monitors());r.add_suffix(b);g.add(r);r=Adw.ActionRow(title="Restore Previous Login Screen Layout",subtitle="Restores the configuration captured before the first Customizer change");b=Gtk.Button(label="Restore",valign=Gtk.Align.CENTER);b.connect("clicked",lambda *_:self._restore_monitors());r.add_suffix(b);g.add(r);return p
+        p=Adw.PreferencesPage(title="Displays");g=Adw.PreferencesGroup(title="Login Screen Layout",description="Copies the current user layout without changing the active session");p.add(g);r=Adw.ActionRow(title="Apply My Current Display Layout",subtitle="Source: ~/.config/monitors.xml");b=Gtk.Button(label="Apply",valign=Gtk.Align.CENTER,css_classes=["suggested-action"]);b.connect("clicked",self._apply_monitors);r.add_suffix(b);g.add(r);r=Adw.ActionRow(title="Restore Previous Login Screen Layout",subtitle="Restores the configuration captured before the first Customizer change");b=Gtk.Button(label="Restore",valign=Gtk.Align.CENTER);b.connect("clicked",lambda *_:self._restore_monitors());r.add_suffix(b);g.add(r);return p
+    def _apply_monitors(self,button):
+        try:xml=(Path.home()/".config/monitors.xml").read_text()
+        except OSError:self.toast("The current display configuration could not be read");return
+        button.set_sensitive(False);button.set_label("Applying…")
+        threading.Thread(target=self._apply_monitors_worker,args=(xml,button),daemon=True).start()
+    def _apply_monitors_worker(self,xml,button):
+        try:
+            self.helper.call("ApplyMonitorConfiguration",{"xml":xml})
+            GLib.idle_add(self._apply_monitors_success,xml,button)
+        except Exception as exc:GLib.idle_add(self._apply_monitors_failure,button,exc)
+    def _apply_monitors_success(self,xml,button):
+        try:remember_applied_login_theme(self.state,{"monitors":xml})
+        except Exception as exc:self.toast(f"Display layout applied, but its theme snapshot could not be saved: {exc}")
+        button.set_label("Apply");button.set_sensitive(True);self.toast("Current display layout applied to the login screen. Log out or reboot to see it.");return GLib.SOURCE_REMOVE
+    def _apply_monitors_failure(self,button,exc):
+        button.set_label("Apply");button.set_sensitive(True);self.toast(exc);return GLib.SOURCE_REMOVE
     def _restore_monitors(self):
         try:self.helper.call("RestoreMonitorConfiguration");self.toast("Previous login-screen display layout restored")
         except Exception as exc:self.toast(exc)
@@ -352,9 +368,6 @@ class CustomizerWindow(Adw.ApplicationWindow):
         self.gdm_pending.setdefault(schema,{})[key]=value;self.factory.register_gdm(schema,key,value);self._login_dirty=True
         if key=="banner-message-text" and hasattr(self,"login_preview_banner"):self.login_preview_banner.set_label(value or "Welcome")
         self._pending()
-    def _stage_monitors(self):
-        try:self.monitor_xml=(Path.home()/".config/monitors.xml").read_text();self._login_dirty=True;self.toast("Display layout staged");self._pending()
-        except OSError:self.toast("The current display configuration could not be read")
     def _count(self):return len(self.changes.pending)+sum(len(v) for v in self.gdm_pending.values())+(1 if hasattr(self,"monitor_xml") else 0)+len(self.gdm_resource)+len(self.gdm_assets)
     def _pending(self):
         count=self._count();self.pending_label.set_label(f"{count} pending change{'s' if count!=1 else ''}");self.apply.set_sensitive(count>0)

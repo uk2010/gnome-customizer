@@ -56,6 +56,12 @@ class AppearanceModeTests(unittest.TestCase):
         self.assertIn('transaction["settings"]=self.factory.gdm_settings()',source)
         self.assertIn('transaction["monitor_default"]=True',source)
 
+    def test_login_display_layout_is_applied_directly(self):
+        source=(ROOT/"src/gnome_customizer/window.py").read_text()
+        self.assertIn('Gtk.Button(label="Apply"',source)
+        self.assertIn('self.helper.call("ApplyMonitorConfiguration",{"xml":xml})',source)
+        self.assertNotIn('Gtk.Button(label="Stage"',source)
+
 
 if __name__ == "__main__":
     unittest.main()

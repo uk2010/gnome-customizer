@@ -190,10 +190,15 @@ export default class CustomizerExtension extends Extension {
             // The half-pixel offset and positive z position are required by
             // Mutter for reliable background painting across monitor layouts.
             const surface=new St.Widget({x:monitor.x,y:monitor.y+0.5,z_position:1,width:monitor.width,height:monitor.height});
-            const manager=new Background.BackgroundManager({container:surface,monitorIndex:i,controlPosition:false});
+            // Keep the tint outside the actor effect. Shell.BlurEffect renders
+            // its actor to an offscreen buffer, where a translucent child can
+            // be flattened before it is composited into the overview.
+            const wallpaper=new St.Widget({x:0,y:0,width:monitor.width,height:monitor.height});
+            surface.add_child(wallpaper);
+            const manager=new Background.BackgroundManager({container:wallpaper,monitorIndex:i,controlPosition:false});
             const tint=new St.Widget({x:0,y:0,width:monitor.width,height:monitor.height});
             surface.add_child(tint);this._overviewBackgroundGroup.insert_child_at_index(surface,0);
-            this._overviewBackgrounds.push({surface,tint,manager});
+            this._overviewBackgrounds.push({surface,wallpaper,tint,manager});
         }
         Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup,0);
         this._syncOverviewBackgrounds();
@@ -207,17 +212,18 @@ export default class CustomizerExtension extends Extension {
         const opacity=this._settings.get_double('overview-opacity');
         const color=this._settings.get_string('overview-color');
         this._overviewBackgroundGroup.visible=enabled;
-        for (const {surface,tint} of this._overviewBackgrounds) {
-            surface.remove_effect_by_name('gnome-customizer-overview-blur');
-            surface.remove_effect_by_name('gnome-customizer-overview-desaturate');
+        for (const {wallpaper,tint} of this._overviewBackgrounds) {
+            wallpaper.remove_effect_by_name('gnome-customizer-overview-blur');
+            wallpaper.remove_effect_by_name('gnome-customizer-overview-desaturate');
             const scale=St.ThemeContext.get_for_stage(global.stage).scale_factor;
-            if (enabled && sigma>0) surface.add_effect_with_name('gnome-customizer-overview-blur',new Shell.BlurEffect({mode:Shell.BlurMode.ACTOR,brightness,radius:sigma*scale}));
-            if (enabled && saturation<1) surface.add_effect_with_name('gnome-customizer-overview-desaturate',new Clutter.DesaturateEffect({factor:1-saturation}));
-            tint.set_style(`background-color: ${colorWithOpacity(color, opacity)};`);
+            if (enabled && sigma>0) wallpaper.add_effect_with_name('gnome-customizer-overview-blur',new Shell.BlurEffect({mode:Shell.BlurMode.ACTOR,brightness,radius:sigma*scale}));
+            if (enabled && saturation<1) wallpaper.add_effect_with_name('gnome-customizer-overview-desaturate',new Clutter.DesaturateEffect({factor:1-saturation}));
+            tint.set_style(`background-color: ${colorWithOpacity(color, 1)};`);
+            tint.set_opacity(Math.round(255*Math.max(0,Math.min(1,opacity))));
         }
         Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
-        const diagnostic=`${enabled}:${sigma}:${this._overviewBackgrounds.length}`;
-        if (diagnostic !== this._overviewDiagnostic) { this._overviewDiagnostic=diagnostic;if (enabled) console.log(`GNOME Customizer: overview applied (blur=${sigma}, monitors=${this._overviewBackgrounds.length})`); }
+        const diagnostic=`${enabled}:${sigma}:${opacity}:${this._overviewBackgrounds.length}`;
+        if (diagnostic !== this._overviewDiagnostic) { this._overviewDiagnostic=diagnostic;if (enabled) console.log(`GNOME Customizer: overview applied (blur=${sigma}, tint=${opacity}, monitors=${this._overviewBackgrounds.length})`); }
     }
     _queuePanelStyleRestore() {
         if (this._panelRestoreSource || !this._settings) return;
