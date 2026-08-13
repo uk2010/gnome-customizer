@@ -4,8 +4,21 @@ from pathlib import Path
 from gnome_customizer.backend.settings import SettingsBackend, yaru_theme_for_accent
 from gnome_customizer.backend.themes import SHELL_SURFACE_SETTINGS
 
+ROOT=Path(__file__).parents[2]
+
 
 class AppearanceModeTests(unittest.TestCase):
+    def test_native_window_and_desktop_icon_placement_controls_are_exposed(self):
+        preferences=(ROOT/"src/gnome_customizer/pages/preferences.py").read_text()
+        window=(ROOT/"src/gnome_customizer/window.py").read_text()
+        self.assertIn('"Always Center New Windows","org.gnome.mutter","center-new-windows"',preferences)
+        self.assertIn('schema="org.gnome.shell.extensions.ding"',preferences)
+        self.assertIn('"Starting Corner",schema,"start-corner"',preferences)
+        for corner in ("top-left","top-right","bottom-left","bottom-right"):
+            self.assertIn(f'"{corner}"',preferences)
+        self.assertIn('(\"placement\",\"Placement\",\"view-grid-symbolic\")',window)
+        self.assertIn('self._add("placement",self.factory.placement())',window)
+
     def test_color_scheme_has_no_old_application_theme_override(self):
         source=(Path(__file__).parents[2]/"src/gnome_customizer/window.py").read_text()
         self.assertNotIn("_stage_color_scheme",source)

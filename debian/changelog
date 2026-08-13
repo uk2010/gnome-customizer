@@ -1,3 +1,10 @@
+gnome-customizer (0.3.21) resolute; urgency=high
+
+  * Add native placement controls for centered new windows and desktop-icon corners.
+  * Remove the inherited Yaru menu shadow that mismatched custom gradient radii.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 04:50:00 -0500
+
 gnome-customizer (0.3.20) resolute; urgency=high
 
   * Normalize GNOME wallpaper colors when saving the current appearance as a theme.

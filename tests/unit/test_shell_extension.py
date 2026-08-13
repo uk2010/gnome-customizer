@@ -91,6 +91,11 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("this._syncMenuActor(actor)",extension)
         self.assertIn("actor.disconnect(record.mappedId);actor.disconnect(record.destroyId)",extension)
 
+    def test_custom_menu_removes_the_theme_shadow_that_uses_the_stock_radius(self):
+        extension=(ROOT/"shell/extension.js").read_text()
+        self.assertIn("border: 1px solid ${border}; box-shadow: none;",extension)
+        self.assertIn("actor.set_style(record.style)",extension)
+
 
 if __name__ == "__main__":
     unittest.main()

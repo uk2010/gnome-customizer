@@ -116,6 +116,16 @@ class PreferencesFactory:
         g=self.group(p,"Numeric Keypad")
         self.switch(g,"Remember Num Lock State","org.gnome.desktop.peripherals.keyboard","remember-numlock-state")
         return p
+    def placement(self):
+        p=self.page("Placement","Choose where GNOME places newly opened windows and desktop icons")
+        windows=self.group(p,"New Windows")
+        self.switch(windows,"Always Center New Windows","org.gnome.mutter","center-new-windows",subtitle="Off lets Mutter choose a free position automatically")
+        icons=self.group(p,"New Desktop Icons")
+        schema="org.gnome.shell.extensions.ding"
+        corner=self.combo(icons,"Starting Corner",schema,"start-corner",{"top-left":"Upper Left","top-right":"Upper Right","bottom-left":"Lower Left","bottom-right":"Lower Right"})
+        if corner is None:
+            icons.add(Adw.ActionRow(title="Desktop icon placement unavailable",subtitle="Install or enable Desktop Icons NG to choose a starting corner."))
+        return p
     def power(self):
         p=self.page("Power");g=self.group(p,"Energy")
         self.combo(g,"Power Button Action","org.gnome.settings-daemon.plugins.power","power-button-action");self.switch(g,"Power Saver on Low Battery","org.gnome.settings-daemon.plugins.power","power-saver-profile-on-low-battery");self.switch(g,"Dim Screen","org.gnome.settings-daemon.plugins.power","idle-dim");self.spin(g,"Dimmed Brightness","org.gnome.settings-daemon.plugins.power","idle-brightness",0,100);self.switch(g,"Ambient Light Sensor","org.gnome.settings-daemon.plugins.power","ambient-enabled");self.duration(g,"Blank Screen Delay (minutes)","org.gnome.desktop.session","idle-delay");self.combo(g,"AC Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-type");self.duration(g,"AC Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-timeout");self.combo(g,"Battery Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-type");self.duration(g,"Battery Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-timeout")

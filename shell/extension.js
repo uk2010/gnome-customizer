@@ -118,7 +118,7 @@ export default class CustomizerExtension extends Extension {
     }
     _syncMenuActor(actor) {
         const opacity=this._settings.get_double('menu-opacity'), radius=this._settings.get_int('menu-radius'), sigma=this._settings.get_int('menu-blur'), text=this._settings.get_string('menu-text-color'), border=this._settings.get_string('menu-border-color');
-        actor.set_style(`${backgroundStyle(this._settings, 'menu', opacity)} border-radius: ${radius}px; color: ${text}; border: 1px solid ${border};`);
+        actor.set_style(`${backgroundStyle(this._settings, 'menu', opacity)} border-radius: ${radius}px; color: ${text}; border: 1px solid ${border}; box-shadow: none;`);
         this._blur(actor, 'gnome-customizer-menu-blur', sigma);
     }
     _restoreMenus() {
