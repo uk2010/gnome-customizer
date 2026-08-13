@@ -22,6 +22,8 @@ jobs:
             dpkg-buildpackage -us -uc -b -d -aamd64
           fi
       - run: python3 tests/integration/check_install_tree.py debian/gnome-customizer
+      - if: matrix.arch == 'amd64'
+        run: python3 tests/integration/check_shell_runtime.py debian/gnome-customizer
       - run: desktop-file-validate debian/gnome-customizer/usr/share/applications/io.github.gnomecustomizer.desktop && appstreamcli validate --no-net debian/gnome-customizer/usr/share/metainfo/io.github.gnomecustomizer.metainfo.xml
       - run: dpkg-deb --info ../gnome-customizer_*_${{ matrix.arch }}.deb
       - run: mkdir -p artifacts && cp ../gnome-customizer_*_${{ matrix.arch }}.deb artifacts/

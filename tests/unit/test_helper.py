@@ -42,7 +42,21 @@ class HelperTests(unittest.TestCase):
         with self.assertRaises(ValueError):helper.require_dict("x"*(helper.MAX_PAYLOAD+1))
     def test_monitor_xml_validation_and_restore(self):
         with self.assertRaises(ValueError):self.service.monitors({"xml":"<monitors version=\"2\"><!DOCTYPE x></monitors>"})
-        self.service.monitors({"xml":"<monitors version=\"2\"></monitors>"});self.assertTrue(helper.MONITORS.is_file());self.service.restore_monitors({});self.assertFalse(helper.MONITORS.exists())
+        xml="<monitors version=\"2\"></monitors>";result=self.service.monitors({"xml":xml})
+        self.assertEqual(helper.MONITORS.read_text(),xml);self.assertEqual(helper.MONITORS.stat().st_mode&0o777,0o600)
+        self.assertEqual(result["path"],str(helper.MONITORS));self.assertEqual(result["sha256"],__import__('hashlib').sha256(xml.encode()).hexdigest())
+        if helper.os.geteuid()==0:
+            account=helper.pwd.getpwnam(helper.gdm_user());info=helper.MONITORS.stat();directory=helper.MONITORS.parent.stat()
+            self.assertEqual((info.st_uid,info.st_gid),(account.pw_uid,account.pw_gid));self.assertEqual((directory.st_uid,directory.st_gid),(account.pw_uid,account.pw_gid))
+        self.service.restore_monitors({});self.assertFalse(helper.MONITORS.exists())
+    def test_monitor_transaction_writes_and_verifies_exact_layout(self):
+        xml='<monitors version="2"><configuration><logicalmonitor><x>1440</x></logicalmonitor></configuration></monitors>'
+        result=self.service.transaction({"monitors":xml})
+        self.assertEqual(helper.MONITORS.read_bytes(),xml.encode());self.assertEqual(result["sha256"],__import__('hashlib').sha256(xml.encode()).hexdigest())
+    def test_production_monitor_path_uses_gdm_account_home(self):
+        account=type("Account",(),{"pw_dir":"/srv/gdm-test","pw_uid":123,"pw_gid":456})()
+        with patch.object(helper,"MONITORS",None),patch.object(helper,"gdm_user",return_value="gdm"),patch.object(helper.pwd,"getpwnam",return_value=account):
+            self.assertEqual(helper.monitor_path(),Path("/srv/gdm-test/.config/monitors.xml"))
     def test_dconf_merges_managed_settings(self):
         class Result:stdout=""
         helper.run=lambda *a,**k:Result()

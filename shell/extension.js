@@ -196,9 +196,8 @@ export default class CustomizerExtension extends Extension {
             const wallpaper=new St.Widget({x:0,y:0,width:monitor.width,height:monitor.height});
             surface.add_child(wallpaper);
             const manager=new Background.BackgroundManager({container:wallpaper,monitorIndex:i,controlPosition:false});
-            const tint=new St.Widget({x:0,y:0,width:monitor.width,height:monitor.height});
-            surface.add_child(tint);this._overviewBackgroundGroup.insert_child_at_index(surface,0);
-            this._overviewBackgrounds.push({surface,wallpaper,tint,manager});
+            this._overviewBackgroundGroup.insert_child_at_index(surface,0);
+            this._overviewBackgrounds.push({surface,wallpaper,tint:null,manager});
         }
         Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup,0);
         this._syncOverviewBackgrounds();
@@ -211,28 +210,38 @@ export default class CustomizerExtension extends Extension {
         const saturation=this._settings.get_double('overview-saturation');
         const opacity=this._settings.get_double('overview-opacity');
         const color=this._settings.get_string('overview-color');
+        // A zero tint is a neutral, transparent blur. Brightness and
+        // desaturation otherwise leave the dark gray cast visible in the
+        // overview even after the color overlay itself is removed.
+        const effectiveBrightness=opacity<=0 ? 1 : brightness;
+        const effectiveSaturation=opacity<=0 ? 1 : saturation;
         this._overviewBackgroundGroup.visible=enabled;
-        for (const {wallpaper,tint} of this._overviewBackgrounds) {
+        for (const item of this._overviewBackgrounds) {
+            const {surface,wallpaper} = item;
             wallpaper.remove_effect_by_name('gnome-customizer-overview-blur');
             wallpaper.remove_effect_by_name('gnome-customizer-overview-desaturate');
             const scale=St.ThemeContext.get_for_stage(global.stage).scale_factor;
-            if (enabled && sigma>0) wallpaper.add_effect_with_name('gnome-customizer-overview-blur',new Shell.BlurEffect({mode:Shell.BlurMode.ACTOR,brightness,radius:sigma*scale}));
-            if (enabled && saturation<1) wallpaper.add_effect_with_name('gnome-customizer-overview-desaturate',new Clutter.DesaturateEffect({factor:1-saturation}));
-            // Zero tint means no tint actor is painted at all. This avoids a
-            // stale themed background or compositor cache leaving a cast over
-            // the blurred wallpaper when the control is set to 0.
+            if (enabled && sigma>0) wallpaper.add_effect_with_name('gnome-customizer-overview-blur',new Shell.BlurEffect({mode:Shell.BlurMode.ACTOR,brightness:effectiveBrightness,radius:sigma*scale}));
+            if (enabled && effectiveSaturation<1) wallpaper.add_effect_with_name('gnome-customizer-overview-desaturate',new Clutter.DesaturateEffect({factor:1-effectiveSaturation}));
+            // At zero there is no tint actor in the scene graph. Destroying it
+            // is stronger than transparent CSS or actor opacity and makes it
+            // impossible for a stale themed paint node to tint the wallpaper.
             if (opacity <= 0) {
-                tint.set_style('background-color: transparent;');
-                tint.hide();
+                item.tint?.destroy();
+                item.tint=null;
             } else {
-                tint.set_style(`background-color: ${colorWithOpacity(color, opacity)};`);
-                tint.set_opacity(255);
-                tint.show();
+                if (!item.tint) {
+                    item.tint=new St.Widget({x:0,y:0,width:surface.width,height:surface.height});
+                    surface.add_child(item.tint);
+                }
+                item.tint.set_style(`background-color: ${colorWithOpacity(color, opacity)};`);
             }
         }
         Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
-        const diagnostic=`${enabled}:${sigma}:${opacity}:${this._overviewBackgrounds.length}`;
-        if (diagnostic !== this._overviewDiagnostic) { this._overviewDiagnostic=diagnostic;if (enabled) console.log(`GNOME Customizer: overview applied (blur=${sigma}, tint=${opacity}, monitors=${this._overviewBackgrounds.length})`); }
+        const tintActors=this._overviewBackgrounds.filter(item => item.tint !== null).length;
+        const desaturateActors=this._overviewBackgrounds.filter(item => item.wallpaper.get_effect('gnome-customizer-overview-desaturate') !== null).length;
+        const diagnostic=`${enabled}:${sigma}:${opacity}:${effectiveBrightness}:${effectiveSaturation}:${tintActors}:${desaturateActors}:${this._overviewBackgrounds.length}`;
+        if (diagnostic !== this._overviewDiagnostic) { this._overviewDiagnostic=diagnostic;if (enabled) console.log(`GNOME Customizer: overview applied (blur=${sigma}, tint=${opacity}, brightness=${effectiveBrightness}, saturation=${effectiveSaturation}, tintActors=${tintActors}, desaturateActors=${desaturateActors}, monitors=${this._overviewBackgrounds.length})`); }
     }
     _queuePanelStyleRestore() {
         if (this._panelRestoreSource || !this._settings) return;

@@ -68,6 +68,9 @@ gsettings set io.github.gnomecustomizer.shell panel-opacity 1.0
 gsettings set io.github.gnomecustomizer.shell panel-blur 20
 gsettings set io.github.gnomecustomizer.shell overview-enabled true
 gsettings set io.github.gnomecustomizer.shell overview-blur 30
+gsettings set io.github.gnomecustomizer.shell overview-opacity 0
+gsettings set io.github.gnomecustomizer.shell overview-brightness 0.2
+gsettings set io.github.gnomecustomizer.shell overview-saturation 0
 gsettings set io.github.gnomecustomizer.shell overview-hover-opacity 0.35
 gsettings set io.github.gnomecustomizer.shell overview-hover-color '#123456'
 gsettings set io.github.gnomecustomizer.shell alphabetical-app-grid true
@@ -82,6 +85,10 @@ for _ in $(seq 1 20); do
 done
 $ready
 sleep 2
+gsettings set io.github.gnomecustomizer.shell overview-opacity 0.5
+sleep 1
+gsettings set io.github.gnomecustomizer.shell overview-opacity 0
+sleep 1
 export WAYLAND_DISPLAY=wayland-0
 GDK_DEBUG=no-portals PYTHONPATH="$PYTHON_SOURCE" python3 "$ACCENT_DRIVER" >"$SMOKE_ROOT/app.log" 2>&1
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Extensions.GetExtensionInfo gnome-customizer@io.github.gnomecustomizer >"$SMOKE_ROOT/info-before.log"
@@ -129,8 +136,13 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
             raise SystemExit(f"Disable/re-enable lifecycle failed:\n{controls}")
         if "GNOME Customizer: panel applied (opacity=1, blur=20, style=true, effect=true)" not in shell_log:
             raise SystemExit("The real GNOME panel did not receive its configured style and blur effect")
-        if "GNOME Customizer: overview applied (blur=30, monitors=1)" not in shell_log:
+        if "GNOME Customizer: overview applied (blur=30, tint=0.5, brightness=0.2, saturation=0, tintActors=1, desaturateActors=1, monitors=1)" not in shell_log:
             raise SystemExit("The overview did not receive its configured per-monitor blur")
+        neutral="GNOME Customizer: overview applied (blur=30, tint=0, brightness=1, saturation=1, tintActors=0, desaturateActors=0, monitors=1)"
+        if shell_log.count(neutral) < 2:
+            raise SystemExit("Zero tint opacity did not produce a neutral blur before and after a nonzero tint")
+        if re.search(r"tint=0, .*tintActors=[1-9]",shell_log):
+            raise SystemExit("A tint actor remained in the Shell scene graph at zero opacity")
         if not re.search(r"GNOME Customizer: overview hover backgrounds tracked \([1-9][0-9]*\)", shell_log):
             raise SystemExit("GNOME Shell did not expose any overview tiles to the hover-background controller")
         if "GNOME Customizer: alphabetical app grid enabled" not in shell_log:

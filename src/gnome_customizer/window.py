@@ -306,7 +306,9 @@ class CustomizerWindow(Adw.ApplicationWindow):
         threading.Thread(target=self._apply_monitors_worker,args=(xml,button),daemon=True).start()
     def _apply_monitors_worker(self,xml,button):
         try:
-            self.helper.call("ApplyMonitorConfiguration",{"xml":xml})
+            result=self.helper.call("ApplyMonitorConfiguration",{"xml":xml})
+            import hashlib
+            if result.get("sha256")!=hashlib.sha256(xml.encode()).hexdigest():raise RuntimeError("The login-screen display layout could not be verified")
             GLib.idle_add(self._apply_monitors_success,xml,button)
         except Exception as exc:GLib.idle_add(self._apply_monitors_failure,button,exc)
     def _apply_monitors_success(self,xml,button):

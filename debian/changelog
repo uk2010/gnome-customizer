@@ -1,3 +1,12 @@
+gnome-customizer (0.3.29) resolute; urgency=high
+
+  * Make zero overview tint a neutral full-color blur with no tint actor.
+  * Resolve the login monitor path from the actual GDM account home.
+  * Verify login display XML bytes, permissions, ownership, and checksum.
+  * Run tint transitions in a real headless GNOME Shell during CI.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 18:25:00 -0500
+
 gnome-customizer (0.3.28) resolute; urgency=high
 
   * Disable painting the overview tint layer when tint opacity is zero.

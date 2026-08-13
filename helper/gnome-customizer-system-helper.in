@@ -19,7 +19,9 @@ RESOURCE=ROOT/"gnome-shell-theme.gresource"; LINK=Path("/usr/share/gnome-shell/g
 PREVIOUS=STATE/"previous-resource"; PREV_MON=STATE/"monitors.xml.previous"; MON_MARK=STATE/"monitors-created"
 GDM_STATE=STATE/"gdm-settings.json"; PROFILE_MARK=STATE/"profile-created"
 RESOURCE_STATE=STATE/"resource-settings.json"
-MONITORS=Path("/var/lib/gdm3/.config/monitors.xml")
+# Tests may override this. Production resolves the greeter account's actual
+# home instead of assuming Ubuntu's historical /var/lib/gdm3 path.
+MONITORS=None
 YARU=Path("/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"); STOCK=Path("/usr/share/gnome-shell/gnome-shell-theme.gresource")
 MAX_PAYLOAD=56*1024*1024; MAX_ASSET=20*1024*1024
 COMPILE_RESOURCES="/usr/bin/glib-compile-resources"
@@ -79,6 +81,13 @@ def gdm_user():
   try:pwd.getpwnam(name);return name
   except KeyError:pass
  return None
+def monitor_path():
+ if isinstance(MONITORS,Path):return MONITORS
+ user=gdm_user()
+ if not user:raise RuntimeError("The GDM account could not be found")
+ account=pwd.getpwnam(user);home=Path(account.pw_dir)
+ if not home.is_absolute() or home==Path("/"):raise RuntimeError("The GDM account has an unsafe home directory")
+ return home/".config/monitors.xml"
 def own_gdm(path):
  user=gdm_user()
  if user and os.geteuid()==0:
@@ -235,13 +244,19 @@ class Helper:
   try:root=ElementTree.fromstring(data)
   except ElementTree.ParseError:raise ValueError("Malformed monitors.xml")
   if root.tag!="monitors" or root.get("version") not in {"1","2"}:raise ValueError("Unsupported monitors.xml format")
-  target=MONITORS;STATE.mkdir(parents=True,exist_ok=True)
+  target=monitor_path();STATE.mkdir(parents=True,exist_ok=True)
   if not PREV_MON.exists() and not MON_MARK.exists():
    if target.exists():shutil.copy2(target,PREV_MON)
    else:MON_MARK.touch()
-  atomic(target,data.encode(),0o600);own_gdm(target);return {"installed":True}
+  payload=data.encode();atomic(target,payload,0o600);own_gdm(target.parent);own_gdm(target)
+  if target.read_bytes()!=payload:raise RuntimeError("GDM display layout verification failed")
+  account=pwd.getpwnam(gdm_user())
+  info=target.stat()
+  if os.geteuid()==0 and (info.st_uid!=account.pw_uid or info.st_gid!=account.pw_gid):raise RuntimeError("GDM display layout ownership verification failed")
+  if info.st_mode&0o777!=0o600:raise RuntimeError("GDM display layout permission verification failed")
+  return {"installed":True,"path":str(target),"sha256":hashlib.sha256(payload).hexdigest()}
  def restore_monitors(self,p):
-  target=MONITORS
+  target=monitor_path()
   if p.get("factory") is True:
    target.unlink(missing_ok=True);PREV_MON.unlink(missing_ok=True);MON_MARK.unlink(missing_ok=True)
   elif PREV_MON.exists():shutil.copy2(PREV_MON,target);own_gdm(target);PREV_MON.unlink()
@@ -283,7 +298,7 @@ class Helper:
  def transaction(self,p):
   if set(p)-{"assets","resource","settings","monitors","monitor_default"}:raise ValueError("Unsupported transaction operation")
   if "monitors" in p and "monitor_default" in p:raise ValueError("Choose a monitor configuration or the default, not both")
-  work=Path(tempfile.mkdtemp(prefix="gnome-customizer-rollback-")); paths=[DCONF,GDM_STATE,RESOURCE,RESOURCE_STATE,MONITORS,PREVIOUS,PREV_MON,MON_MARK,PROFILE,PROFILE_MARK]
+  work=Path(tempfile.mkdtemp(prefix="gnome-customizer-rollback-")); paths=[DCONF,GDM_STATE,RESOURCE,RESOURCE_STATE,monitor_path(),PREVIOUS,PREV_MON,MON_MARK,PROFILE,PROFILE_MARK]
   snapshots={}; old_active=current()
   for item in paths:
    snapshots[item]=(item.exists(),item.read_bytes() if item.is_file() else b"")
@@ -327,7 +342,8 @@ class Helper:
    match=next((path for path in ASSETS.glob(role+".*") if path.is_file() and not path.is_symlink()),None) if ASSETS.is_dir() else None
    if match and (role!="logo" or logo_active):assets[role]=str(match)
   result={"resource":resource,"assets":assets,"settings":settings if isinstance(settings,dict) else {}}
-  try:result["monitors"]=MONITORS.read_text() if MONITORS.is_file() else ""
+  target=monitor_path()
+  try:result["monitors"]=target.read_text() if target.is_file() else ""
   except OSError:result["monitors"]=""
   if accent in {"blue","teal","green","yellow","orange","red","pink","purple","slate","brown"}:result["accent"]=accent
   return result

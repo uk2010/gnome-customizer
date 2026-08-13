@@ -60,6 +60,7 @@ class AppearanceModeTests(unittest.TestCase):
         source=(ROOT/"src/gnome_customizer/window.py").read_text()
         self.assertIn('Gtk.Button(label="Apply"',source)
         self.assertIn('self.helper.call("ApplyMonitorConfiguration",{"xml":xml})',source)
+        self.assertIn('result.get("sha256")!=hashlib.sha256(xml.encode()).hexdigest()',source)
         self.assertNotIn('Gtk.Button(label="Stage"',source)
 
 
