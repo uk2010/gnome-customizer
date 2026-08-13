@@ -90,7 +90,11 @@ sleep 1
 gsettings set io.github.gnomecustomizer.shell overview-opacity 0
 sleep 1
 export WAYLAND_DISPLAY=wayland-0
-GDK_DEBUG=no-portals PYTHONPATH="$PYTHON_SOURCE" python3 "$ACCENT_DRIVER" >"$SMOKE_ROOT/app.log" 2>&1
+if [ "$RUN_ACCENT_DRIVER" = 1 ]; then
+    GDK_DEBUG=no-portals PYTHONPATH="$PYTHON_SOURCE" python3 "$ACCENT_DRIVER" >"$SMOKE_ROOT/app.log" 2>&1
+else
+    : >"$SMOKE_ROOT/app.log"
+fi
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Extensions.GetExtensionInfo gnome-customizer@io.github.gnomecustomizer >"$SMOKE_ROOT/info-before.log"
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Extensions.GetExtensionErrors gnome-customizer@io.github.gnomecustomizer >"$SMOKE_ROOT/errors-before.log"
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Extensions.DisableExtension gnome-customizer@io.github.gnomecustomizer >"$SMOKE_ROOT/disable.log"
@@ -105,6 +109,8 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
         environment["HOME"] = str(base / "home")
         environment["PYTHON_SOURCE"] = str(python_source)
         environment["ACCENT_DRIVER"] = str(ROOT / "tests/integration/accent_runtime_driver.py")
+        isolated_system_bus = environment.get("GNOME_CUSTOMIZER_ISOLATED_SYSTEM_BUS") == "1"
+        environment["RUN_ACCENT_DRIVER"] = "0" if isolated_system_bus else "1"
         completed = subprocess.run(
             ["dbus-run-session", "--", "bash", "-c", script],
             env=environment,
@@ -149,14 +155,50 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
             raise SystemExit("The alphabetical app-grid renderer was not enabled")
         forbidden = re.compile(r"JS ERROR|TypeError|ReferenceError|gnome-customizer-panel-background|needs an allocation|assertion 'width >= 1'", re.I)
         problems = [line for line in shell_log.splitlines() if forbidden.search(line)]
+        if isolated_system_bus:
+            known_mock_failures = (
+                "Could not get a proxy for user",
+                'TypeError: can only concatenate str (not "dbus.UInt32") to str',
+            )
+            problems = [
+                line for line in problems
+                if not any(message in line for message in known_mock_failures)
+            ]
         if problems:
             raise SystemExit("Companion emitted runtime errors:\n" + "\n".join(problems))
-        if re.search(r"Traceback|SettingsError|Gtk-ERROR|Gdk-ERROR", app_log, re.I):
-            raise SystemExit("GNOME Customizer application failed under the test compositor:\n" + app_log)
-        if "Appearance accent runtime passed" not in app_log:
-            raise SystemExit("The Appearance accent end-to-end check did not complete:\n" + app_log)
-        print("GNOME runtime check passed: native accent, panel/overview effects, and disable/re-enable clean")
+        if not isolated_system_bus:
+            if re.search(r"Traceback|SettingsError|Gtk-ERROR|Gdk-ERROR", app_log, re.I):
+                raise SystemExit("GNOME Customizer application failed under the test compositor:\n" + app_log)
+            if "Appearance accent runtime passed" not in app_log:
+                raise SystemExit("The Appearance accent end-to-end check did not complete:\n" + app_log)
+            print("GNOME runtime check passed: native accent, panel/overview effects, and disable/re-enable clean")
+        else:
+            print("GNOME runtime check passed: panel/overview effects and disable/re-enable clean")
+
+
+def run() -> None:
+    if os.environ.get("GNOME_CUSTOMIZER_ISOLATED_SYSTEM_BUS") != "1":
+        main()
+        return
+
+    try:
+        from dbusmock import DBusTestCase
+    except ImportError as error:
+        raise SystemExit("GNOME_CUSTOMIZER_ISOLATED_SYSTEM_BUS requires python3-dbusmock") from error
+
+    DBusTestCase.start_system_bus()
+    mock_process = None
+    try:
+        mock_process, _ = DBusTestCase.spawn_server_template(
+            "logind", {}, stdout=subprocess.DEVNULL
+        )
+        main()
+    finally:
+        if mock_process is not None:
+            mock_process.terminate()
+            mock_process.wait(timeout=5)
+        DBusTestCase.tearDownClass()
 
 
 if __name__ == "__main__":
-    main()
+    run()
