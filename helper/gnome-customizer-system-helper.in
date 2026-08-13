@@ -279,7 +279,27 @@ class Helper:
    subprocess.run(["/usr/bin/dconf","update"],capture_output=True)
    raise
   finally:shutil.rmtree(work)
- def status(self):
+ def appearance(self):
+  try:resource=json.loads(RESOURCE_STATE.read_text())
+  except (OSError,json.JSONDecodeError):resource={}
+  if not isinstance(resource,dict):resource={}
+  allowed={"wallpaper","background_color","panel_color","panel_color2","panel_gradient_enabled","panel_gradient_direction","panel_text_color","panel_opacity","panel_radius"}
+  resource={key:value for key,value in resource.items() if key in allowed}
+  try:settings=json.loads(GDM_STATE.read_text())
+  except (OSError,json.JSONDecodeError):settings={}
+  interface=settings.get("org.gnome.desktop.interface",{}) if isinstance(settings,dict) else {}
+  accent=interface.get("accent-color") if isinstance(interface,dict) else None
+  login=settings.get("org.gnome.login-screen",{}) if isinstance(settings,dict) else {}
+  logo_active=isinstance(login,dict) and bool(login.get("logo"))
+  assets={}
+  for role in ("wallpaper","logo"):
+   match=next((path for path in ASSETS.glob(role+".*") if path.is_file() and not path.is_symlink()),None) if ASSETS.is_dir() else None
+   if match and (role!="logo" or logo_active):assets[role]=str(match)
+  result={"resource":resource,"assets":assets}
+  if accent in {"blue","teal","green","yellow","orange","red","pink","purple","slate","brown"}:result["accent"]=accent
+  return result
+ def status(self,p=None):
+  if isinstance(p,dict) and p.get("appearance_only") is True:return {"available":True,"appearance":self.appearance()}
   queries=(("Accent","org.gnome.desktop.interface","accent-color"),("Color scheme","org.gnome.desktop.interface","color-scheme"),("Clock format","org.gnome.desktop.interface","clock-format"),("Date","org.gnome.desktop.interface","clock-show-date"),("Weekday","org.gnome.desktop.interface","clock-show-weekday"),("Seconds","org.gnome.desktop.interface","clock-show-seconds"),("Font","org.gnome.desktop.interface","font-name"),("Icons","org.gnome.desktop.interface","icon-theme"),("Cursor","org.gnome.desktop.interface","cursor-theme"),("Logo","org.gnome.login-screen","logo"),("Banner enabled","org.gnome.login-screen","banner-message-enable"),("Banner text","org.gnome.login-screen","banner-message-text"),("User list disabled","org.gnome.login-screen","disable-user-list"),("Power buttons disabled","org.gnome.login-screen","disable-restart-buttons"))
   with ThreadPoolExecutor(max_workers=7) as pool:values=pool.map(lambda q:self.gdm_get(q[1],q[2]),queries)
   effective={query[0]:value for query,value in zip(queries,values)}
@@ -288,7 +308,7 @@ class Helper:
 def main():
  loop=GLib.MainLoop(); connection=Gio.bus_get_sync(Gio.BusType.SYSTEM,None); helper=Helper(connection)
  xml=INTROSPECTION.read_text(); node=Gio.DBusNodeInfo.new_for_xml(xml); iface=node.interfaces[0]
- methods={"ApplyTransaction":helper.transaction,"ApplyGdmDconf":helper.dconf,"InstallGdmAssets":helper.assets,"InstallGdmResource":helper.resource,"ActivateGdmResource":helper.activate,"RestoreGdmResource":helper.restore_resource,"ApplyMonitorConfiguration":helper.monitors,"RestoreMonitorConfiguration":helper.restore_monitors,"RestoreGdmDefaults":helper.restore_all,"QueryStatus":lambda p:helper.status()}
+ methods={"ApplyTransaction":helper.transaction,"ApplyGdmDconf":helper.dconf,"InstallGdmAssets":helper.assets,"InstallGdmResource":helper.resource,"ActivateGdmResource":helper.activate,"RestoreGdmResource":helper.restore_resource,"ApplyMonitorConfiguration":helper.monitors,"RestoreMonitorConfiguration":helper.restore_monitors,"RestoreGdmDefaults":helper.restore_all,"QueryStatus":helper.status}
  def call(conn,sender,path,interface,method,params,invocation):
   try:
    if method!="QueryStatus":helper.authorize(sender)

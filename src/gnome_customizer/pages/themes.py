@@ -6,10 +6,10 @@ from gi.repository import Adw, GLib, Gtk
 from ..backend.themes import capture_current_theme, compatibility_warnings, delete_theme, export_theme, import_theme
 
 class ThemesPage(Adw.PreferencesPage):
-    def __init__(self,toast,apply_theme=None,settings=None):
-        super().__init__(title="Themes",description="Import, apply, delete, and share validated appearance-only themes");self.toast=toast;self.apply_theme=apply_theme;self.settings=settings;self.group=Adw.PreferencesGroup(title="Local Themes");self.add(self.group);self._theme_rows={}
+    def __init__(self,toast,apply_theme=None,settings=None,state=None,helper=None):
+        super().__init__(title="Themes",description="Import, apply, delete, and share validated appearance-only themes");self.toast=toast;self.apply_theme=apply_theme;self.settings=settings;self.state=state;self.helper=helper;self.group=Adw.PreferencesGroup(title="Local Themes");self.add(self.group);self._theme_rows={}
         if settings:
-            save=Adw.ActionRow(title="Save Current Settings",subtitle="Export the currently applied desktop, Shell, and dock appearance as a reusable theme");save_button=Gtk.Button(label="Save as Theme",valign=Gtk.Align.CENTER,css_classes=["suggested-action"]);save_button.connect("clicked",self._save_current);save.add_suffix(save_button);self.group.add(save)
+            save=Adw.ActionRow(title="Save Current Settings",subtitle="Embed the applied desktop and login wallpapers with desktop, Shell, dock, and login appearance");save_button=Gtk.Button(label="Save as Theme",valign=Gtk.Align.CENTER,css_classes=["suggested-action"]);save_button.connect("clicked",self._save_current);save.add_suffix(save_button);self.group.add(save)
         row=Adw.ActionRow(title="Import .gctheme",subtitle="Archives are validated before extraction");button=Gtk.Button(label="Choose File",valign=Gtk.Align.CENTER);button.connect("clicked",self._choose);row.add_suffix(button);self.group.add(row)
         self.samples=Adw.PreferencesGroup(title="Included Samples",description="Safe themes shipped with GNOME Customizer");self.add(self.samples);self._sample_temp=tempfile.TemporaryDirectory(prefix="gnome-customizer-samples-")
         from ..backend.constants import THEMES_DIR
@@ -29,7 +29,9 @@ class ThemesPage(Adw.PreferencesPage):
         try:
             target=Path(dialog.save_finish(result).get_path());name=target.stem.strip() or "Current Settings";author=GLib.get_real_name()
             if not author or author == "Unknown":author=GLib.get_user_name() or "GNOME User"
-            manifest,assets=capture_current_theme(self.settings,name,author)
+            login=self.helper.login_appearance() if self.helper else None
+            if not login and self.state:login=self.state.data.get("login_theme")
+            manifest,assets=capture_current_theme(self.settings,name,author,login)
             threading.Thread(target=self._save_current_worker,args=(manifest,assets,target),daemon=True).start()
         except GLib.Error:pass
         except Exception as exc:self.toast(str(exc))

@@ -23,3 +23,7 @@ class SystemHelperProxy:
     def status(self):
         try: return self.call("QueryStatus")
         except Exception as exc: return {"ok": False, "error": str(exc), "available": False}
+
+    def login_appearance(self):
+        try:return self.call("QueryStatus", {"appearance_only": True}).get("appearance")
+        except Exception:return None

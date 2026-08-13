@@ -11,6 +11,7 @@ python.install_sources(
   'gnome_customizer/backend/assets.py',
   'gnome_customizer/backend/app_theme.py',
   'gnome_customizer/backend/constants.py',
+  'gnome_customizer/backend/login_theme.py',
   'gnome_customizer/backend/settings.py',
   'gnome_customizer/backend/state.py',
   'gnome_customizer/backend/transactions.py',

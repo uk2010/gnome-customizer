@@ -329,7 +329,7 @@ def export_theme(manifest: dict, assets: dict[str, Path], target: Path) -> Path:
         except FileNotFoundError: pass
 
 
-def capture_current_theme(settings, name: str, author: str) -> tuple[dict, dict[str, Path]]:
+def capture_current_theme(settings, name: str, author: str, login_snapshot: dict | None = None) -> tuple[dict, dict[str, Path]]:
     """Capture the currently applied appearance settings as a portable theme."""
     get, supports = settings.get, settings.supports
     manifest = {
@@ -375,5 +375,31 @@ def capture_current_theme(settings, name: str, author: str) -> tuple[dict, dict[
         dock = {field: get(dock_schema, key) for field, key in DOCK_THEME_SETTINGS.items() if supports(dock_schema, key)}
         if dock: shell["dock"] = dock
     if shell: manifest["shell"] = shell
+
+    if isinstance(login_snapshot, dict):
+        resource = login_snapshot.get("resource", {})
+        saved_assets = login_snapshot.get("assets", {})
+        login: dict[str, Any] = {}
+        if isinstance(resource, dict):
+            color = _portable_color(resource.get("background_color"))
+            if color is not None:login["background_color"] = color
+            panel = {}
+            for source, target in (("panel_color", "color"), ("panel_color2", "color2"), ("panel_text_color", "text_color"), ("panel_opacity", "opacity"), ("panel_radius", "corner_radius")):
+                if source in resource:panel[target] = resource[source]
+            if any(key in resource for key in ("panel_gradient_enabled", "panel_gradient_direction")):
+                panel["background_type"] = "gradient" if resource.get("panel_gradient_enabled", False) else "solid"
+                panel["gradient_angle"] = 90 if resource.get("panel_gradient_direction") == "vertical" else 0
+            if panel:login["panel"] = panel
+        accent = login_snapshot.get("accent")
+        if accent in ACCENTS:login["accent"] = accent
+        if isinstance(saved_assets, dict):
+            for role in ("wallpaper", "logo"):
+                source_value = saved_assets.get(role)
+                source = Path(source_value) if isinstance(source_value, str) else None
+                active = role != "wallpaper" or not isinstance(resource, dict) or resource.get("wallpaper", True)
+                if active and source and source.is_file() and not source.is_symlink() and source.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS:
+                    archive_name = f"assets/login-{role}{source.suffix.lower()}"
+                    login[role], assets[archive_name] = archive_name, source
+        if login:manifest["login"] = login
     validate_manifest(manifest, set(assets))
     return manifest, assets

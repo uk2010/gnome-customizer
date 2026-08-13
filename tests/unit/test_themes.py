@@ -119,6 +119,24 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual(manifest["shell"]["overview"]["hover_color"],"#AABBCC");self.assertEqual(manifest["shell"]["overview"]["hover_opacity"],.35)
         target=Path(tempfile.mkstemp(suffix=".gctheme")[1]);target.unlink();self.addCleanup(target.unlink,missing_ok=True)
         export_theme(manifest,assets,target);saved,archive=inspect_archive(target);archive.close();self.assertEqual(saved["shell"]["panel"]["opacity"],0)
+    def test_current_desktop_and_login_wallpapers_are_embedded(self):
+        desktop=Path(tempfile.mkstemp(suffix=".png")[1]);desktop.write_bytes(png());self.addCleanup(desktop.unlink,missing_ok=True)
+        login=Path(tempfile.mkstemp(suffix=".png")[1]);login.write_bytes(png());self.addCleanup(login.unlink,missing_ok=True)
+        logo=Path(tempfile.mkstemp(suffix=".png")[1]);logo.write_bytes(png());self.addCleanup(logo.unlink,missing_ok=True)
+        values={("org.gnome.desktop.background","picture-uri"):desktop.as_uri(),("org.gnome.desktop.background","picture-uri-dark"):desktop.as_uri()}
+        class FakeSettings:
+            def supports(self,schema,key):return (schema,key) in values
+            def get(self,schema,key):return values[schema,key]
+            def schema(self,schema):return None
+        snapshot={"resource":{"wallpaper":True,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_text_color":"#FFFFFF","panel_opacity":.8,"panel_radius":12,"panel_gradient_enabled":True,"panel_gradient_direction":"vertical"},"accent":"purple","assets":{"wallpaper":str(login),"logo":str(logo)}}
+        manifest,assets=capture_current_theme(FakeSettings(),"Portable","Tester",snapshot)
+        self.assertEqual(set(assets),{"assets/wallpaper.png","assets/wallpaper-dark.png","assets/login-wallpaper.png","assets/login-logo.png"})
+        self.assertEqual(manifest["login"]["wallpaper"],"assets/login-wallpaper.png");self.assertEqual(manifest["login"]["logo"],"assets/login-logo.png")
+        self.assertEqual(manifest["login"]["accent"],"purple");self.assertEqual(manifest["login"]["panel"]["background_type"],"gradient");self.assertEqual(manifest["login"]["panel"]["gradient_angle"],90)
+        target=Path(tempfile.mkstemp(suffix=".gctheme")[1]);target.unlink();self.addCleanup(target.unlink,missing_ok=True)
+        export_theme(manifest,assets,target);saved,archive=inspect_archive(target)
+        try:self.assertTrue(set(assets).issubset(archive.namelist()));self.assertEqual(saved["login"]["background_color"],"#101820")
+        finally:archive.close()
     def test_themes_page_exposes_save_current_settings_action(self):
         source=(Path(__file__).parents[2]/"src/gnome_customizer/pages/themes.py").read_text()
         self.assertIn('title="Save Current Settings"',source);self.assertIn("capture_current_theme(self.settings",source);self.assertIn('label="Apply Theme"',source);self.assertIn('tooltip_text="Delete Theme"',source);self.assertNotIn('label="Stage Theme"',source)

@@ -22,6 +22,14 @@ class HelperTests(unittest.TestCase):
         with self.assertRaises(ValueError):helper.validate_setting("org.gnome.login-screen","logo",str(helper.ASSETS/".."/"logo.png"))
     def test_asset_magic_validation(self):
         with self.assertRaises(ValueError):self.service.assets({"assets":{"logo":{"mime":"image/png","data":base64.b64encode(b"fake").decode()}}})
+    def test_fast_appearance_status_returns_existing_login_theme(self):
+        helper.STATE.mkdir(parents=True);helper.ASSETS.mkdir(parents=True)
+        (helper.ASSETS/"wallpaper.png").write_bytes(png());(helper.ASSETS/"logo.png").write_bytes(png())
+        helper.RESOURCE_STATE.write_text('{"wallpaper": true, "background_color": "#123456", "unknown": true}')
+        helper.GDM_STATE.write_text('{"org.gnome.desktop.interface": {"accent-color": "pink"}, "org.gnome.login-screen": {"logo": "/usr/local/share/gnome-customizer/assets/logo.png", "banner-message-text": "private"}}')
+        status=self.service.status({"appearance_only":True});appearance=status["appearance"]
+        self.assertEqual(appearance["accent"],"pink");self.assertEqual(appearance["resource"],{"wallpaper":True,"background_color":"#123456"})
+        self.assertEqual(set(appearance["assets"]),{"wallpaper","logo"});self.assertNotIn("settings",appearance)
     def test_asset_and_resource_compile(self):
         self.service.assets({"assets":{"wallpaper":{"mime":"image/png","data":base64.b64encode(png()).decode()}}})
         result=self.service.resource({"wallpaper":True,"panel_color":"#111122","panel_opacity":.8});self.assertEqual(len(result["sha256"]),64);self.assertTrue(helper.RESOURCE.is_file());self.service.resource({"wallpaper":False,"panel_gradient_enabled":False,"panel_text_color":"#FFFFFF"})

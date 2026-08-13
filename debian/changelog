@@ -1,3 +1,11 @@
+gnome-customizer (0.3.23) resolute; urgency=high
+
+  * Save applied login-screen appearance when exporting the current theme.
+  * Embed desktop and login wallpaper images, plus the login logo, in themes.
+  * Recover previously applied managed GDM appearance during theme export.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 15:20:00 -0500
+
 gnome-customizer (0.3.22) resolute; urgency=high
 
   * Add optional alphabetical ordering for Overview's application grid and folders.

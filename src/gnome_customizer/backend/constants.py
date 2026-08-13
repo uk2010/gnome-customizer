@@ -11,6 +11,7 @@ USER_CONFIG = Path.home() / ".config/gnome-customizer"
 STATE_FILE = USER_CONFIG / "state.json"
 THEMES_DIR = USER_DATA / "themes"
 ASSETS_DIR = USER_DATA / "assets"
+LOGIN_THEME_ASSETS_DIR = USER_DATA / "login-theme-assets"
 
 DESKTOP_KEYS = {
     "color_scheme": ("org.gnome.desktop.interface", "color-scheme"),

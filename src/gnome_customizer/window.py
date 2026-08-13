@@ -8,6 +8,7 @@ from PIL import Image
 from .backend.constants import ASSETS_DIR
 from .backend.assets import copy_managed_image, remove_managed_images
 from .backend.app_theme import ApplicationThemeManager
+from .backend.login_theme import clear_login_theme_snapshot, remember_applied_login_theme
 from .backend.transactions import Change
 from .backend.settings import SettingsBackend, yaru_theme_for_accent
 from .backend.state import StateStore
@@ -65,7 +66,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
     def _build_pages(self):
         self.desktop_pages=[("appearance","Appearance","preferences-desktop-wallpaper-symbolic"),("fonts","Fonts, Icons & Cursor","preferences-desktop-font-symbolic"),("themes","Themes","applications-graphics-symbolic"),("dock","Dock","view-app-grid-symbolic"),("blur","Blur","weather-fog-symbolic"),("topbar","Top Bar","preferences-system-time-symbolic"),("placement","Placement","view-grid-symbolic"),("input","Mouse & Touchpad","input-mouse-symbolic"),("keyboard","Keyboard","input-keyboard-symbolic"),("power","Power","battery-symbolic"),("night","Night Light","weather-clear-night-symbolic"),("desktop_displays","Displays","video-display-symbolic"),("sound","Sound","audio-volume-high-symbolic"),("system","Apply & Restore","edit-undo-symbolic"),("status","Status","dialog-information-symbolic")]
         self.login_pages=[("login","Appearance & Options","system-lock-screen-symbolic"),("login_top","Top Bar & Clock","preferences-system-time-symbolic"),("login_input","Mouse, Touchpad & Sound","input-mouse-symbolic"),("login_power","Power & Night Light","battery-symbolic"),("displays","Displays","video-display-symbolic"),("system","Apply & Restore","edit-undo-symbolic"),("status","Status","dialog-information-symbolic")]
-        appearance=self.factory.desktop_appearance();self._extend_appearance(appearance);self._add("appearance",appearance);self._add("fonts",self._fonts_icons());self._add("themes",ThemesPage(self.toast,self._apply_theme,self.settings));self._add("dock",self.factory.native_dock());self._add("blur",self.factory.shell("Blur","Blur"));topbar=self.factory.topbar();self._extend_topbar(topbar);self._add("topbar",topbar);self._add("placement",self.factory.placement());self._add("input",self.factory.mouse_touchpad());self._add("keyboard",self.factory.keyboard());self._add("power",self.factory.power());self._add("night",self.factory.night_light());self._add("desktop_displays",self._desktop_displays());sound=self.factory.sound();self._extend_sound(sound);self._add("sound",sound);login=self.factory.login();self._extend_login(login);self._add("login",login);self._add("login_top",self._login_top());login_input=self.factory.login_input();self._extend_sound(login_input,True);self._add("login_input",login_input);self._add("login_power",self.factory.login_power());self._add("displays",self._displays());self._add("system",self._restore_page());self._add("status",StatusPage(self.settings,self.helper,self._count))
+        appearance=self.factory.desktop_appearance();self._extend_appearance(appearance);self._add("appearance",appearance);self._add("fonts",self._fonts_icons());self._add("themes",ThemesPage(self.toast,self._apply_theme,self.settings,self.state,self.helper));self._add("dock",self.factory.native_dock());self._add("blur",self.factory.shell("Blur","Blur"));topbar=self.factory.topbar();self._extend_topbar(topbar);self._add("topbar",topbar);self._add("placement",self.factory.placement());self._add("input",self.factory.mouse_touchpad());self._add("keyboard",self.factory.keyboard());self._add("power",self.factory.power());self._add("night",self.factory.night_light());self._add("desktop_displays",self._desktop_displays());sound=self.factory.sound();self._extend_sound(sound);self._add("sound",sound);login=self.factory.login();self._extend_login(login);self._add("login",login);self._add("login_top",self._login_top());login_input=self.factory.login_input();self._extend_sound(login_input,True);self._add("login_input",login_input);self._add("login_power",self.factory.login_power());self._add("displays",self._displays());self._add("system",self._restore_page());self._add("status",StatusPage(self.settings,self.helper,self._count))
     def _apply_theme(self,directory):
         if self._stage_theme(directory):self._apply()
     def _stage_theme(self,directory):
@@ -293,7 +294,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         try:self.toast(f"Restored {self.changes.restore(domain)} {domain} settings")
         except Exception as exc:self.toast(exc)
     def _restore_login(self):
-        try:self.helper.call("RestoreGdmDefaults");self.toast("Login screen restored. Log out or reboot to see all changes.")
+        try:self.helper.call("RestoreGdmDefaults");clear_login_theme_snapshot(self.state);self.toast("Login screen restored. Log out or reboot to see all changes.")
         except Exception as exc:self.toast(exc)
     def _restore_application_theme(self):
         try:self.toast(f"Removed application theme from {self.app_theme.restore()} GTK configuration files. Reopen applications to see the change.")
@@ -304,6 +305,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
     def _reset_defaults(self):
         try:
             self.helper.call("RestoreGdmDefaults")
+            clear_login_theme_snapshot(self.state)
             count=self.changes.reset_managed(("desktop","shell"));files=self.app_theme.restore();images=remove_managed_images(ASSETS_DIR)
             self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending()
             self.toast(f"Reset {count} settings, {files} application theme files, and {images} managed wallpapers. Log out and back in to finish.")
@@ -349,7 +351,10 @@ class CustomizerWindow(Adw.ApplicationWindow):
         try:self.helper.call("ApplyTransaction",transaction);GLib.idle_add(self._apply_success,context)
         except Exception as exc:GLib.idle_add(self._apply_failure,context,exc)
     def _apply_success(self,context):
-        pending,_,_,_,desktop,transaction=context;privileged=bool(transaction);shell_changed=any(change.domain=="shell" for change in pending.values());self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message);return GLib.SOURCE_REMOVE
+        pending,_,_,_,desktop,transaction=context;privileged=bool(transaction);shell_changed=any(change.domain=="shell" for change in pending.values())
+        try:remember_applied_login_theme(self.state,transaction)
+        except Exception as exc:self.toast(f"Changes applied, but the login theme snapshot could not be saved: {exc}")
+        self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message);return GLib.SOURCE_REMOVE
     def _apply_failure(self,context,exc):
         pending_before,state_before,old_values,desktop_applied,_,_=context
         if desktop_applied:
