@@ -13,7 +13,7 @@ jobs:
     container: ubuntu:26.04
     steps:
       - uses: actions/checkout@v5
-      - run: apt-get update && apt-get install -y appstream desktop-file-utils nodejs && apt-get build-dep -y .
+      - run: apt-get update && apt-get install -y appstream desktop-file-utils nodejs gnome-shell && apt-get build-dep -y .
       - run: glib-compile-schemas --strict --dry-run data/schemas && glib-compile-schemas --strict --dry-run shell/schemas && node --check shell/extension.js
       - run: |
           if [ "${{ matrix.arch }}" = arm64 ]; then
