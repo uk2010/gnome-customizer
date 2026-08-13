@@ -70,6 +70,7 @@ gsettings set io.github.gnomecustomizer.shell overview-enabled true
 gsettings set io.github.gnomecustomizer.shell overview-blur 30
 gsettings set io.github.gnomecustomizer.shell overview-hover-opacity 0.35
 gsettings set io.github.gnomecustomizer.shell overview-hover-color '#123456'
+gsettings set io.github.gnomecustomizer.shell alphabetical-app-grid true
 gnome-shell --wayland --headless --virtual-monitor 1024x768 --no-x11 >"$SMOKE_ROOT/shell.log" 2>&1 &
 shell_pid=$!
 cleanup() { kill "$shell_pid" 2>/dev/null || true; wait "$shell_pid" 2>/dev/null || true; }
@@ -132,6 +133,8 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
             raise SystemExit("The overview did not receive its configured per-monitor blur")
         if not re.search(r"GNOME Customizer: overview hover backgrounds tracked \([1-9][0-9]*\)", shell_log):
             raise SystemExit("GNOME Shell did not expose any overview tiles to the hover-background controller")
+        if "GNOME Customizer: alphabetical app grid enabled" not in shell_log:
+            raise SystemExit("The alphabetical app-grid renderer was not enabled")
         forbidden = re.compile(r"JS ERROR|TypeError|ReferenceError|gnome-customizer-panel-background|needs an allocation|assertion 'width >= 1'", re.I)
         problems = [line for line in shell_log.splitlines() if forbidden.search(line)]
         if problems:

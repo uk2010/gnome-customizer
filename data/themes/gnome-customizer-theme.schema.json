@@ -68,6 +68,7 @@
       "autohide": {"type": "boolean"}, "intellihide": {"type": "boolean"},
       "transparency": {"enum": ["DEFAULT", "FIXED", "DYNAMIC"]},
       "custom_color": {"type": "boolean"}, "built_in_theme": {"type": "boolean"},
+      "shrink_dash": {"type": "boolean"},
       "straight_corners": {"type": "boolean"}
     }},
     "desktop": {"type": "object", "additionalProperties": false, "properties": {

@@ -21,6 +21,7 @@ class ShellExtensionTests(unittest.TestCase):
         for key in ("dock-position", "dash-max-icon-size", "show-favorites", "show-running", "show-show-apps-button", "dock-fixed", "autohide", "intellihide", "background-opacity"):
             self.assertIn(f'"{key}"', preferences)
         self.assertNotIn('"Enable Custom Dock"', preferences)
+        self.assertIn('"Shrink the Dash",schema,"custom-theme-shrink"',preferences)
 
     def test_real_panel_is_styled_and_restored_after_overview(self):
         extension=(ROOT/"shell/extension.js").read_text();stylesheet=(ROOT/"shell/stylesheet.css").read_text()
@@ -95,6 +96,16 @@ class ShellExtensionTests(unittest.TestCase):
         extension=(ROOT/"shell/extension.js").read_text()
         self.assertIn("border: 1px solid ${border}; box-shadow: none;",extension)
         self.assertIn("actor.set_style(record.style)",extension)
+
+    def test_app_grid_can_be_alphabetized_without_reordering_search_results(self):
+        extension=(ROOT/"shell/extension.js").read_text();preferences=(ROOT/"src/gnome_customizer/pages/preferences.py").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
+        self.assertIn('name="alphabetical-app-grid" type="b"',schema)
+        self.assertIn('"Alphabetical App Grid","io.github.gnomecustomizer.shell","alphabetical-app-grid"',preferences)
+        self.assertIn("overrideMethod(AppDisplay.AppDisplay.prototype, '_compareItems'",extension)
+        self.assertIn("overrideMethod(AppDisplay.AppDisplay.prototype, '_redisplay'",extension)
+        self.assertIn("localeCompare",extension)
+        self.assertIn("this._injectionManager.clear()",extension)
+        self.assertNotIn("AppSearchProvider.prototype, '_compareItems'",extension)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,10 @@
+gnome-customizer (0.3.22) resolute; urgency=high
+
+  * Add optional alphabetical ordering for Overview's application grid and folders.
+  * Add Ubuntu Dock's native Shrink the Dash control and theme round-tripping.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 14:41:00 -0500
+
 gnome-customizer (0.3.21) resolute; urgency=high
 
   * Add native placement controls for centered new windows and desktop-icon corners.

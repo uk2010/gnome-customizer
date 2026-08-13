@@ -61,6 +61,7 @@ DOCK_THEME_SETTINGS = {
     "transparency": "transparency-mode", "opacity": "background-opacity",
     "custom_color": "custom-background-color", "color": "background-color",
     "indicator_style": "running-indicator-style", "built_in_theme": "apply-custom-theme",
+    "shrink_dash": "custom-theme-shrink",
     "straight_corners": "force-straight-corner",
 }
 SHELL_SURFACE_SETTINGS = {
@@ -154,7 +155,7 @@ def _dock(obj: Any, where: str):
     legacy = {field: value for field, value in obj.items() if field in SURFACE_FIELDS}
     if legacy.get("indicator_style") in {"DEFAULT", "DOTS", "SQUARES", "DASHES", "SEGMENTED", "SOLID", "CILIORA", "METRO", "BINARY", "DOT"}: legacy.pop("indicator_style")
     _surface(legacy, where)
-    booleans = {"panel_mode", "icon_size_fixed", "multi_monitor", "show_favorites", "show_running", "show_applications", "show_applications_first", "always_visible", "autohide", "intellihide", "custom_color", "built_in_theme", "straight_corners"}
+    booleans = {"panel_mode", "icon_size_fixed", "multi_monitor", "show_favorites", "show_running", "show_applications", "show_applications_first", "always_visible", "autohide", "intellihide", "custom_color", "built_in_theme", "shrink_dash", "straight_corners"}
     for field in booleans:
         if field in obj and not isinstance(obj[field], bool): raise ThemeError(f"{where}.{field} must be true or false")
     if "position" in obj and obj["position"] not in {"TOP", "RIGHT", "BOTTOM", "LEFT"}: raise ThemeError(f"Invalid dock position at {where}")

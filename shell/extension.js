@@ -4,9 +4,10 @@ import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 function colorWithOpacity(color, opacity) {
     const match = color.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
@@ -26,7 +27,7 @@ function backgroundStyle(settings, prefix, opacity=1) {
 
 export default class CustomizerExtension extends Extension {
     enable() {
-        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewHoverActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._overviewScanSource = 0; this._started = false;
+        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewHoverActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._overviewScanSource = 0; this._injectionManager = new InjectionManager(); this._alphabeticalGridEnabled = false; this._started = false;
         this._changed = this._settings.connect('changed', () => this._sync());
         this._startupComplete = 0;
         if (Main.layoutManager._startingUp)
@@ -75,6 +76,38 @@ export default class CustomizerExtension extends Extension {
         const opacity=this._settings.get_double('overview-hover-opacity');
         const color=colorWithOpacity(this._settings.get_string('overview-hover-color'),opacity);
         actor.set_style(`${record.style ?? ''} background-color: ${color};`);
+    }
+    _syncAlphabeticalAppGrid() {
+        const enabled=this._settings.get_boolean('alphabetical-app-grid');
+        if (enabled===this._alphabeticalGridEnabled) return;
+        this._alphabeticalGridEnabled=enabled;
+        this._injectionManager.clear();
+        if (enabled) {
+            this._injectionManager.overrideMethod(AppDisplay.AppDisplay.prototype, '_compareItems', () =>
+                function alphabeticalCompare(a,b) {
+                    return `${a.name ?? ''}`.localeCompare(`${b.name ?? ''}`, undefined, {sensitivity:'base'});
+                });
+            this._injectionManager.overrideMethod(AppDisplay.AppDisplay.prototype, '_redisplay', () =>
+                function alphabeticalRedisplay() {
+                    this._folderIcons.forEach(icon => icon.view._redisplay());
+                    const currentApps=this._orderedItems.slice();
+                    const currentIds=currentApps.map(icon => icon.id);
+                    const newApps=this._loadApps().sort(this._compareItems.bind(this));
+                    const newIds=newApps.map(icon => icon.id);
+                    const addedApps=newApps.filter(icon => !currentIds.includes(icon.id));
+                    currentApps.filter(icon => !newIds.includes(icon.id)).forEach(icon => { this._removeItem(icon);icon.destroy(); });
+                    const {itemsPerPage}=this._grid;
+                    newApps.forEach((icon,index) => {
+                        const page=Math.floor(index/itemsPerPage), position=index%itemsPerPage;
+                        if (addedApps.includes(icon)) this._addItem(icon,page,position);
+                        else this._moveItem(icon,page,position);
+                    });
+                    this._orderedItems=newApps;
+                    this.emit('view-loaded');
+                });
+            console.log('GNOME Customizer: alphabetical app grid enabled');
+        }
+        try { Main.overview._overview._controls._appDisplay._redisplay(); } catch (_) {}
     }
     _restoreOverviewHoverBackgrounds() {
         for (const [actor,record] of this._overviewHoverActors) {
@@ -213,6 +246,7 @@ export default class CustomizerExtension extends Extension {
     }
     _sync() {
         if (!this._started) return;
+        this._syncAlphabeticalAppGrid();
         this._syncPanel();
         this._syncOverviewBackgrounds();
         this._styleOverviewHoverBackgrounds();
@@ -224,6 +258,8 @@ export default class CustomizerExtension extends Extension {
         if (this._overviewScanSource) { GLib.Source.remove(this._overviewScanSource); this._overviewScanSource=0; }
         this._settings.disconnect(this._changed);
         if (!this._started) { this._settings=null; return; }
+        this._injectionManager.clear();
+        try { Main.overview._overview._controls._appDisplay._redisplay(); } catch (_) {}
         Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.layoutManager.overviewGroup.disconnect(this._overviewAdded); Main.uiGroup.disconnect(this._uiAdded);
         this._destroyOverviewBackgrounds();
         this._restoreOverviewHoverBackgrounds();
@@ -232,6 +268,6 @@ export default class CustomizerExtension extends Extension {
         Main.layoutManager.overviewGroup.set_style(this._overviewStyle);
         for (const [actor,name] of this._effects) { try { actor?.remove_effect_by_name(name); } catch (_) {} }
         this._restoreMenus();
-        this._effects=[]; this._menuActors=new Map(); this._settings=null;
+        this._effects=[]; this._menuActors=new Map(); this._injectionManager=null; this._settings=null;
     }
 }

@@ -125,6 +125,8 @@ class PreferencesFactory:
         corner=self.combo(icons,"Starting Corner",schema,"start-corner",{"top-left":"Upper Left","top-right":"Upper Right","bottom-left":"Lower Left","bottom-right":"Lower Right"})
         if corner is None:
             icons.add(Adw.ActionRow(title="Desktop icon placement unavailable",subtitle="Install or enable Desktop Icons NG to choose a starting corner."))
+        overview=self.group(p,"Overview &amp; App Grid")
+        self.switch(overview,"Alphabetical App Grid","io.github.gnomecustomizer.shell","alphabetical-app-grid",subtitle="Orders applications and folders by name; search results remain relevance-ranked")
         return p
     def power(self):
         p=self.page("Power");g=self.group(p,"Energy")
@@ -185,5 +187,6 @@ class PreferencesFactory:
         self.color(appearance,"Background Color",schema,"background-color",domain="shell")
         self.combo(appearance,"Running Indicator",schema,"running-indicator-style",domain="shell")
         self.switch(appearance,"Use Built-in Theme",schema,"apply-custom-theme",domain="shell")
+        self.switch(appearance,"Shrink the Dash",schema,"custom-theme-shrink",domain="shell",subtitle="Use Ubuntu Dock's compact padding and spacing")
         self.switch(appearance,"Straight Corners",schema,"force-straight-corner",domain="shell")
         return p
