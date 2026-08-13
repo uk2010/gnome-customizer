@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.io/gnomecustomizer/theme-v1.schema.json",
-  "title": "GNOME Customizer appearance theme",
+  "title": "GNOME Customizer complete settings theme",
   "type": "object",
   "additionalProperties": false,
   "required": ["format_version", "name", "author"],
@@ -90,6 +90,7 @@
       "clock_show_date": {"type": "boolean"}, "clock_show_weekday": {"type": "boolean"},
       "clock_show_seconds": {"type": "boolean"}, "battery_percentage": {"type": "boolean"},
       "sound_theme": {"type": "string", "maxLength": 100}
+      ,"settings": {"$ref": "#/$defs/settingsSnapshot"}
     }},
     "applications": {"type": "object", "additionalProperties": false, "properties": {
       "window_color": {"$ref": "#/$defs/color"}, "view_color": {"$ref": "#/$defs/color"},
@@ -108,7 +109,11 @@
     "login": {"type": "object", "additionalProperties": false, "properties": {
       "wallpaper": {"$ref": "#/$defs/asset"}, "background_color": {"$ref": "#/$defs/color"},
       "accent": {"enum": ["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate", "brown"]},
-      "logo": {"$ref": "#/$defs/asset"}, "panel": {"$ref": "#/$defs/surface"}
+      "logo": {"$ref": "#/$defs/asset"}, "panel": {"$ref": "#/$defs/surface"},
+      "settings": {"$ref": "#/$defs/settingsSnapshot"}, "monitors": {"type": "string", "maxLength": 2097152}
+    }},
+    "settingsSnapshot": {"type": "object", "additionalProperties": {
+      "type": "object", "additionalProperties": {"type": ["string", "boolean", "integer", "number"]}
     }}
   }
 }

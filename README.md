@@ -12,7 +12,7 @@ It uses native GNOME settings as the single source of truth and never installs p
 - `data`: GSettings, D-Bus interface, PolicyKit policy, desktop/AppStream metadata, icon, theme schema, and samples.
 - `debian`: native Debian packaging with safe resource restoration during removal.
 
-The helper owns only `/etc/dconf/db/gdm.d/99-gdm-customizer`, `/usr/local/share/gnome-customizer`, and its managed `/etc/xdg/monitors.xml` state. It validates and compiles a replacement GResource before activating it through `update-alternatives`. It never restarts GDM.
+The helper owns its GDM dconf state, `/usr/local/share/gnome-customizer`, and the managed GDM account monitor configuration. It validates and compiles a replacement GResource before activating it through `update-alternatives`. It never restarts GDM.
 
 ## Build
 
@@ -38,12 +38,12 @@ Build a native package:
 dpkg-buildpackage -us -uc -b
 ```
 
-Native amd64 and arm64 builders produce `gnome-customizer_0.3.25_amd64.deb` and `gnome-customizer_0.3.25_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
+Native amd64 and arm64 builders produce `gnome-customizer_0.3.26_amd64.deb` and `gnome-customizer_0.3.26_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
 
 ## Install and uninstall
 
 ```sh
-sudo apt install ./dist/gnome-customizer_0.3.25_amd64.deb
+sudo apt install ./dist/gnome-customizer_0.3.26_amd64.deb
 gnome-customizer
 ```
 
@@ -67,7 +67,7 @@ assets/optional-login-wallpaper.webp
 assets/optional-preview.png
 ```
 
-Format version 1 permits metadata, wallpapers, GTK/icon/cursor references, application-preview metadata, and bounded panel, dock, menu, overview, and login-surface values. It does not permit scripts, raw CSS, behavioral login options, power settings, keyboard shortcuts, services, extensions, hooks, or arbitrary paths. See [docs/theme-format.md](docs/theme-format.md) and `data/themes/gnome-customizer-theme.schema.json`.
+Format version 1 permits metadata, wallpapers, GTK/icon/cursor references, application-preview metadata, bounded surface values, and allowlisted complete Desktop and Login Screen settings snapshots, including the GDM monitor layout. It does not permit scripts, raw CSS, services, extensions, hooks, unknown settings, or arbitrary paths. See [docs/theme-format.md](docs/theme-format.md) and `data/themes/gnome-customizer-theme.schema.json`.
 
 Imports enforce file count and expanded-size limits, reject traversal, absolute paths, backslashes, symlinks, duplicates and unknown files, validate strict UTF-8 JSON and all enums/bounds, decode every image, verify MIME/extension and dimensions, and extract through controlled paths.
 

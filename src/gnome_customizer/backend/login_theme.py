@@ -49,13 +49,16 @@ def _store_asset(role: str, asset: dict, directory: Path) -> Path:
 
 def remember_applied_login_theme(state, transaction: dict, directory: Path = LOGIN_THEME_ASSETS_DIR) -> None:
     """Merge successfully applied GDM appearance deltas into portable user state."""
-    if not any(key in transaction for key in ("resource", "assets", "settings")):return
+    if not any(key in transaction for key in ("resource", "assets", "settings", "monitors", "monitor_default")):return
     raw = state.data.get("login_theme")
     snapshot = raw if isinstance(raw, dict) else {}
     snapshot.setdefault("resource", {});snapshot.setdefault("assets", {})
     resource = transaction.get("resource", {})
     if isinstance(resource, dict):snapshot["resource"].update(resource)
     settings = transaction.get("settings", {})
+    if isinstance(settings,dict):snapshot["settings"]={schema:dict(values) for schema,values in settings.items() if isinstance(values,dict)}
+    if isinstance(transaction.get("monitors"),str):snapshot["monitors"]=transaction["monitors"]
+    elif transaction.get("monitor_default") is True:snapshot["monitors"]=""
     interface = settings.get("org.gnome.desktop.interface", {}) if isinstance(settings, dict) else {}
     accent = interface.get("accent-color") if isinstance(interface, dict) else None
     if isinstance(accent, str):snapshot["accent"] = accent

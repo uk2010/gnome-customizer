@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from functools import lru_cache
 from urllib.parse import unquote, urlparse
+from xml.etree import ElementTree
 from PIL import Image, ImageColor
 
 from .constants import MIN_GNOME, THEMES_DIR
@@ -22,7 +23,7 @@ from .constants import MIN_GNOME, THEMES_DIR
 MAX_FILES = 32
 MAX_TOTAL = 50 * 1024 * 1024
 MAX_IMAGE = 20 * 1024 * 1024
-MAX_JSON = 256 * 1024
+MAX_JSON = 3 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -64,6 +65,33 @@ DOCK_THEME_SETTINGS = {
     "shrink_dash": "custom-theme-shrink",
     "straight_corners": "force-straight-corner",
 }
+COMPLETE_DESKTOP_SETTINGS = {
+    "org.gnome.desktop.interface": {"color-scheme","accent-color","cursor-theme","cursor-size","icon-theme","show-battery-percentage","clock-show-date","clock-show-seconds","clock-show-weekday","clock-format","font-name","font-antialiasing","font-hinting","text-scaling-factor","gtk-theme"},
+    "org.gnome.desktop.background": {"picture-options","color-shading-type","primary-color","secondary-color"},
+    "org.gnome.desktop.sound": {"theme-name","event-sounds","input-feedback-sounds","allow-volume-above-100-percent"},
+    "org.gnome.desktop.peripherals.mouse": {"accel-profile","left-handed","natural-scroll","speed","middle-click-emulation","double-click","drag-threshold"},
+    "org.gnome.desktop.peripherals.touchpad": {"send-events","accel-profile","speed","tap-to-click","tap-and-drag","tap-and-drag-lock","natural-scroll","two-finger-scrolling-enabled","edge-scrolling-enabled","click-method","left-handed","middle-click-emulation","disable-while-typing","disable-while-typing-timeout"},
+    "org.gnome.desktop.peripherals.keyboard": {"repeat","delay","repeat-interval","remember-numlock-state"},
+    "org.gnome.settings-daemon.plugins.power": {"power-button-action","power-saver-profile-on-low-battery","idle-dim","idle-brightness","ambient-enabled","sleep-inactive-ac-type","sleep-inactive-ac-timeout","sleep-inactive-battery-type","sleep-inactive-battery-timeout"},
+    "org.gnome.desktop.session": {"idle-delay"},
+    "org.gnome.settings-daemon.plugins.color": {"night-light-enabled","night-light-temperature","night-light-schedule-automatic","night-light-schedule-from","night-light-schedule-to"},
+    "org.gnome.mutter": {"center-new-windows"},
+    "org.gnome.shell.extensions.ding": {"start-corner"},
+    "org.gnome.shell.ubuntu": {"color-scheme"},
+    "io.github.gnomecustomizer.shell": {"panel-enabled","panel-color","panel-gradient-enabled","panel-color2","panel-gradient-direction","panel-opacity","panel-radius","panel-text-color","panel-blur","overview-enabled","overview-blur","overview-color","overview-opacity","overview-brightness","overview-saturation","overview-hover-opacity","overview-hover-color","alphabetical-app-grid","menu-blur","menu-enabled","menu-color","menu-gradient-enabled","menu-color2","menu-gradient-direction","menu-opacity","menu-radius","menu-text-color","menu-border-color"},
+    "org.gnome.shell.extensions.dash-to-dock": set(DOCK_THEME_SETTINGS.values()),
+}
+COMPLETE_LOGIN_SETTINGS = {
+    "org.gnome.desktop.interface": {"accent-color","color-scheme","cursor-theme","cursor-size","icon-theme","show-battery-percentage","clock-show-date","clock-show-seconds","clock-show-weekday","clock-format","font-name","font-antialiasing","font-hinting","text-scaling-factor"},
+    "org.gnome.desktop.a11y": {"always-show-universal-access-status"},
+    "org.gnome.desktop.sound": {"theme-name","event-sounds","input-feedback-sounds","allow-volume-above-100-percent"},
+    "org.gnome.desktop.peripherals.mouse": {"accel-profile","left-handed","natural-scroll","speed","middle-click-emulation","double-click","drag-threshold"},
+    "org.gnome.desktop.peripherals.touchpad": {"send-events","accel-profile","speed","tap-to-click","tap-and-drag","tap-and-drag-lock","natural-scroll","two-finger-scrolling-enabled","edge-scrolling-enabled","click-method","left-handed","middle-click-emulation","disable-while-typing","disable-while-typing-timeout"},
+    "org.gnome.settings-daemon.plugins.power": {"power-button-action","power-saver-profile-on-low-battery","idle-dim","idle-brightness","ambient-enabled","sleep-inactive-ac-type","sleep-inactive-ac-timeout","sleep-inactive-battery-type","sleep-inactive-battery-timeout"},
+    "org.gnome.desktop.session": {"idle-delay"},
+    "org.gnome.settings-daemon.plugins.color": {"night-light-enabled","night-light-temperature","night-light-schedule-automatic","night-light-schedule-from","night-light-schedule-to"},
+    "org.gnome.login-screen": {"logo","banner-message-enable","banner-message-text","disable-restart-buttons","disable-user-list","enable-fingerprint-authentication"},
+}
 SHELL_SURFACE_SETTINGS = {
     "panel": {"enabled": "panel-enabled", "color": "panel-color", "color2": "panel-color2", "opacity": "panel-opacity", "blur": "panel-blur", "text_color": "panel-text-color", "corner_radius": "panel-radius"},
     "menus": {"enabled": "menu-enabled", "color": "menu-color", "color2": "menu-color2", "opacity": "menu-opacity", "blur": "menu-blur", "text_color": "menu-text-color", "border_color": "menu-border-color", "corner_radius": "menu-radius"},
@@ -73,6 +101,15 @@ DOCK_FIELDS = set(DOCK_THEME_SETTINGS) | (SURFACE_FIELDS - {"indicator_style", "
 
 
 class ThemeError(ValueError): pass
+
+def _settings_snapshot(value, allowed, where):
+    if not isinstance(value,dict):raise ThemeError(f"{where} must be an object")
+    for schema,values in value.items():
+        if schema not in allowed or not isinstance(values,dict):raise ThemeError(f"Unsupported schema at {where}.{schema}")
+        unknown=set(values)-allowed[schema]
+        if unknown:raise ThemeError(f"Unsupported setting at {where}.{schema}: {', '.join(sorted(unknown))}")
+        for key,item in values.items():
+            if type(item) not in (str,bool,int,float):raise ThemeError(f"Invalid value at {where}.{schema}.{key}")
 
 
 def _portable_color(value: Any) -> str | None:
@@ -205,7 +242,8 @@ def validate_manifest(manifest: Any, assets: set[str] | None = None, gnome=None)
     if "preview" in manifest: refs.append(_asset(manifest["preview"], "preview"))
     desktop = manifest.get("desktop", {})
     if not isinstance(desktop, dict): raise ThemeError("desktop must be an object")
-    _known(desktop, set(DESKTOP_THEME_SETTINGS) | {"wallpaper", "wallpaper_dark"}, "desktop")
+    _known(desktop, set(DESKTOP_THEME_SETTINGS) | {"wallpaper", "wallpaper_dark", "settings"}, "desktop")
+    if "settings" in desktop:_settings_snapshot(desktop["settings"],COMPLETE_DESKTOP_SETTINGS,"desktop.settings")
     if "color_scheme" in desktop and desktop["color_scheme"] not in {"default", "prefer-light", "prefer-dark"}: raise ThemeError("Invalid color scheme")
     if "accent" in desktop and desktop["accent"] not in ACCENTS: raise ThemeError("Invalid accent")
     for key in ("wallpaper", "wallpaper_dark"):
@@ -231,7 +269,16 @@ def validate_manifest(manifest: Any, assets: set[str] | None = None, gnome=None)
         (_dock if key == "dock" else _surface)(value, f"shell.{key}")
     login = manifest.get("login", {})
     if not isinstance(login, dict): raise ThemeError("login must be an object")
-    _known(login, {"wallpaper", "background_color", "accent", "logo", "panel"}, "login")
+    _known(login, {"wallpaper", "background_color", "accent", "logo", "panel", "settings", "monitors"}, "login")
+    if "settings" in login:_settings_snapshot(login["settings"],COMPLETE_LOGIN_SETTINGS,"login.settings")
+    if "monitors" in login:
+        monitor_xml=login["monitors"]
+        if not isinstance(monitor_xml,str) or len(monitor_xml)>2*1024*1024:raise ThemeError("Invalid login monitor configuration")
+        if monitor_xml:
+            if "<!DOCTYPE" in monitor_xml.upper() or "<!ENTITY" in monitor_xml.upper():raise ThemeError("Unsafe login monitor configuration")
+            try:monitor_root=ElementTree.fromstring(monitor_xml)
+            except ElementTree.ParseError:raise ThemeError("Malformed login monitor configuration")
+            if monitor_root.tag!="monitors" or monitor_root.get("version") not in {"1","2"}:raise ThemeError("Unsupported login monitor configuration")
     for key in ("wallpaper", "logo"):
         if key in login: refs.append(_asset(login[key], f"login.{key}"))
     if "background_color" in login and not COLOR.fullmatch(login["background_color"]): raise ThemeError("Invalid login background color")
@@ -338,6 +385,11 @@ def capture_current_theme(settings, name: str, author: str, login_snapshot: dict
         "minimum_gnome": "50.1", "maximum_tested_gnome": "50.x", "desktop": {},
     }
     desktop = manifest["desktop"]
+    complete={}
+    for schema,keys in COMPLETE_DESKTOP_SETTINGS.items():
+        values={key:get(schema,key) for key in sorted(keys) if supports(schema,key)}
+        if values:complete[schema]=values
+    desktop["settings"]=complete
     for field, (schema, key) in DESKTOP_THEME_SETTINGS.items():
         if not supports(schema, key): continue
         value = get(schema, key)
@@ -380,6 +432,17 @@ def capture_current_theme(settings, name: str, author: str, login_snapshot: dict
         resource = login_snapshot.get("resource", {})
         saved_assets = login_snapshot.get("assets", {})
         login: dict[str, Any] = {}
+        saved_settings=login_snapshot.get("settings",{})
+        complete_login={}
+        for schema,keys in COMPLETE_LOGIN_SETTINGS.items():
+            saved_values=saved_settings.get(schema,{}) if isinstance(saved_settings,dict) else {}
+            values={}
+            for key in sorted(keys):
+                if isinstance(saved_values,dict) and key in saved_values:values[key]=saved_values[key]
+            if values:complete_login[schema]=values
+        login["settings"]=complete_login
+        monitors=login_snapshot.get("monitors")
+        if isinstance(monitors,str):login["monitors"]=monitors
         if isinstance(resource, dict):
             color = _portable_color(resource.get("background_color"))
             if color is not None:login["background_color"] = color
@@ -400,6 +463,8 @@ def capture_current_theme(settings, name: str, author: str, login_snapshot: dict
                 if active and source and source.is_file() and not source.is_symlink() and source.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS:
                     archive_name = f"assets/login-{role}{source.suffix.lower()}"
                     login[role], assets[archive_name] = archive_name, source
+        if "logo" not in login and "org.gnome.login-screen" in complete_login:complete_login["org.gnome.login-screen"]["logo"]=""
+        if "wallpaper" not in login and isinstance(resource,dict):resource["wallpaper"]=False
         if login:manifest["login"] = login
     validate_manifest(manifest, set(assets))
     return manifest, assets

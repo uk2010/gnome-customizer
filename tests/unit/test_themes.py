@@ -22,6 +22,9 @@ class ThemeTests(unittest.TestCase):
     def test_behavior_not_theme_property(self):
         bad={**BASE,"login":{"disable_user_list":True}}
         with self.assertRaises(ThemeError):validate_manifest(bad)
+    def test_complete_settings_snapshots_accept_every_exposed_scope(self):
+        manifest={**BASE,"desktop":{**BASE["desktop"],"settings":{"org.gnome.desktop.peripherals.keyboard":{"repeat":False},"org.gnome.settings-daemon.plugins.power":{"idle-brightness":42}}},"login":{"settings":{"org.gnome.login-screen":{"logo":"","disable-user-list":True},"org.gnome.desktop.peripherals.mouse":{"speed":.4}},"monitors":"<monitors version=\"2\"></monitors>"}}
+        saved=validate_manifest(manifest);self.assertFalse(saved["desktop"]["settings"]["org.gnome.desktop.peripherals.keyboard"]["repeat"]);self.assertEqual(saved["login"]["settings"]["org.gnome.login-screen"]["logo"],"")
     def test_traversal_rejected(self):
         p=self.archive({"manifest.json":json.dumps(BASE),"../escape.png":png()})
         with self.assertRaises(ThemeError):inspect_archive(p)
@@ -111,6 +114,8 @@ class ThemeTests(unittest.TestCase):
             def get(self,schema,key):return values[schema,key]
             def schema(self,schema):return object() if schema=="org.gnome.shell.extensions.dash-to-dock" else None
         manifest,assets=capture_current_theme(FakeSettings(),"My Current Theme","Tester")
+        for (schema,key),value in values.items():
+            if schema in themes.COMPLETE_DESKTOP_SETTINGS and key in themes.COMPLETE_DESKTOP_SETTINGS[schema] and key not in {"picture-uri","picture-uri-dark"}:self.assertEqual(manifest["desktop"]["settings"][schema][key],value)
         for field,(schema,key) in DESKTOP_THEME_SETTINGS.items():self.assertEqual(manifest["desktop"][field],values[schema,key],field)
         for field,key in DOCK_THEME_SETTINGS.items():self.assertEqual(manifest["shell"]["dock"][field],values["org.gnome.shell.extensions.dash-to-dock",key],field)
         for surface,fields in SHELL_SURFACE_SETTINGS.items():
@@ -128,11 +133,12 @@ class ThemeTests(unittest.TestCase):
             def supports(self,schema,key):return (schema,key) in values
             def get(self,schema,key):return values[schema,key]
             def schema(self,schema):return None
-        snapshot={"resource":{"wallpaper":True,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_text_color":"#FFFFFF","panel_opacity":.8,"panel_radius":12,"panel_gradient_enabled":True,"panel_gradient_direction":"vertical"},"accent":"purple","assets":{"wallpaper":str(login),"logo":str(logo)}}
+        snapshot={"resource":{"wallpaper":True,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_text_color":"#FFFFFF","panel_opacity":.8,"panel_radius":12,"panel_gradient_enabled":True,"panel_gradient_direction":"vertical"},"accent":"purple","assets":{"wallpaper":str(login),"logo":str(logo)},"settings":{"org.gnome.login-screen":{"logo":"/managed/logo.png","disable-user-list":True}},"monitors":"<monitors version=\"2\"></monitors>"}
         manifest,assets=capture_current_theme(FakeSettings(),"Portable","Tester",snapshot)
         self.assertEqual(set(assets),{"assets/wallpaper.png","assets/wallpaper-dark.png","assets/login-wallpaper.png","assets/login-logo.png"})
         self.assertEqual(manifest["login"]["wallpaper"],"assets/login-wallpaper.png");self.assertEqual(manifest["login"]["logo"],"assets/login-logo.png")
         self.assertEqual(manifest["login"]["accent"],"purple");self.assertEqual(manifest["login"]["panel"]["background_type"],"gradient");self.assertEqual(manifest["login"]["panel"]["gradient_angle"],90)
+        self.assertTrue(manifest["login"]["settings"]["org.gnome.login-screen"]["disable-user-list"]);self.assertIn("<monitors",manifest["login"]["monitors"])
         target=Path(tempfile.mkstemp(suffix=".gctheme")[1]);target.unlink();self.addCleanup(target.unlink,missing_ok=True)
         export_theme(manifest,assets,target);saved,archive=inspect_archive(target)
         try:self.assertTrue(set(assets).issubset(archive.namelist()));self.assertEqual(saved["login"]["background_color"],"#101820")

@@ -20,6 +20,10 @@ class LoginThemeStateTests(unittest.TestCase):
         snapshot=self.state.data["login_theme"]
         self.assertEqual(snapshot["accent"],"orange");self.assertEqual(snapshot["resource"]["background_color"],"#123456")
         self.assertTrue(Path(snapshot["assets"]["wallpaper"]).is_file());self.assertTrue(Path(snapshot["assets"]["logo"]).is_file())
+    def test_complete_login_settings_and_resolution_are_saved(self):
+        settings={"org.gnome.login-screen":{"logo":"","disable-user-list":True},"org.gnome.desktop.interface":{"clock-show-seconds":True}}
+        remember_applied_login_theme(self.state,{"settings":settings,"monitors":"<monitors version=\"2\"></monitors>"},self.assets)
+        snapshot=self.state.data["login_theme"];self.assertEqual(snapshot["settings"],settings);self.assertIn("<monitors",snapshot["monitors"])
         remember_applied_login_theme(self.state,{"resource":{"wallpaper":False},"settings":{"org.gnome.login-screen":{"logo":""}}},self.assets)
         self.assertEqual(self.state.data["login_theme"]["assets"],{})
 

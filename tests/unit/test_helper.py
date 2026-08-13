@@ -29,7 +29,7 @@ class HelperTests(unittest.TestCase):
         helper.GDM_STATE.write_text('{"org.gnome.desktop.interface": {"accent-color": "pink"}, "org.gnome.login-screen": {"logo": "/usr/local/share/gnome-customizer/assets/logo.png", "banner-message-text": "private"}}')
         status=self.service.status({"appearance_only":True});appearance=status["appearance"]
         self.assertEqual(appearance["accent"],"pink");self.assertEqual(appearance["resource"],{"wallpaper":True,"background_color":"#123456"})
-        self.assertEqual(set(appearance["assets"]),{"wallpaper","logo"});self.assertNotIn("settings",appearance)
+        self.assertEqual(set(appearance["assets"]),{"wallpaper","logo"});self.assertIn("settings",appearance);self.assertIn("monitors",appearance)
     def test_asset_and_resource_compile(self):
         self.service.assets({"assets":{"wallpaper":{"mime":"image/png","data":base64.b64encode(png()).decode()}}})
         result=self.service.resource({"wallpaper":True,"panel_color":"#111122","panel_opacity":.8});self.assertEqual(len(result["sha256"]),64);self.assertTrue(helper.RESOURCE.is_file());self.service.resource({"wallpaper":False,"panel_gradient_enabled":False,"panel_text_color":"#FFFFFF"})
@@ -48,6 +48,11 @@ class HelperTests(unittest.TestCase):
         helper.run=lambda *a,**k:Result()
         self.service.dconf({"settings":{"org.gnome.desktop.interface":{"accent-color":"blue"}}});self.service.dconf({"settings":{"org.gnome.desktop.interface":{"clock-show-date":True}}})
         text=helper.DCONF.read_text();self.assertIn("accent-color='blue'",text);self.assertIn("clock-show-date=true",text)
+    def test_complete_transaction_replaces_stale_login_settings(self):
+        class Result:stdout=""
+        helper.run=lambda *a,**k:Result();helper.GDM_STATE.parent.mkdir(parents=True);helper.GDM_STATE.write_text('{"org.gnome.login-screen":{"logo":"/old/logo.png","disable-user-list":true}}')
+        self.service.transaction({"settings":{"org.gnome.login-screen":{"logo":"","disable-user-list":False}}})
+        saved=__import__('json').loads(helper.GDM_STATE.read_text());self.assertEqual(saved,{"org.gnome.login-screen":{"logo":"","disable-user-list":False}})
     def test_dconf_text_cannot_inject_keyfile_lines(self):
         class Result:stdout=""
         helper.run=lambda *a,**k:Result();self.service.dconf({"settings":{"org.gnome.login-screen":{"banner-message-text":"Hello\n[evil]\nkey=true"}}});text=helper.DCONF.read_text();self.assertIn("Hello\\n[evil]\\nkey=true",text);self.assertNotIn("\n[evil]\n",text)

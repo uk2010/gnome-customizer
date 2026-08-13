@@ -26,8 +26,10 @@ def _clock_value(text, twelve_hour):
 
 
 class PreferencesFactory:
-    def __init__(self, backend, manager, gdm_stage): self.backend=backend; self.manager=manager; self.gdm_stage=gdm_stage
+    def __init__(self, backend, manager, gdm_stage): self.backend=backend; self.manager=manager; self.gdm_stage=gdm_stage;self.gdm_values={}
     def _factory(self,domain,schema,key):self.manager.register_factory(domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop"),schema,key)
+    def register_gdm(self,schema,key,value):self.gdm_values.setdefault(schema,{})[key]=value;return value
+    def gdm_settings(self):return {schema:dict(values) for schema,values in self.gdm_values.items()}
 
     def page(self, title, description=""):
         page=Adw.PreferencesPage(title=title); page.set_description(description); return page
@@ -65,6 +67,7 @@ class PreferencesFactory:
         if not self.backend.supports(schema,key):return None
         if not gdm:self._factory(domain,schema,key)
         row=Adw.SpinRow.new_with_range(0,1440,1);row.set_title(title);value=self.backend.default(schema,key) if gdm else self.backend.get(schema,key);row.set_value(value/60)
+        if gdm:self.register_gdm(schema,key,value)
         if gdm:row.connect("notify::value",lambda r,_:self.gdm_stage(schema,key,int(r.get_value()*60)))
         else:row.connect("notify::value",lambda r,_:self.manager.stage(Change(domain,schema,key,int(r.get_value()*60),title)))
         group.add(row);return row
@@ -72,6 +75,7 @@ class PreferencesFactory:
         if not self.backend.supports(schema,key):return None
         if not gdm:self._factory("desktop",schema,key)
         value=float(self.backend.default(schema,key) if gdm else self.backend.get(schema,key));twelve_hour=self.backend.supports("org.gnome.desktop.interface","clock-format") and self.backend.get("org.gnome.desktop.interface","clock-format")=="12h";row=Adw.EntryRow(title=title,text=_clock_text(value,twelve_hour));row.set_tooltip_text("Use h:mm AM/PM" if twelve_hour else "Use HH:MM (24-hour time)")
+        if gdm:self.register_gdm(schema,key,value)
         def changed(r,_):
             try:
                 decimal=_clock_value(r.get_text(),twelve_hour);r.remove_css_class("error")
@@ -79,19 +83,20 @@ class PreferencesFactory:
                 else:self.manager.stage(Change("desktop",schema,key,decimal,title))
             except ValueError:r.add_css_class("error")
         row.connect("notify::text",changed);group.add(row);return row
-    def gdm_switch(self,group,title,schema,key,default=False,subtitle=""):
+    def gdm_switch(self,group,title,schema,key,default=None,subtitle=""):
         if not self.backend.supports(schema,key):return None
-        row=Adw.SwitchRow(title=title,subtitle=subtitle);row.set_active(default);row.connect("notify::active",lambda r,_:self.gdm_stage(schema,key,r.get_active()));group.add(row);return row
+        value=self.backend.default(schema,key) if default is None else default;self.register_gdm(schema,key,value)
+        row=Adw.SwitchRow(title=title,subtitle=subtitle);row.set_active(value);row.connect("notify::active",lambda r,_:self.gdm_stage(schema,key,r.get_active()));group.add(row);return row
     def gdm_combo(self,group,title,schema,key,labels=None):
         choices=self.backend.choices(schema,key)
         if not choices:return None
-        labels=labels or {x:x.replace("-"," ").title() for x in choices};row=Adw.ComboRow(title=title,model=Gtk.StringList.new([labels.get(x,x) for x in choices]));default=self.backend.default(schema,key);row.set_selected(choices.index(default) if default in choices else 0);row.connect("notify::selected",lambda r,_:self.gdm_stage(schema,key,choices[r.get_selected()]));group.add(row);return row
+        labels=labels or {x:x.replace("-"," ").title() for x in choices};row=Adw.ComboRow(title=title,model=Gtk.StringList.new([labels.get(x,x) for x in choices]));default=self.backend.default(schema,key);value=default if default in choices else choices[0];self.register_gdm(schema,key,value);row.set_selected(choices.index(value));row.connect("notify::selected",lambda r,_:self.gdm_stage(schema,key,choices[r.get_selected()]));group.add(row);return row
     def gdm_spin(self,group,title,schema,key,low,high,step=1):
         if not self.backend.supports(schema,key):return None
-        row=Adw.SpinRow.new_with_range(low,high,step);row.set_title(title);row.set_value(float(self.backend.default(schema,key)));row.connect("notify::value",lambda r,_:self.gdm_stage(schema,key,int(r.get_value()) if step>=1 else r.get_value()));group.add(row);return row
+        value=self.backend.default(schema,key);self.register_gdm(schema,key,value);row=Adw.SpinRow.new_with_range(low,high,step);row.set_title(title);row.set_value(float(value));row.connect("notify::value",lambda r,_:self.gdm_stage(schema,key,int(r.get_value()) if step>=1 else r.get_value()));group.add(row);return row
     def gdm_entry(self,group,title,schema,key):
         if not self.backend.supports(schema,key):return None
-        row=Adw.EntryRow(title=title,text=str(self.backend.default(schema,key)));row.connect("notify::text",lambda r,_:self.gdm_stage(schema,key,r.get_text()));group.add(row);return row
+        value=str(self.backend.default(schema,key));self.register_gdm(schema,key,value);row=Adw.EntryRow(title=title,text=value);row.connect("notify::text",lambda r,_:self.gdm_stage(schema,key,r.get_text()));group.add(row);return row
 
     def desktop_appearance(self):
         p=self.page("Appearance","Desktop colors, wallpaper, icons, cursor, and typography")

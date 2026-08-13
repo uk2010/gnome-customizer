@@ -50,6 +50,12 @@ class AppearanceModeTests(unittest.TestCase):
         self.assertEqual(backend.reset_value("org.gnome.desktop.background","picture-uri"),"file:///usr/share/backgrounds/warty-final-ubuntu.png")
         self.assertEqual(backend.reset_value("org.gnome.desktop.background","picture-uri-dark"),"file:///usr/share/backgrounds/ubuntu-wallpaper-d.png")
 
+    def test_theme_apply_refreshes_wallpaper_names_and_saves_complete_login_state(self):
+        source=(ROOT/"src/gnome_customizer/window.py").read_text()
+        self.assertIn('self.desktop_wallpaper_rows[key].set_subtitle(source.name)',source)
+        self.assertIn('transaction["settings"]=self.factory.gdm_settings()',source)
+        self.assertIn('transaction["monitor_default"]=True',source)
+
 
 if __name__ == "__main__":
     unittest.main()

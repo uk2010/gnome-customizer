@@ -25,7 +25,8 @@ class CustomizerWindow(Adw.ApplicationWindow):
     def __init__(self,app):
         super().__init__(application=app,title="GNOME Customizer",default_width=950,default_height=700,width_request=720,height_request=520)
         self.add_css_class("gnome-customizer-window")
-        self.settings=SettingsBackend();self.state=StateStore();self._migrate_native_theme_ownership();self._migrate_shell_surface_ownership();self.changes=ChangeManager(self.settings,self.state);self.app_theme=ApplicationThemeManager(self.state);self.helper=SystemHelperProxy();self.gdm_pending={};self.gdm_resource={};self.gdm_assets={}
+        self.settings=SettingsBackend();self.state=StateStore();self._migrate_native_theme_ownership();self._migrate_shell_surface_ownership();self.changes=ChangeManager(self.settings,self.state);self.app_theme=ApplicationThemeManager(self.state);self.helper=SystemHelperProxy();self.gdm_pending={};self.gdm_resource={};self.gdm_assets={};self._login_dirty=False
+        self.gdm_resource_values={"wallpaper":False,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_gradient_enabled":False,"panel_gradient_direction":"horizontal","panel_text_color":"#FFFFFF","panel_opacity":1.0,"panel_radius":0}
         self._theme_cache={}
         self.toast_overlay=Adw.ToastOverlay();self.set_content(self.toast_overlay);root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.toast_overlay.set_child(root)
         header=Adw.HeaderBar();root.append(header);self.mode=Adw.ViewSwitcher();self.mode_stack=Adw.ViewStack();self.mode.set_stack(self.mode_stack);header.set_title_widget(self.mode);menu=Gio.Menu();menu.append("About GNOME Customizer","app.about");header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",menu_model=menu,tooltip_text="Main Menu"))
@@ -77,6 +78,10 @@ class CustomizerWindow(Adw.ApplicationWindow):
                 if candidate.is_symlink():raise ValueError("Theme files changed after import; symbolic links are not allowed")
                 if candidate.is_file():files.add(candidate.relative_to(directory).as_posix())
             manifest=validate_manifest(json.loads((directory/"manifest.json").read_text(encoding="utf-8")),files);desktop=manifest.get("desktop",{})
+            for schema,values in desktop.get("settings",{}).items():
+                domain="shell" if schema in {"io.github.gnomecustomizer.shell","org.gnome.shell.extensions.dash-to-dock"} else "desktop"
+                for key,value in values.items():
+                    if self.settings.supports(schema,key):self.changes.stage(Change(domain,schema,key,value,f"Theme {schema} {key}"))
             for key,(schema,setting) in DESKTOP_THEME_SETTINGS.items():
                 if key in desktop and self.settings.supports(schema,setting):self.changes.stage(Change("desktop",schema,setting,desktop[key],f"Theme {key}"))
             if "color_scheme" in desktop and self.settings.supports("org.gnome.shell.ubuntu","color-scheme"):
@@ -84,6 +89,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
             for field,key in (("wallpaper","picture-uri"),("wallpaper_dark","picture-uri-dark")):
                 if field in desktop:
                     source=self._theme_asset(directory,desktop[field]);mime=self._validate_image(source);dest=copy_managed_image(source,ASSETS_DIR,"theme-"+field,mime)
+                    if hasattr(self,"desktop_wallpaper_rows") and key in self.desktop_wallpaper_rows:self.desktop_wallpaper_rows[key].set_subtitle(source.name)
                     keys=(key,)
                     if field=="wallpaper" and "wallpaper_dark" not in desktop:
                         keys=wallpaper_keys(dark_override=False,supports_dark=self.settings.supports("org.gnome.desktop.background","picture-uri-dark"))
@@ -109,11 +115,22 @@ class CustomizerWindow(Adw.ApplicationWindow):
                 indicator={"dot":"DOTS","dash":"DASHES","line":"SOLID"}.get(dock.get("indicator_style"))
                 if indicator and self.settings.supports(dock_schema,"running-indicator-style"):self.changes.stage(Change("shell",dock_schema,"running-indicator-style",indicator,"Theme dock indicator"))
             login=manifest.get("login",{})
+            self._login_dirty=True
+            for schema,values in login.get("settings",{}).items():
+                for key,value in values.items():
+                    if self.settings.supports(schema,key):self._stage_gdm(schema,key,value)
+            if "monitors" in login:self.monitor_xml=login["monitors"]
             for role in ("wallpaper","logo"):
                 if role in login:
                     path=self._theme_asset(directory,login[role]);mime=self._validate_image(path);self.gdm_assets[role]={"mime":mime,"data":base64.b64encode(path.read_bytes()).decode("ascii")}
-                    if role=="wallpaper":self.gdm_resource["wallpaper"]=True;self.login_preview_picture.set_file(Gio.File.new_for_path(str(path)))
+                    if hasattr(self,"login_image_rows"):self.login_image_rows[role].set_subtitle(path.name)
+                    if role=="wallpaper":self._stage_resource("wallpaper",True);self.login_preview_picture.set_file(Gio.File.new_for_path(str(path)))
                     else:self._stage_gdm("org.gnome.login-screen","logo",f"/usr/local/share/gnome-customizer/assets/logo.{ {'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[mime] }");self.login_preview_logo.set_file(Gio.File.new_for_path(str(path)));self.login_preview_logo.set_visible(True)
+                else:
+                    self.gdm_assets.pop(role,None)
+                    if hasattr(self,"login_image_rows"):self.login_image_rows[role].set_subtitle("GNOME default")
+                    if role=="wallpaper":self._stage_resource("wallpaper",False);self.login_preview_picture.set_file(None)
+                    else:self._stage_gdm("org.gnome.login-screen","logo","");self.login_preview_logo.set_visible(False);self.login_preview_logo.set_file(None)
             if "background_color" in login:
                 self.gdm_resource["background_color"]=login["background_color"]
                 if "wallpaper" not in login:self.gdm_resource["wallpaper"]=False
@@ -122,7 +139,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
             if "gradient_angle" in login.get("panel",{}):self.gdm_resource["panel_gradient_direction"]="vertical" if 45<=login["panel"]["gradient_angle"]<=135 else "horizontal"
             if login.get("panel"):self.gdm_resource["panel_gradient_enabled"]=login["panel"].get("background_type")=="gradient"
             if "accent" in login:self._stage_gdm("org.gnome.desktop.interface","accent-color",login["accent"])
-            self._update_login_preview();self._pending();return True
+            self.gdm_resource_values.update(self.gdm_resource);self._update_login_preview();self._pending();return True
         except Exception as exc:self.toast(exc);return False
     @staticmethod
     def _theme_asset(directory,relative):
@@ -141,7 +158,9 @@ class CustomizerWindow(Adw.ApplicationWindow):
         return sorted(names,key=str.casefold)
     def _theme_combo_async(self,group,title,kind,schema,key,gdm=False):
         if not gdm:self.changes.register_factory("desktop",schema,key)
-        current=self.settings.default(schema,key) if gdm else self.settings.get(schema,key);model=Gtk.StringList.new([current]);row=Adw.ComboRow(title=title,model=model,selected=0);row._theme_values=[current];row._loading=True
+        current=self.settings.default(schema,key) if gdm else self.settings.get(schema,key)
+        if gdm:self.factory.register_gdm(schema,key,current)
+        model=Gtk.StringList.new([current]);row=Adw.ComboRow(title=title,model=model,selected=0);row._theme_values=[current];row._loading=True
         def selected(r,_):
             if r._loading:return
             index=r.get_selected()
@@ -164,10 +183,13 @@ class CustomizerWindow(Adw.ApplicationWindow):
             if uri:self.desktop_preview.set_file(Gio.File.new_for_uri(uri))
         except Exception:pass
         self.factory.combo(g,"Placement","org.gnome.desktop.background","picture-options");self.factory.combo(g,"Color Fill","org.gnome.desktop.background","color-shading-type");self.factory.color(g,"Primary Color","org.gnome.desktop.background","primary-color");self.factory.color(g,"Secondary Color","org.gnome.desktop.background","secondary-color")
+        self.desktop_wallpaper_rows={}
         for title,key,dark in (("Wallpaper (Light and Dark)","picture-uri",False),("Dark Wallpaper Override","picture-uri-dark",True)):
             if not self.settings.supports("org.gnome.desktop.background",key):continue
             self.changes.register_factory("desktop","org.gnome.desktop.background",key)
-            row=Adw.ActionRow(title=title,subtitle="Choose an image");default=Gtk.Button(icon_name="edit-undo-symbolic",tooltip_text="Use GNOME default",valign=Gtk.Align.CENTER);default.connect("clicked",lambda _,r=row,k=key,t=title:self._default_desktop_wallpaper(r,k,t));b=Gtk.Button(label="Choose Image",valign=Gtk.Align.CENTER);b.connect("clicked",lambda _,r=row,k=key,d=dark:self._choose_desktop_wallpaper(r,k,d));row.add_suffix(default);row.add_suffix(b);g.add(row)
+            try:current=Path(Gio.File.new_for_uri(self.settings.get("org.gnome.desktop.background",key)).get_path()).name
+            except Exception:current="No wallpaper selected"
+            row=Adw.ActionRow(title=title,subtitle=current);self.desktop_wallpaper_rows[key]=row;default=Gtk.Button(icon_name="edit-undo-symbolic",tooltip_text="Use GNOME default",valign=Gtk.Align.CENTER);default.connect("clicked",lambda _,r=row,k=key,t=title:self._default_desktop_wallpaper(r,k,t));b=Gtk.Button(label="Choose Image",valign=Gtk.Align.CENTER);b.connect("clicked",lambda _,r=row,k=key,d=dark:self._choose_desktop_wallpaper(r,k,d));row.add_suffix(default);row.add_suffix(b);g.add(row)
     def _default_desktop_wallpaper(self,row,key,title):
         supports_dark=self.settings.supports("org.gnome.desktop.background","picture-uri-dark")
         keys=wallpaper_keys(dark_override=key=="picture-uri-dark",supports_dark=supports_dark)
@@ -221,15 +243,17 @@ class CustomizerWindow(Adw.ApplicationWindow):
             self.changes.stage(Change("shell","org.gnome.shell","disabled-extensions",disabled,"Shell Companion"))
     def _extend_login(self,page):
         preview=Adw.PreferencesGroup(title="Login Screen Preview",description="A safe approximation; log out to see the compositor-rendered result");page.add(preview);self.login_preview=Gtk.Overlay(height_request=240,css_classes=["card"]);self.login_preview.set_name("login-live-preview");self.login_preview_picture=Gtk.Picture(can_shrink=True,content_fit=Gtk.ContentFit.COVER);self.login_preview.set_child(self.login_preview_picture);bar=Gtk.Label(label="Aug 11   10:30",height_request=38,halign=Gtk.Align.FILL,valign=Gtk.Align.START);bar.set_name("login-live-bar");self.login_preview.add_overlay(bar);card=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8,halign=Gtk.Align.CENTER,valign=Gtk.Align.CENTER,width_request=260,css_classes=["card"]);self.login_preview_logo=Gtk.Picture(width_request=72,height_request=48,can_shrink=True,content_fit=Gtk.ContentFit.CONTAIN);self.login_preview_logo.set_visible(False);card.append(self.login_preview_logo);card.append(Gtk.Image.new_from_icon_name("avatar-default-symbolic"));self.login_preview_banner=Gtk.Label(label="Welcome",css_classes=["title-2"]);card.append(self.login_preview_banner);card.append(Gtk.Entry(placeholder_text="Password",sensitive=False));self.login_preview.add_overlay(card);preview.add(self.login_preview);self._login_preview_provider=Gtk.CssProvider();Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),self._login_preview_provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);self._update_login_preview()
-        options=Adw.PreferencesGroup(title="Login Options",description="Behavioral options are never stored in themes");page.add(options);self.factory.gdm_switch(options,"Welcome Message","org.gnome.login-screen","banner-message-enable");self.factory.gdm_switch(options,"Hide User List","org.gnome.login-screen","disable-user-list");self.factory.gdm_switch(options,"Hide Restart and Shutdown","org.gnome.login-screen","disable-restart-buttons");self.factory.gdm_switch(options,"Fingerprint Authentication","org.gnome.login-screen","enable-fingerprint-authentication")
+        options=Adw.PreferencesGroup(title="Login Options",description="Every option is stored in complete theme snapshots");page.add(options);self.factory.gdm_switch(options,"Welcome Message","org.gnome.login-screen","banner-message-enable");self.factory.gdm_switch(options,"Hide User List","org.gnome.login-screen","disable-user-list");self.factory.gdm_switch(options,"Hide Restart and Shutdown","org.gnome.login-screen","disable-restart-buttons");self.factory.gdm_switch(options,"Fingerprint Authentication","org.gnome.login-screen","enable-fingerprint-authentication")
         accessibility=Adw.PreferencesGroup(title="Accessibility");page.add(accessibility);self.factory.gdm_switch(accessibility,"Always Show Accessibility Menu","org.gnome.desktop.a11y","always-show-universal-access-status")
         style=Adw.PreferencesGroup(title="Style and Typography");page.add(style);self.factory.gdm_combo(style,"Accent Color","org.gnome.desktop.interface","accent-color");self.factory.gdm_entry(style,"Interface Font","org.gnome.desktop.interface","font-name");self.factory.gdm_spin(style,"Text Scaling","org.gnome.desktop.interface","text-scaling-factor",.5,3,.05);self.factory.gdm_spin(style,"Cursor Size","org.gnome.desktop.interface","cursor-size",8,128)
         for title,key,kind in (("Icon Theme","icon-theme","icon"),("Cursor Theme","cursor-theme","cursor")):
             if self.settings.supports("org.gnome.desktop.interface",key):self._theme_combo_async(style,title,kind,"org.gnome.desktop.interface",key,True)
         g=Adw.PreferencesGroup(title="Wallpaper and Logo");page.add(g)
+        self.factory.register_gdm("org.gnome.login-screen","logo",str(self.settings.default("org.gnome.login-screen","logo")))
+        self.login_image_rows={}
         for title,role in (("Login Wallpaper","wallpaper"),("Login Logo","logo")):
-            row=Adw.ActionRow(title=title,subtitle="No image selected");default=Gtk.Button(icon_name="edit-undo-symbolic",tooltip_text="Use GNOME default",valign=Gtk.Align.CENTER);default.connect("clicked",lambda _,r=row,role=role:self._default_gdm_image(r,role));b=Gtk.Button(label="Choose Image",valign=Gtk.Align.CENTER);b.connect("clicked",lambda _,r=row,role=role:self._choose_gdm_image(r,role));row.add_suffix(default);row.add_suffix(b);g.add(row)
-        banner=Adw.EntryRow(title="Welcome Message");banner.connect("notify::text",lambda r,_:self._stage_gdm("org.gnome.login-screen","banner-message-text",r.get_text()));g.add(banner)
+            row=Adw.ActionRow(title=title,subtitle="No image selected");self.login_image_rows[role]=row;default=Gtk.Button(icon_name="edit-undo-symbolic",tooltip_text="Use GNOME default",valign=Gtk.Align.CENTER);default.connect("clicked",lambda _,r=row,role=role:self._default_gdm_image(r,role));b=Gtk.Button(label="Choose Image",valign=Gtk.Align.CENTER);b.connect("clicked",lambda _,r=row,role=role:self._choose_gdm_image(r,role));row.add_suffix(default);row.add_suffix(b);g.add(row)
+        banner_value=str(self.settings.default("org.gnome.login-screen","banner-message-text"));self.factory.register_gdm("org.gnome.login-screen","banner-message-text",banner_value);banner=Adw.EntryRow(title="Welcome Message",text=banner_value);banner.connect("notify::text",lambda r,_:self._stage_gdm("org.gnome.login-screen","banner-message-text",r.get_text()));g.add(banner)
         colors=Adw.PreferencesGroup(title="Controlled Appearance");page.add(colors)
         gradient=Adw.SwitchRow(title="Top Bar Gradient");gradient.connect("notify::active",lambda r,_:self._stage_resource("panel_gradient_enabled",r.get_active()));colors.add(gradient)
         for title,key,initial in (("Background Color","background_color","#101820"),("Top Bar Color","panel_color","#16161A"),("Top Bar Gradient End","panel_color2","#303044"),("Top Bar Text","panel_text_color","#FFFFFF")):
@@ -239,14 +263,15 @@ class CustomizerWindow(Adw.ApplicationWindow):
         radius=Adw.SpinRow.new_with_range(0,32,1);radius.set_title("Top Bar Corner Radius");radius.connect("notify::value",lambda r,_:self._stage_resource("panel_radius",int(r.get_value())));colors.add(radius)
     def _choose_gdm_image(self,row,role):Gtk.FileDialog(title=row.get_title()).open(self,None,lambda d,res:self._gdm_image_done(d,res,row,role))
     def _default_gdm_image(self,row,role):
-        self.gdm_assets.pop(role,None);row.set_subtitle("GNOME default")
-        if role=="wallpaper":self.gdm_resource["wallpaper"]=False;self.login_preview_picture.set_file(None)
+        self.gdm_assets.pop(role,None);row.set_subtitle("GNOME default");self._login_dirty=True
+        if role=="wallpaper":self._stage_resource("wallpaper",False);self.login_preview_picture.set_file(None)
         else:self._stage_gdm("org.gnome.login-screen","logo","");self.login_preview_logo.set_visible(False);self.login_preview_logo.set_file(None)
         self._pending()
     def _gdm_image_done(self,dialog,result,row,role):
         try:
             path=Path(dialog.open_finish(result).get_path());mime=self._validate_image(path);self.gdm_assets[role]={"mime":mime,"data":base64.b64encode(path.read_bytes()).decode("ascii")};row.set_subtitle(path.name)
-            if role=="wallpaper":self.gdm_resource["wallpaper"]=True
+            self._login_dirty=True
+            if role=="wallpaper":self._stage_resource("wallpaper",True)
             else:self._stage_gdm("org.gnome.login-screen","logo",f"/usr/local/share/gnome-customizer/assets/logo.{ {'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[mime] }")
             (self.login_preview_picture if role=="wallpaper" else self.login_preview_logo).set_file(Gio.File.new_for_path(str(path)))
             if role=="logo":self.login_preview_logo.set_visible(True)
@@ -254,7 +279,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         except GLib.Error:pass
         except Exception as exc:self.toast(exc)
     def _stage_resource(self,key,value):
-        self.gdm_resource[key]=value
+        self.gdm_resource[key]=value;self.gdm_resource_values[key]=value;self._login_dirty=True
         if key=="background_color":self.gdm_resource["wallpaper"]=False;self.login_preview_picture.set_file(None)
         self._update_login_preview();self._pending()
     def _stage_resource_color(self,row,key):
@@ -270,7 +295,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         p=Adw.PreferencesPage(title="Login Screen Top Bar");g=Adw.PreferencesGroup(title="Clock");p.add(g)
         self.factory.gdm_combo(g,"Clock Format","org.gnome.desktop.interface","clock-format",{"12h":"12-hour","24h":"24-hour"})
         for title,key in (("Show Date","clock-show-date"),("Show Weekday","clock-show-weekday"),("Show Seconds","clock-show-seconds"),("Battery Percentage","show-battery-percentage")):
-            r=Adw.SwitchRow(title=title);r.connect("notify::active",lambda row,_,k=key:self._stage_gdm("org.gnome.desktop.interface",k,row.get_active()));g.add(r)
+            self.factory.gdm_switch(g,title,"org.gnome.desktop.interface",key)
         return p
     def _displays(self):
         p=Adw.PreferencesPage(title="Displays");g=Adw.PreferencesGroup(title="Login Screen Layout",description="Copies the current user layout without changing the active session");p.add(g);r=Adw.ActionRow(title="Apply My Current Display Layout",subtitle="Source: ~/.config/monitors.xml");b=Gtk.Button(label="Stage",valign=Gtk.Align.CENTER);b.connect("clicked",lambda *_:self._stage_monitors());r.add_suffix(b);g.add(r);r=Adw.ActionRow(title="Restore Previous Login Screen Layout",subtitle="Restores the configuration captured before the first Customizer change");b=Gtk.Button(label="Restore",valign=Gtk.Align.CENTER);b.connect("clicked",lambda *_:self._restore_monitors());r.add_suffix(b);g.add(r);return p
@@ -324,26 +349,31 @@ class CustomizerWindow(Adw.ApplicationWindow):
             self.content.set_visible_child_name(row.page_name)
             if self.body.get_collapsed():self.body.set_show_sidebar(False)
     def _stage_gdm(self,schema,key,value):
-        self.gdm_pending.setdefault(schema,{})[key]=value
+        self.gdm_pending.setdefault(schema,{})[key]=value;self.factory.register_gdm(schema,key,value);self._login_dirty=True
         if key=="banner-message-text" and hasattr(self,"login_preview_banner"):self.login_preview_banner.set_label(value or "Welcome")
         self._pending()
     def _stage_monitors(self):
-        try:self.monitor_xml=(Path.home()/".config/monitors.xml").read_text();self.toast("Display layout staged");self._pending()
+        try:self.monitor_xml=(Path.home()/".config/monitors.xml").read_text();self._login_dirty=True;self.toast("Display layout staged");self._pending()
         except OSError:self.toast("The current display configuration could not be read")
     def _count(self):return len(self.changes.pending)+sum(len(v) for v in self.gdm_pending.values())+(1 if hasattr(self,"monitor_xml") else 0)+len(self.gdm_resource)+len(self.gdm_assets)
     def _pending(self):
         count=self._count();self.pending_label.set_label(f"{count} pending change{'s' if count!=1 else ''}");self.apply.set_sensitive(count>0)
-    def _discard(self):self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending();self.toast("Pending changes discarded")
+    def _discard(self):self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._pending();self.toast("Pending changes discarded")
     def _apply(self,*_):
         pending_before=dict(self.changes.pending);state_before=deepcopy(self.state.data);old_values={};desktop_applied=False
         try:
             for change in pending_before.values():old_values[(change.schema,change.key)]=self.settings.get(change.schema,change.key)
             desktop=self.changes.apply() if self.changes.pending else 0;desktop_applied=desktop>0
             transaction={}
-            if self.gdm_assets:transaction["assets"]=self.gdm_assets
-            if self.gdm_resource:transaction["resource"]=self.gdm_resource
-            if self.gdm_pending:transaction["settings"]=self.gdm_pending
-            if hasattr(self,"monitor_xml"):transaction["monitors"]=self.monitor_xml
+            if self._login_dirty:
+                if self.gdm_assets:transaction["assets"]=self.gdm_assets
+                transaction["resource"]={**self.gdm_resource_values,**self.gdm_resource}
+                transaction["settings"]=self.factory.gdm_settings()
+                if not hasattr(self,"monitor_xml"):
+                    try:self.monitor_xml=(Path.home()/".config/monitors.xml").read_text()
+                    except OSError:self.monitor_xml=""
+                if self.monitor_xml:transaction["monitors"]=self.monitor_xml
+                else:transaction["monitor_default"]=True
             context=(pending_before,state_before,old_values,desktop_applied,desktop,transaction)
             if transaction:
                 self.body.set_sensitive(False);self.apply.set_sensitive(False);self.discard_button.set_sensitive(False);self.apply.set_label("Applying…");threading.Thread(target=self._apply_worker,args=(transaction,context),daemon=True).start();return
@@ -357,7 +387,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         pending,_,_,_,desktop,transaction=context;privileged=bool(transaction);shell_changed=any(change.domain=="shell" for change in pending.values())
         try:remember_applied_login_theme(self.state,transaction)
         except Exception as exc:self.toast(f"Changes applied, but the login theme snapshot could not be saved: {exc}")
-        self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message);return GLib.SOURCE_REMOVE
+        self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message);return GLib.SOURCE_REMOVE
     def _apply_failure(self,context,exc):
         pending_before,state_before,old_values,desktop_applied,_,_=context
         if desktop_applied:

@@ -19,7 +19,7 @@ RESOURCE=ROOT/"gnome-shell-theme.gresource"; LINK=Path("/usr/share/gnome-shell/g
 PREVIOUS=STATE/"previous-resource"; PREV_MON=STATE/"monitors.xml.previous"; MON_MARK=STATE/"monitors-created"
 GDM_STATE=STATE/"gdm-settings.json"; PROFILE_MARK=STATE/"profile-created"
 RESOURCE_STATE=STATE/"resource-settings.json"
-MONITORS=Path("/etc/xdg/monitors.xml")
+MONITORS=Path("/var/lib/gdm3/.config/monitors.xml")
 YARU=Path("/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"); STOCK=Path("/usr/share/gnome-shell/gnome-shell-theme.gresource")
 MAX_PAYLOAD=56*1024*1024; MAX_ASSET=20*1024*1024
 COMPILE_RESOURCES="/usr/bin/glib-compile-resources"
@@ -79,6 +79,10 @@ def gdm_user():
   try:pwd.getpwnam(name);return name
   except KeyError:pass
  return None
+def own_gdm(path):
+ user=gdm_user()
+ if user and os.geteuid()==0:
+  account=pwd.getpwnam(user);os.chown(path,account.pw_uid,account.pw_gid)
 
 class Helper:
  def __init__(self,connection):self.connection=connection
@@ -95,7 +99,7 @@ class Helper:
  def dconf(self,p):
   incoming=p.get("settings");
   if not isinstance(incoming,dict):raise ValueError("settings must be an object")
-  try:settings=json.loads(GDM_STATE.read_text())
+  try:settings={} if p.get("replace") is True else json.loads(GDM_STATE.read_text())
   except (OSError,json.JSONDecodeError):settings={}
   if not isinstance(settings,dict):settings={}
   for schema,values in incoming.items():
@@ -235,12 +239,12 @@ class Helper:
   if not PREV_MON.exists() and not MON_MARK.exists():
    if target.exists():shutil.copy2(target,PREV_MON)
    else:MON_MARK.touch()
-  atomic(target,data.encode());return {"installed":True}
+  atomic(target,data.encode(),0o600);own_gdm(target);return {"installed":True}
  def restore_monitors(self,p):
   target=MONITORS
   if p.get("factory") is True:
    target.unlink(missing_ok=True);PREV_MON.unlink(missing_ok=True);MON_MARK.unlink(missing_ok=True)
-  elif PREV_MON.exists():shutil.copy2(PREV_MON,target);PREV_MON.unlink()
+  elif PREV_MON.exists():shutil.copy2(PREV_MON,target);own_gdm(target);PREV_MON.unlink()
   elif MON_MARK.exists():target.unlink(missing_ok=True);MON_MARK.unlink()
   return {"restored":True}
  def restore_all(self,p):
@@ -277,7 +281,8 @@ class Helper:
    return next((line for line in reversed(output) if not line.startswith(("Connected to ","Connection to "))),"Unavailable")
   except Exception:return "Unavailable"
  def transaction(self,p):
-  if set(p)-{"assets","resource","settings","monitors"}:raise ValueError("Unsupported transaction operation")
+  if set(p)-{"assets","resource","settings","monitors","monitor_default"}:raise ValueError("Unsupported transaction operation")
+  if "monitors" in p and "monitor_default" in p:raise ValueError("Choose a monitor configuration or the default, not both")
   work=Path(tempfile.mkdtemp(prefix="gnome-customizer-rollback-")); paths=[DCONF,GDM_STATE,RESOURCE,RESOURCE_STATE,MONITORS,PREVIOUS,PREV_MON,MON_MARK,PROFILE,PROFILE_MARK]
   snapshots={}; old_active=current()
   for item in paths:
@@ -288,8 +293,9 @@ class Helper:
    result={}
    if "assets" in p:result.update(self.assets({"assets":p["assets"]}))
    if "resource" in p:result.update(self.resource(p["resource"]))
-   if "settings" in p:result.update(self.dconf({"settings":p["settings"]}))
+   if "settings" in p:result.update(self.dconf({"settings":p["settings"],"replace":True}))
    if "monitors" in p:result.update(self.monitors({"xml":p["monitors"]}))
+   if p.get("monitor_default") is True:result.update(self.restore_monitors({"factory":True}))
    if "resource" in p:result.update(self.activate({}))
    return result
   except Exception:
@@ -320,7 +326,9 @@ class Helper:
   for role in ("wallpaper","logo"):
    match=next((path for path in ASSETS.glob(role+".*") if path.is_file() and not path.is_symlink()),None) if ASSETS.is_dir() else None
    if match and (role!="logo" or logo_active):assets[role]=str(match)
-  result={"resource":resource,"assets":assets}
+  result={"resource":resource,"assets":assets,"settings":settings if isinstance(settings,dict) else {}}
+  try:result["monitors"]=MONITORS.read_text() if MONITORS.is_file() else ""
+  except OSError:result["monitors"]=""
   if accent in {"blue","teal","green","yellow","orange","red","pink","purple","slate","brown"}:result["accent"]=accent
   return result
  def status(self,p=None):
