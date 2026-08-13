@@ -1,3 +1,10 @@
+gnome-customizer (0.3.28) resolute; urgency=high
+
+  * Disable painting the overview tint layer when tint opacity is zero.
+  * Keep wallpaper blur active while guaranteeing a transparent tint.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 18:10:00 -0500
+
 gnome-customizer (0.3.27) resolute; urgency=high
 
   * Make overview tint opacity composite independently from blur effects.

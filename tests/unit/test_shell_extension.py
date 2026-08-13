@@ -56,7 +56,11 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("y:monitor.y+0.5,z_position:1", extension)
         self.assertIn("radius:sigma*scale", extension)
         self.assertIn("container:wallpaper", extension)
-        self.assertIn("tint.set_opacity(Math.round(255*", extension)
+        self.assertIn("if (opacity <= 0)", extension)
+        self.assertIn("tint.set_style('background-color: transparent;')", extension)
+        self.assertIn("tint.hide()", extension)
+        self.assertIn("colorWithOpacity(color, opacity)", extension)
+        self.assertIn("tint.show()", extension)
         self.assertIn("wallpaper.add_effect_with_name('gnome-customizer-overview-blur'", extension)
         self.assertIn("Main.overview.connect('showing', () => { this._lowerOverviewBackground();this._queueOverviewHoverScan(); })", extension)
         for key in ("overview-enabled", "overview-opacity", "overview-brightness", "overview-saturation"):

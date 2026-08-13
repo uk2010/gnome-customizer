@@ -218,8 +218,17 @@ export default class CustomizerExtension extends Extension {
             const scale=St.ThemeContext.get_for_stage(global.stage).scale_factor;
             if (enabled && sigma>0) wallpaper.add_effect_with_name('gnome-customizer-overview-blur',new Shell.BlurEffect({mode:Shell.BlurMode.ACTOR,brightness,radius:sigma*scale}));
             if (enabled && saturation<1) wallpaper.add_effect_with_name('gnome-customizer-overview-desaturate',new Clutter.DesaturateEffect({factor:1-saturation}));
-            tint.set_style(`background-color: ${colorWithOpacity(color, 1)};`);
-            tint.set_opacity(Math.round(255*Math.max(0,Math.min(1,opacity))));
+            // Zero tint means no tint actor is painted at all. This avoids a
+            // stale themed background or compositor cache leaving a cast over
+            // the blurred wallpaper when the control is set to 0.
+            if (opacity <= 0) {
+                tint.set_style('background-color: transparent;');
+                tint.hide();
+            } else {
+                tint.set_style(`background-color: ${colorWithOpacity(color, opacity)};`);
+                tint.set_opacity(255);
+                tint.show();
+            }
         }
         Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
         const diagnostic=`${enabled}:${sigma}:${opacity}:${this._overviewBackgrounds.length}`;
