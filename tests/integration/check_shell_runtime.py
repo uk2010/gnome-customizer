@@ -142,13 +142,15 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --met
             raise SystemExit(f"Disable/re-enable lifecycle failed:\n{controls}")
         if "GNOME Customizer: panel applied (opacity=1, blur=20, style=true, effect=true)" not in shell_log:
             raise SystemExit("The real GNOME panel did not receive its configured style and blur effect")
-        if "GNOME Customizer: overview applied (blur=30, tint=0.5, brightness=0.2, saturation=0, tintActors=1, desaturateActors=1, monitors=1)" not in shell_log:
+        if "GNOME Customizer: overview applied (blur=30, tint=0.5, brightness=0.2, saturation=0, tintActors=1, desaturateActors=1, neutralWallpapers=1, monitors=1)" not in shell_log:
             raise SystemExit("The overview did not receive its configured per-monitor blur")
-        neutral="GNOME Customizer: overview applied (blur=30, tint=0, brightness=1, saturation=1, tintActors=0, desaturateActors=0, monitors=1)"
+        neutral="GNOME Customizer: overview applied (blur=30, tint=0, brightness=1, saturation=1, tintActors=0, desaturateActors=0, neutralWallpapers=1, monitors=1)"
         if shell_log.count(neutral) < 2:
             raise SystemExit("Zero tint opacity did not produce a neutral blur before and after a nonzero tint")
         if re.search(r"tint=0, .*tintActors=[1-9]",shell_log):
             raise SystemExit("A tint actor remained in the Shell scene graph at zero opacity")
+        if re.search(r"tint=0, .*neutralWallpapers=0",shell_log):
+            raise SystemExit("GNOME's background actor still dimmed the wallpaper at zero tint opacity")
         if not re.search(r"GNOME Customizer: overview hover backgrounds tracked \([1-9][0-9]*\)", shell_log):
             raise SystemExit("GNOME Shell did not expose any overview tiles to the hover-background controller")
         if "GNOME Customizer: alphabetical app grid enabled" not in shell_log:

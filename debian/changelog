@@ -1,3 +1,10 @@
+gnome-customizer (0.3.30) resolute; urgency=high
+
+  * Keep overview blur at the wallpaper's native brightness when tint is zero.
+  * Verify GNOME's underlying background actor is not dimming the wallpaper.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 18:40:00 -0500
+
 gnome-customizer (0.3.29) resolute; urgency=high
 
   * Make zero overview tint a neutral full-color blur with no tint actor.

@@ -166,7 +166,10 @@ export default class CustomizerExtension extends Extension {
     }
     _destroyOverviewBackgrounds() {
         for (const item of this._overviewBackgrounds ?? []) {
-            try { item.manager.destroy(); } catch (_) {}
+            try {
+                if (item.managerChanged) item.manager.disconnect(item.managerChanged);
+                item.manager.destroy();
+            } catch (_) {}
         }
         this._overviewBackgrounds=[];
         try { this._overviewBackgroundGroup?.destroy(); } catch (_) {}
@@ -196,8 +199,14 @@ export default class CustomizerExtension extends Extension {
             const wallpaper=new St.Widget({x:0,y:0,width:monitor.width,height:monitor.height});
             surface.add_child(wallpaper);
             const manager=new Background.BackgroundManager({container:wallpaper,monitorIndex:i,controlPosition:false});
+            // BackgroundManager initializes every Meta.BackgroundActor at
+            // brightness 0.5, even when vignette is disabled. Neutralize that
+            // built-in dimming so blur does not silently become a dark tint.
+            const neutralizeWallpaper=() => { manager.backgroundActor.content.brightness=1; };
+            neutralizeWallpaper();
+            const managerChanged=manager.connect('changed',neutralizeWallpaper);
             this._overviewBackgroundGroup.insert_child_at_index(surface,0);
-            this._overviewBackgrounds.push({surface,wallpaper,tint:null,manager});
+            this._overviewBackgrounds.push({surface,wallpaper,tint:null,manager,managerChanged});
         }
         Main.layoutManager.overviewGroup.insert_child_at_index(this._overviewBackgroundGroup,0);
         this._syncOverviewBackgrounds();
@@ -240,8 +249,9 @@ export default class CustomizerExtension extends Extension {
         Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle);
         const tintActors=this._overviewBackgrounds.filter(item => item.tint !== null).length;
         const desaturateActors=this._overviewBackgrounds.filter(item => item.wallpaper.get_effect('gnome-customizer-overview-desaturate') !== null).length;
-        const diagnostic=`${enabled}:${sigma}:${opacity}:${effectiveBrightness}:${effectiveSaturation}:${tintActors}:${desaturateActors}:${this._overviewBackgrounds.length}`;
-        if (diagnostic !== this._overviewDiagnostic) { this._overviewDiagnostic=diagnostic;if (enabled) console.log(`GNOME Customizer: overview applied (blur=${sigma}, tint=${opacity}, brightness=${effectiveBrightness}, saturation=${effectiveSaturation}, tintActors=${tintActors}, desaturateActors=${desaturateActors}, monitors=${this._overviewBackgrounds.length})`); }
+        const neutralWallpapers=this._overviewBackgrounds.filter(item => item.manager.backgroundActor.content.brightness === 1).length;
+        const diagnostic=`${enabled}:${sigma}:${opacity}:${effectiveBrightness}:${effectiveSaturation}:${tintActors}:${desaturateActors}:${neutralWallpapers}:${this._overviewBackgrounds.length}`;
+        if (diagnostic !== this._overviewDiagnostic) { this._overviewDiagnostic=diagnostic;if (enabled) console.log(`GNOME Customizer: overview applied (blur=${sigma}, tint=${opacity}, brightness=${effectiveBrightness}, saturation=${effectiveSaturation}, tintActors=${tintActors}, desaturateActors=${desaturateActors}, neutralWallpapers=${neutralWallpapers}, monitors=${this._overviewBackgrounds.length})`); }
     }
     _queuePanelStyleRestore() {
         if (this._panelRestoreSource || !this._settings) return;
