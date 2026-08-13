@@ -1,3 +1,11 @@
+gnome-customizer (0.3.27) resolute; urgency=high
+
+  * Make overview tint opacity composite independently from blur effects.
+  * Apply the current display layout directly to the login screen.
+  * Show Apply instead of Stage for the login display action.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 18:00:00 -0500
+
 gnome-customizer (0.3.26) resolute; urgency=high
 
   * Save every exposed Desktop and Login Screen setting in theme archives.
