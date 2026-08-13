@@ -11,6 +11,8 @@ if command -v glib-compile-schemas >/dev/null 2>&1; then
 fi
 if [ -d /run/systemd/system ]; then
     systemctl --system daemon-reload >/dev/null || true
+    # Upgrades must not leave an already-running older helper serving D-Bus.
+    systemctl --system try-restart gnome-customizer-system-helper.service >/dev/null || true
 fi
 # Installation intentionally does not enable the companion or alter GNOME/GDM.
 #DEBHELPER#

@@ -1,3 +1,11 @@
+gnome-customizer (0.3.24) resolute; urgency=high
+
+  * Verify that login reset switches back to a stock GDM resource.
+  * Remove all managed login overrides, assets, state, and staged changes.
+  * Restart an already-running system helper during package upgrades.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 15:15:00 -0500
+
 gnome-customizer (0.3.23) resolute; urgency=high
 
   * Save applied login-screen appearance when exporting the current theme.

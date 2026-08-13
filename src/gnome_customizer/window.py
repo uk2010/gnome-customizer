@@ -294,7 +294,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         try:self.toast(f"Restored {self.changes.restore(domain)} {domain} settings")
         except Exception as exc:self.toast(exc)
     def _restore_login(self):
-        try:self.helper.call("RestoreGdmDefaults");clear_login_theme_snapshot(self.state);self.toast("Login screen restored. Log out or reboot to see all changes.")
+        try:self.helper.call("RestoreGdmDefaults");clear_login_theme_snapshot(self.state);self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending();self.toast("Login screen restored. Reboot before checking the login screen.")
         except Exception as exc:self.toast(exc)
     def _restore_application_theme(self):
         try:self.toast(f"Removed application theme from {self.app_theme.restore()} GTK configuration files. Reopen applications to see the change.")

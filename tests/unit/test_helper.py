@@ -60,5 +60,19 @@ class HelperTests(unittest.TestCase):
         self.service.resource=resource;self.service.activate=activate
         with patch.object(helper.subprocess,"run") as command,self.assertRaises(RuntimeError):self.service.transaction({"resource":{"background_color":"#112233"}})
         self.assertTrue(any(call.args[0][:3]==["/usr/bin/update-alternatives","--remove",helper.ALT] for call in command.call_args_list));self.assertFalse(helper.RESOURCE.exists())
+    def test_restore_fails_if_custom_resource_remains_active(self):
+        helper.RESOURCE.parent.mkdir(parents=True);helper.RESOURCE.write_bytes(b"custom")
+        with patch.object(helper,"current",return_value=helper.RESOURCE),patch.object(helper.subprocess,"run") as command:
+            command.return_value.returncode=0;command.return_value.stderr=""
+            with self.assertRaisesRegex(RuntimeError,"stock GDM resource did not become active"):self.service.restore_resource({})
+    def test_restore_switches_to_stock_and_removes_custom_resource(self):
+        stock=self.temp/"stock.gresource";stock.write_bytes(b"stock");helper.RESOURCE.parent.mkdir(parents=True);helper.RESOURCE.write_bytes(b"custom");active=[helper.RESOURCE]
+        def execute(argv,**_):
+            class Result:returncode=0;stderr="";stdout=""
+            if argv[:3]==["/usr/bin/update-alternatives","--set",helper.ALT]:active[0]=Path(argv[3])
+            return Result()
+        with patch.object(helper,"YARU",stock),patch.object(helper,"STOCK",stock),patch.object(helper,"current",side_effect=lambda:active[0]),patch.object(helper,"run",side_effect=execute),patch.object(helper.subprocess,"run",side_effect=execute):
+            self.service.restore_resource({})
+        self.assertEqual(active[0],stock);self.assertFalse(helper.RESOURCE.exists())
 
 if __name__=="__main__":unittest.main()

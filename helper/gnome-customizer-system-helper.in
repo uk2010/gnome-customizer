@@ -205,6 +205,7 @@ class Helper:
   if current()!=RESOURCE:raise RuntimeError("Custom resource did not become active")
   return {"active":True}
  def restore_resource(self,p):
+  managed=RESOURCE.exists() or current()==RESOURCE or PREVIOUS.exists()
   if current()==RESOURCE:
    targets=[]
    if PREVIOUS.exists():targets.append(Path(PREVIOUS.read_text().strip()))
@@ -212,7 +213,11 @@ class Helper:
    target=next((x for x in targets if x.is_file() and x!=RESOURCE),None)
    if not target:raise RuntimeError("No safe stock GDM resource can be restored")
    run(["/usr/bin/update-alternatives","--set",ALT,str(target)])
-  subprocess.run(["/usr/bin/update-alternatives","--remove",ALT,str(RESOURCE)],capture_output=True)
+   if current()!=target:raise RuntimeError("The stock GDM resource did not become active")
+  if managed:
+   removal=subprocess.run(["/usr/bin/update-alternatives","--remove",ALT,str(RESOURCE)],text=True,capture_output=True)
+   if removal.returncode!=0:raise RuntimeError(removal.stderr.strip() or "Could not remove the custom GDM resource alternative")
+  if current()==RESOURCE:raise RuntimeError("The custom GDM resource is still active")
   RESOURCE.unlink(missing_ok=True);PREVIOUS.unlink(missing_ok=True)
   if not p.get("preserve_state"):RESOURCE_STATE.unlink(missing_ok=True)
   return {"active":False}
@@ -243,6 +248,12 @@ class Helper:
     if PROFILE.read_bytes()==expected:PROFILE.unlink()
    except FileNotFoundError:pass
    PROFILE_MARK.unlink(missing_ok=True)
+  leftovers=[]
+  if current()==RESOURCE:leftovers.append("active resource")
+  if DCONF.exists():leftovers.append("dconf override")
+  if ASSETS.exists():leftovers.append("managed assets")
+  if GDM_STATE.exists() or RESOURCE_STATE.exists():leftovers.append("managed state")
+  if leftovers:raise RuntimeError("Login reset is incomplete: "+", ".join(leftovers))
   return {"restored":True}
  def gdm_get(self,schema,key):
   user=gdm_user()
