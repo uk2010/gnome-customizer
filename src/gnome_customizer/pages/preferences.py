@@ -27,6 +27,7 @@ def _clock_value(text, twelve_hour):
 
 class PreferencesFactory:
     def __init__(self, backend, manager, gdm_stage): self.backend=backend; self.manager=manager; self.gdm_stage=gdm_stage
+    def _factory(self,domain,schema,key):self.manager.register_factory(domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop"),schema,key)
 
     def page(self, title, description=""):
         page=Adw.PreferencesPage(title=title); page.set_description(description); return page
@@ -34,35 +35,42 @@ class PreferencesFactory:
         group=Adw.PreferencesGroup(title=title,description=description);page.add(group);return group
     def switch(self,group,title,schema,key,domain=None,subtitle=""):
         if not self.backend.supports(schema,key): return None
+        self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
         row=Adw.SwitchRow(title=title,subtitle=subtitle); row.set_active(bool(self.backend.get(schema,key)))
         row.connect("notify::active",lambda r,_:self.manager.stage(Change(domain,schema,key,r.get_active(),title)));group.add(row);return row
     def combo(self,group,title,schema,key,labels=None,domain=None):
         choices=self.backend.choices(schema,key)
         if not choices:return None
+        self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");labels=labels or {x:x.replace("-"," ").title() for x in choices}; model=Gtk.StringList.new([labels.get(x,x) for x in choices]);row=Adw.ComboRow(title=title,model=model)
         current=self.backend.get(schema,key);row.set_selected(choices.index(current) if current in choices else 0)
         row.connect("notify::selected",lambda r,_:self.manager.stage(Change(domain,schema,key,choices[r.get_selected()],title)));group.add(row);return row
     def spin(self,group,title,schema,key,low,high,step=1,domain=None):
         if not self.backend.supports(schema,key):return None
+        self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
         row=Adw.SpinRow.new_with_range(low,high,step);row.set_title(title);row.set_value(float(self.backend.get(schema,key)))
         row.connect("notify::value",lambda r,_:self.manager.stage(Change(domain,schema,key,int(r.get_value()) if step>=1 else r.get_value(),title)));group.add(row);return row
     def entry(self,group,title,schema,key,domain=None):
         if not self.backend.supports(schema,key):return None
+        self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
         row=Adw.EntryRow(title=title,text=str(self.backend.get(schema,key)));row.connect("notify::text",lambda r,_:self.manager.stage(Change(domain,schema,key,r.get_text(),title)));group.add(row);return row
     def color(self,group,title,schema,key,domain=None):
         if not self.backend.supports(schema,key):return None
+        self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");row=Adw.ActionRow(title=title);button=color_button(self.backend.get(schema,key),title);button.connect("notify::rgba",lambda b,_:self.manager.stage(Change(domain,schema,key,hex_color(b.get_rgba()),title)));row.add_suffix(button);row.set_activatable_widget(button);group.add(row);return row
     def duration(self,group,title,schema,key,domain="desktop",gdm=False):
         if not self.backend.supports(schema,key):return None
+        if not gdm:self._factory(domain,schema,key)
         row=Adw.SpinRow.new_with_range(0,1440,1);row.set_title(title);value=self.backend.default(schema,key) if gdm else self.backend.get(schema,key);row.set_value(value/60)
         if gdm:row.connect("notify::value",lambda r,_:self.gdm_stage(schema,key,int(r.get_value()*60)))
         else:row.connect("notify::value",lambda r,_:self.manager.stage(Change(domain,schema,key,int(r.get_value()*60),title)))
         group.add(row);return row
     def time(self,group,title,schema,key,gdm=False):
         if not self.backend.supports(schema,key):return None
+        if not gdm:self._factory("desktop",schema,key)
         value=float(self.backend.default(schema,key) if gdm else self.backend.get(schema,key));twelve_hour=self.backend.supports("org.gnome.desktop.interface","clock-format") and self.backend.get("org.gnome.desktop.interface","clock-format")=="12h";row=Adw.EntryRow(title=title,text=_clock_text(value,twelve_hour));row.set_tooltip_text("Use h:mm AM/PM" if twelve_hour else "Use HH:MM (24-hour time)")
         def changed(r,_):
             try:
@@ -90,6 +98,7 @@ class PreferencesFactory:
         g=self.group(p,"Style")
         color_scheme=self.combo(g,"Color Scheme","org.gnome.desktop.interface","color-scheme")
         if color_scheme and self.backend.supports("org.gnome.shell.ubuntu","color-scheme"):
+            self.manager.register_factory("desktop","org.gnome.shell.ubuntu","color-scheme")
             choices=self.backend.choices("org.gnome.desktop.interface","color-scheme")
             color_scheme.connect("notify::selected",lambda r,_:self.manager.stage(Change("desktop","org.gnome.shell.ubuntu","color-scheme",choices[r.get_selected()],"Ubuntu Color Scheme")))
         self.combo(g,"Accent Color","org.gnome.desktop.interface","accent-color")

@@ -30,7 +30,14 @@ class ChangeManager:
     def __init__(self, settings: SettingsBackend, state: StateStore):
         self.settings, self.state = settings, state
         self.pending: dict[tuple[str, str], Change] = {}
+        self.factory_targets: dict[str, list[str]] = {"shell":[
+            "org.gnome.shell:enabled-extensions","org.gnome.shell:disabled-extensions","org.gnome.shell:disable-user-extensions",
+        ]}
         self.listeners: list[Callable[[], None]] = []
+
+    def register_factory(self, domain: str, schema: str, key: str) -> None:
+        token=f"{schema}:{key}";targets=self.factory_targets.setdefault(domain,[])
+        if token not in targets:targets.append(token)
 
     def stage(self, change: Change) -> None:
         if not self.settings.supports(change.schema, change.key):
@@ -124,10 +131,11 @@ class ChangeManager:
         self.state.clear_original(domain)
         return restored
 
-    def reset_managed(self, domains=("desktop", "shell")) -> int:
+    def _reset(self, domains, factory=False) -> int:
         tokens=[]
         for domain in domains:
-            for token in [*self.state.data.get("managed",{}).get(domain,[]), *self.state.original(domain)]:
+            exposed=self.factory_targets.get(domain,[]) if factory else []
+            for token in [*self.state.data.get("managed",{}).get(domain,[]), *self.state.original(domain), *exposed]:
                 if token not in tokens:tokens.append(token)
         applied=[]
         try:
@@ -147,6 +155,12 @@ class ChangeManager:
             self.state.data.get("original",{}).pop(domain,None)
             self.state.data.get("managed",{}).pop(domain,None)
         self.state.save();return len(applied)
+
+    def reset_managed(self, domains=("desktop", "shell")) -> int:
+        return self._reset(domains)
+
+    def reset_factory(self, domains=("desktop", "shell")) -> int:
+        return self._reset(domains,True)
 
     def _notify(self):
         for listener in tuple(self.listeners): listener()

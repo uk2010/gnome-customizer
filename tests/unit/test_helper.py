@@ -12,8 +12,8 @@ def png():
 class HelperTests(unittest.TestCase):
     def setUp(self):
         self.temp=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,self.temp)
-        self.old={name:getattr(helper,name) for name in ("ROOT","STATE","ASSETS","RESOURCE","DCONF","GDM_STATE","RESOURCE_STATE","PROFILE","PROFILE_MARK","PREVIOUS","PREV_MON","MON_MARK","MONITORS","LINK","COMPILE_RESOURCES","run")}
-        helper.ROOT=self.temp/"root";helper.STATE=helper.ROOT/"state";helper.ASSETS=helper.ROOT/"assets";helper.RESOURCE=helper.ROOT/"theme.gresource";helper.DCONF=self.temp/"etc/99-customizer";helper.GDM_STATE=helper.STATE/"gdm-settings.json";helper.RESOURCE_STATE=helper.STATE/"resource-settings.json";helper.PROFILE=self.temp/"profile";helper.PROFILE_MARK=helper.STATE/"profile-created";helper.PREVIOUS=helper.STATE/"previous";helper.PREV_MON=helper.STATE/"monitors.previous";helper.MON_MARK=helper.STATE/"monitors-created";helper.MONITORS=self.temp/"monitors.xml";helper.LINK=self.temp/"gdm-theme.gresource";helper.COMPILE_RESOURCES=shutil.which("glib-compile-resources") or str(HERE/".build-tools/glib-dev-root/usr/bin/glib-compile-resources")
+        self.old={name:getattr(helper,name) for name in ("ROOT","STATE","ASSETS","RESOURCE","DCONF","GDM_DCONF_DIR","GDM_DCONF_DB","GDM_USER_DBS","GDM_STATE","RESOURCE_STATE","PROFILE","PROFILE_MARK","PREVIOUS","PREV_MON","MON_MARK","MONITORS","LINK","COMPILE_RESOURCES","run")}
+        helper.ROOT=self.temp/"root";helper.STATE=helper.ROOT/"state";helper.ASSETS=helper.ROOT/"assets";helper.RESOURCE=helper.ROOT/"theme.gresource";helper.GDM_DCONF_DIR=self.temp/"etc/gdm.d";helper.DCONF=helper.GDM_DCONF_DIR/"99-customizer";helper.GDM_DCONF_DB=self.temp/"etc/gdm";helper.GDM_USER_DBS=(self.temp/"gdm3/user",self.temp/"gdm/user");helper.GDM_STATE=helper.STATE/"gdm-settings.json";helper.RESOURCE_STATE=helper.STATE/"resource-settings.json";helper.PROFILE=self.temp/"profile";helper.PROFILE_MARK=helper.STATE/"profile-created";helper.PREVIOUS=helper.STATE/"previous";helper.PREV_MON=helper.STATE/"monitors.previous";helper.MON_MARK=helper.STATE/"monitors-created";helper.MONITORS=self.temp/"monitors.xml";helper.LINK=self.temp/"gdm-theme.gresource";helper.COMPILE_RESOURCES=shutil.which("glib-compile-resources") or str(HERE/".build-tools/glib-dev-root/usr/bin/glib-compile-resources")
         self.addCleanup(lambda:[setattr(helper,k,v) for k,v in self.old.items()])
         self.service=helper.Helper(None)
     def test_setting_enums_and_logo_path(self):
@@ -74,5 +74,24 @@ class HelperTests(unittest.TestCase):
         with patch.object(helper,"YARU",stock),patch.object(helper,"STOCK",stock),patch.object(helper,"current",side_effect=lambda:active[0]),patch.object(helper,"run",side_effect=execute),patch.object(helper.subprocess,"run",side_effect=execute):
             self.service.restore_resource({})
         self.assertEqual(active[0],stock);self.assertFalse(helper.RESOURCE.exists())
+    def test_factory_reset_ignores_previous_resource_and_selects_yaru(self):
+        yaru=self.temp/"yaru.gresource";yaru.write_bytes(b"yaru");previous=self.temp/"previous.gresource";previous.write_bytes(b"previous")
+        helper.STATE.mkdir(parents=True);helper.RESOURCE.write_bytes(b"custom");helper.PREVIOUS.write_text(str(previous));active=[previous]
+        def execute(argv,**_):
+            class Result:returncode=0;stderr="";stdout=""
+            if argv[:3]==["/usr/bin/update-alternatives","--set",helper.ALT]:active[0]=Path(argv[3])
+            return Result()
+        with patch.object(helper,"YARU",yaru),patch.object(helper,"STOCK",yaru),patch.object(helper,"current",side_effect=lambda:active[0]),patch.object(helper,"run",side_effect=execute),patch.object(helper.subprocess,"run",side_effect=execute):
+            self.service.restore_resource({"factory":True})
+        self.assertEqual(active[0],yaru);self.assertFalse(helper.RESOURCE.exists())
+    def test_factory_reset_removes_all_local_gdm_state(self):
+        class Result:stdout=""
+        helper.run=lambda *a,**k:Result();helper.GDM_DCONF_DIR.mkdir(parents=True);(helper.GDM_DCONF_DIR/"95-other-customizer").write_text("custom")
+        helper.GDM_DCONF_DB.write_bytes(b"compiled");helper.PROFILE.write_text("custom profile")
+        for database in helper.GDM_USER_DBS:database.parent.mkdir(parents=True);database.write_bytes(b"user settings")
+        helper.MONITORS.write_text("custom monitors");helper.PREV_MON.parent.mkdir(parents=True);helper.PREV_MON.write_text("previous monitors")
+        self.service.restore_resource=lambda p:{};self.service.restore_all({"factory":True})
+        self.assertFalse(helper.GDM_DCONF_DIR.exists());self.assertFalse(helper.GDM_DCONF_DB.exists());self.assertFalse(helper.PROFILE.exists())
+        self.assertFalse(any(database.exists() for database in helper.GDM_USER_DBS));self.assertFalse(helper.MONITORS.exists());self.assertFalse(helper.PREV_MON.exists())
 
 if __name__=="__main__":unittest.main()

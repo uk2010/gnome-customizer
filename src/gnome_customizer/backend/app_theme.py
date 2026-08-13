@@ -139,6 +139,14 @@ class ApplicationThemeManager:
         self.state.data.pop("application_theme", None);self.state.save()
         return changed
 
+    def reset_factory(self) -> int:
+        removed=0
+        for path in self.targets:
+            if path.is_symlink():raise ValueError(f"Refusing symbolic-link GTK CSS: {path}")
+            if path.is_file():path.unlink();removed+=1
+        self.state.data.pop("application_theme", None);self.state.save()
+        return removed
+
     def current_palette(self) -> dict:
         metadata = self.state.data.get("application_theme", {})
         palette = metadata.get("palette", {}) if isinstance(metadata, dict) else {}

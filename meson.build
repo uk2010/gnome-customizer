@@ -1,4 +1,4 @@
-project('gnome-customizer', version: '0.3.24', meson_version: '>=1.3.0', default_options: ['prefix=/usr'])
+project('gnome-customizer', version: '0.3.25', meson_version: '>=1.3.0', default_options: ['prefix=/usr'])
 
 gnome = import('gnome')
 i18n = import('i18n')

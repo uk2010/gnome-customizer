@@ -13,6 +13,8 @@ from gi.repository import Gio, GLib, Polkit
 BUS="io.github.gnomecustomizer.SystemHelper"; PATH="/io/github/gnomecustomizer/SystemHelper"; ACTION="io.github.gnomecustomizer.modify-system"
 ROOT=Path("/usr/local/share/gnome-customizer"); STATE=ROOT/"state"; ASSETS=ROOT/"assets"
 DCONF=Path("/etc/dconf/db/gdm.d/99-gdm-customizer"); PROFILE=Path("/etc/dconf/profile/gdm")
+GDM_DCONF_DIR=Path("/etc/dconf/db/gdm.d"); GDM_DCONF_DB=Path("/etc/dconf/db/gdm")
+GDM_USER_DBS=(Path("/var/lib/gdm3/.config/dconf/user"),Path("/var/lib/gdm/.config/dconf/user"))
 RESOURCE=ROOT/"gnome-shell-theme.gresource"; LINK=Path("/usr/share/gnome-shell/gdm-theme.gresource"); ALT="gdm-theme.gresource"
 PREVIOUS=STATE/"previous-resource"; PREV_MON=STATE/"monitors.xml.previous"; MON_MARK=STATE/"monitors-created"
 GDM_STATE=STATE/"gdm-settings.json"; PROFILE_MARK=STATE/"profile-created"
@@ -206,10 +208,11 @@ class Helper:
   return {"active":True}
  def restore_resource(self,p):
   managed=RESOURCE.exists() or current()==RESOURCE or PREVIOUS.exists()
-  if current()==RESOURCE:
-   targets=[]
-   if PREVIOUS.exists():targets.append(Path(PREVIOUS.read_text().strip()))
-   targets.extend([YARU,STOCK])
+  factory=p.get("factory") is True
+  if current()==RESOURCE or factory:
+   targets=[YARU,STOCK] if factory else []
+   if not factory and PREVIOUS.exists():targets.append(Path(PREVIOUS.read_text().strip()))
+   if not factory:targets.extend([YARU,STOCK])
    target=next((x for x in targets if x.is_file() and x!=RESOURCE),None)
    if not target:raise RuntimeError("No safe stock GDM resource can be restored")
    run(["/usr/bin/update-alternatives","--set",ALT,str(target)])
@@ -235,22 +238,33 @@ class Helper:
   atomic(target,data.encode());return {"installed":True}
  def restore_monitors(self,p):
   target=MONITORS
-  if PREV_MON.exists():shutil.copy2(PREV_MON,target);PREV_MON.unlink()
+  if p.get("factory") is True:
+   target.unlink(missing_ok=True);PREV_MON.unlink(missing_ok=True);MON_MARK.unlink(missing_ok=True)
+  elif PREV_MON.exists():shutil.copy2(PREV_MON,target);PREV_MON.unlink()
   elif MON_MARK.exists():target.unlink(missing_ok=True);MON_MARK.unlink()
   return {"restored":True}
  def restore_all(self,p):
-  self.restore_resource({});self.restore_monitors({});DCONF.unlink(missing_ok=True);run(["/usr/bin/dconf","update"])
+  factory=p.get("factory") is True
+  self.restore_resource({"factory":factory});self.restore_monitors({"factory":factory})
+  if factory:
+   if GDM_DCONF_DIR.exists():shutil.rmtree(GDM_DCONF_DIR)
+   GDM_DCONF_DB.unlink(missing_ok=True);PROFILE.unlink(missing_ok=True)
+   for database in GDM_USER_DBS:database.unlink(missing_ok=True)
+  else:DCONF.unlink(missing_ok=True)
+  run(["/usr/bin/dconf","update"])
   if ASSETS.exists():shutil.rmtree(ASSETS)
   GDM_STATE.unlink(missing_ok=True)
-  if PROFILE_MARK.exists():
+  if not factory and PROFILE_MARK.exists():
    expected=b"user-db:user\nsystem-db:gdm\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n"
    try:
     if PROFILE.read_bytes()==expected:PROFILE.unlink()
    except FileNotFoundError:pass
    PROFILE_MARK.unlink(missing_ok=True)
+  elif factory:PROFILE_MARK.unlink(missing_ok=True)
   leftovers=[]
   if current()==RESOURCE:leftovers.append("active resource")
   if DCONF.exists():leftovers.append("dconf override")
+  if factory and (PROFILE.exists() or GDM_DCONF_DIR.exists() or GDM_DCONF_DB.exists() or any(path.exists() for path in GDM_USER_DBS)):leftovers.append("non-factory dconf state")
   if ASSETS.exists():leftovers.append("managed assets")
   if GDM_STATE.exists() or RESOURCE_STATE.exists():leftovers.append("managed state")
   if leftovers:raise RuntimeError("Login reset is incomplete: "+", ".join(leftovers))

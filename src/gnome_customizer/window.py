@@ -140,6 +140,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
                     if child.is_dir() and ((kind=="cursor" and (child/"cursors").is_dir()) or (kind=="gtk" and ((child/"gtk-3.0").is_dir() or (child/"gtk-4.0").is_dir())) or (kind in {"icon","sound"} and (child/"index.theme").is_file())):names.add(child.name)
         return sorted(names,key=str.casefold)
     def _theme_combo_async(self,group,title,kind,schema,key,gdm=False):
+        if not gdm:self.changes.register_factory("desktop",schema,key)
         current=self.settings.default(schema,key) if gdm else self.settings.get(schema,key);model=Gtk.StringList.new([current]);row=Adw.ComboRow(title=title,model=model,selected=0);row._theme_values=[current];row._loading=True
         def selected(r,_):
             if r._loading:return
@@ -165,6 +166,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         self.factory.combo(g,"Placement","org.gnome.desktop.background","picture-options");self.factory.combo(g,"Color Fill","org.gnome.desktop.background","color-shading-type");self.factory.color(g,"Primary Color","org.gnome.desktop.background","primary-color");self.factory.color(g,"Secondary Color","org.gnome.desktop.background","secondary-color")
         for title,key,dark in (("Wallpaper (Light and Dark)","picture-uri",False),("Dark Wallpaper Override","picture-uri-dark",True)):
             if not self.settings.supports("org.gnome.desktop.background",key):continue
+            self.changes.register_factory("desktop","org.gnome.desktop.background",key)
             row=Adw.ActionRow(title=title,subtitle="Choose an image");default=Gtk.Button(icon_name="edit-undo-symbolic",tooltip_text="Use GNOME default",valign=Gtk.Align.CENTER);default.connect("clicked",lambda _,r=row,k=key,t=title:self._default_desktop_wallpaper(r,k,t));b=Gtk.Button(label="Choose Image",valign=Gtk.Align.CENTER);b.connect("clicked",lambda _,r=row,k=key,d=dark:self._choose_desktop_wallpaper(r,k,d));row.add_suffix(default);row.add_suffix(b);g.add(row)
     def _default_desktop_wallpaper(self,row,key,title):
         supports_dark=self.settings.supports("org.gnome.desktop.background","picture-uri-dark")
@@ -198,6 +200,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
             if self.settings.supports("org.gnome.desktop.interface",key):self._theme_combo_async(g,title,kind,"org.gnome.desktop.interface",key)
         g=Adw.PreferencesGroup(title="Typography");p.add(g)
         if self.settings.supports("org.gnome.desktop.interface","font-name"):
+            self.changes.register_factory("desktop","org.gnome.desktop.interface","font-name")
             row=Adw.ActionRow(title="Interface Font");button=Gtk.FontDialogButton.new(Gtk.FontDialog());button.set_font_desc(Pango.FontDescription.from_string(self.settings.get("org.gnome.desktop.interface","font-name")));button.connect("notify::font-desc",lambda b,_:self.changes.stage(Change("desktop","org.gnome.desktop.interface","font-name",b.get_font_desc().to_string(),"Interface Font")));row.add_suffix(button);g.add(row)
         for title,key in (("Antialiasing","font-antialiasing"),("Hinting","font-hinting")):self.factory.combo(g,title,"org.gnome.desktop.interface",key)
         return p
@@ -287,7 +290,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         p=Adw.PreferencesPage(title="Apply & Restore",description="Restoration only touches values and files managed by GNOME Customizer");g=Adw.PreferencesGroup(title="Restore Pre-Customizer State");p.add(g)
         for title,subtitle,callback in (("Restore Desktop Appearance","Returns settings captured before their first change",lambda:self._restore_domain("desktop")),("Restore Application Theme","Removes only the managed GTK3/GTK4 CSS block",self._restore_application_theme),("Restore Shell Appearance","Restores companion settings without touching other extensions",lambda:self._restore_domain("shell")),("Restore Login Screen Appearance","Removes the owned dconf, resource, assets, and display state",self._restore_login),("Restore All GNOME Customizer Changes","Restores all four scopes",self._restore_all)):
             row=Adw.ActionRow(title=title,subtitle=subtitle);button=Gtk.Button(label="Restore",valign=Gtk.Align.CENTER,css_classes=["destructive-action"]);button.connect("clicked",lambda _,cb=callback,t=title:self._confirm_restore(t,cb));row.add_suffix(button);g.add(row)
-        g=Adw.PreferencesGroup(title="Ubuntu / GNOME Defaults",description="Resets every desktop, Shell, application, and login-screen customization managed by this app");p.add(g);row=Adw.ActionRow(title="Reset All Managed Customizations",subtitle="Restores Ubuntu Yaru defaults when installed and removes managed application CSS and wallpaper copies");button=Gtk.Button(label="Reset All",valign=Gtk.Align.CENTER,css_classes=["destructive-action"]);button.connect("clicked",lambda *_:self._confirm_defaults());row.add_suffix(button);g.add(row);return p
+        g=Adw.PreferencesGroup(title="Ubuntu Factory Defaults",description="Resets every setting exposed by this app, including changes made by other customization tools");p.add(g);row=Adw.ActionRow(title="Reset Everything to Ubuntu Defaults",subtitle="Restores Yaru, stock wallpapers and GDM, and removes user GTK CSS");button=Gtk.Button(label="Factory Reset",valign=Gtk.Align.CENTER,css_classes=["destructive-action"]);button.connect("clicked",lambda *_:self._confirm_defaults());row.add_suffix(button);g.add(row);return p
     def _confirm_restore(self,title,callback):
         dialog=Adw.AlertDialog(heading=title,body="Only GNOME Customizer-owned changes in this scope will be restored.");dialog.add_response("cancel","Cancel");dialog.add_response("restore","Restore");dialog.set_response_appearance("restore",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:callback() if response=="restore" else None);dialog.present(self)
     def _restore_domain(self,domain):
@@ -301,14 +304,14 @@ class CustomizerWindow(Adw.ApplicationWindow):
         except Exception as exc:self.toast(exc)
     def _restore_all(self):self._restore_domain("desktop");self._restore_application_theme();self._restore_domain("shell");self._restore_login()
     def _confirm_defaults(self):
-        dialog=Adw.AlertDialog(heading="Reset All Managed Customizations",body="Desktop, Shell, application, and login-screen changes made by GNOME Customizer will be reset to Ubuntu Yaru defaults when available, otherwise GNOME defaults. Other extensions and unrelated settings are preserved.");dialog.add_response("cancel","Cancel");dialog.add_response("reset","Reset All");dialog.set_response_appearance("reset",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:self._reset_defaults() if response=="reset" else None);dialog.present(self)
+        dialog=Adw.AlertDialog(heading="Reset Everything to Ubuntu Defaults",body="Every desktop, Shell, dock, application, wallpaper, display, and login-screen setting exposed here will be reset, even if another program changed it. User GTK CSS and local GDM overrides will be removed. Unrelated files and settings outside this app's scope are preserved.");dialog.add_response("cancel","Cancel");dialog.add_response("reset","Factory Reset");dialog.set_response_appearance("reset",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:self._reset_defaults() if response=="reset" else None);dialog.present(self)
     def _reset_defaults(self):
         try:
-            self.helper.call("RestoreGdmDefaults")
+            self.helper.call("RestoreGdmDefaults",{"factory":True})
             clear_login_theme_snapshot(self.state)
-            count=self.changes.reset_managed(("desktop","shell"));files=self.app_theme.restore();images=remove_managed_images(ASSETS_DIR)
+            count=self.changes.reset_factory(("desktop","shell"));files=self.app_theme.reset_factory();images=remove_managed_images(ASSETS_DIR)
             self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending()
-            self.toast(f"Reset {count} settings, {files} application theme files, and {images} managed wallpapers. Log out and back in to finish.")
+            self.toast(f"Reset {count} settings, {files} application theme files, and {images} managed wallpapers. Reboot before checking the login screen.")
         except Exception as exc:self.toast(f"Could not reset all customizations: {exc}")
     def _fill_nav(self):
         while child:=self.nav.get_first_child():self.nav.remove(child)

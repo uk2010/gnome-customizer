@@ -47,6 +47,10 @@ class ApplicationThemeTests(unittest.TestCase):
         self.manager.restore()
         self.assertEqual(target.read_bytes(), b"entry { padding: 4px; }\n")
 
+    def test_factory_reset_removes_preexisting_user_css(self):
+        target=self.manager.targets[1];target.parent.mkdir(parents=True);target.write_text("window { color: red; }")
+        self.assertEqual(self.manager.reset_factory(),1);self.assertFalse(target.exists())
+
     def test_complete_presets_generate_distinct_valid_themes(self):
         generated={name:application_css(palette) for name,palette in APPLICATION_PRESETS.items()}
         self.assertEqual(set(generated),{"Light","Dark","High Contrast"});self.assertEqual(len(set(generated.values())),3)

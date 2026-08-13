@@ -1,3 +1,12 @@
+gnome-customizer (0.3.25) resolute; urgency=high
+
+  * Make factory reset explicitly select the packaged Yaru or GNOME GDM resource.
+  * Clear local GDM overrides, user settings, and monitor state during factory reset.
+  * Reset every exposed desktop, Shell, and dock setting even when changed elsewhere.
+  * Keep pre-Customizer state restoration separate from factory reset.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Thu, 13 Aug 2026 16:10:00 -0500
+
 gnome-customizer (0.3.24) resolute; urgency=high
 
   * Verify that login reset switches back to a stock GDM resource.

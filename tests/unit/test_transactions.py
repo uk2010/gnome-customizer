@@ -64,5 +64,8 @@ class TransactionTests(unittest.TestCase):
         uuid='gnome-customizer@io.github.gnomecustomizer';self.backend.values['org.gnome.shell','enabled-extensions']=[uuid,'other@example']
         self.store.data['managed']={'desktop':['s:a'],'shell':['org.gnome.shell:enabled-extensions']};self.store.save()
         self.assertEqual(self.manager.reset_managed(),2);self.assertEqual(self.backend.values['s','a'],'default-a');self.assertEqual(self.backend.values['org.gnome.shell','enabled-extensions'],['other@example']);self.assertEqual(self.store.data['managed'],{})
+    def test_factory_reset_includes_exposed_settings_changed_before_customizer(self):
+        self.backend.values['s','b']=99;self.manager.register_factory('desktop','s','b')
+        self.assertGreaterEqual(self.manager.reset_factory(),1);self.assertEqual(self.backend.values['s','b'],0)
 
 if __name__=="__main__":unittest.main()
