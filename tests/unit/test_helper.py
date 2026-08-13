@@ -45,8 +45,9 @@ class HelperTests(unittest.TestCase):
         xml="<monitors version=\"2\"></monitors>";result=self.service.monitors({"xml":xml})
         self.assertEqual(helper.MONITORS.read_text(),xml);self.assertEqual(helper.MONITORS.stat().st_mode&0o777,0o600)
         self.assertEqual(result["path"],str(helper.MONITORS));self.assertEqual(result["sha256"],__import__('hashlib').sha256(xml.encode()).hexdigest())
-        if helper.os.geteuid()==0:
-            account=helper.pwd.getpwnam(helper.gdm_user());info=helper.MONITORS.stat();directory=helper.MONITORS.parent.stat()
+        user=helper.gdm_user()
+        if helper.os.geteuid()==0 and user:
+            account=helper.pwd.getpwnam(user);info=helper.MONITORS.stat();directory=helper.MONITORS.parent.stat()
             self.assertEqual((info.st_uid,info.st_gid),(account.pw_uid,account.pw_gid));self.assertEqual((directory.st_uid,directory.st_gid),(account.pw_uid,account.pw_gid))
         self.service.restore_monitors({});self.assertFalse(helper.MONITORS.exists())
     def test_monitor_transaction_writes_and_verifies_exact_layout(self):
