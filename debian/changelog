@@ -1,3 +1,9 @@
+gnome-customizer (1.05) resolute; urgency=high
+
+  * Continue applying themes when the saved power profile is unavailable.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Fri, 14 Aug 2026 17:45:00 -0500
+
 gnome-customizer (1.04) resolute; urgency=high
 
   * Brighten the actual GNOME Shell shade behind opened app folders.

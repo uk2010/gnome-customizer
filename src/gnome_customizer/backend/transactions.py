@@ -18,6 +18,7 @@ class Change:
     key: str
     value: Any
     label: str
+    best_effort: bool = False
 
 
 class TransactionError(RuntimeError):
@@ -30,6 +31,7 @@ class ChangeManager:
     def __init__(self, settings: SettingsBackend, state: StateStore):
         self.settings, self.state = settings, state
         self.pending: dict[tuple[str, str], Change] = {}
+        self.skipped: list[tuple[Change, str]] = []
         self.factory_targets: dict[str, list[str]] = {"shell":[
             "org.gnome.shell:enabled-extensions","org.gnome.shell:disabled-extensions","org.gnome.shell:disable-user-extensions",
         ]}
@@ -84,17 +86,24 @@ class ChangeManager:
     def apply(self) -> int:
         state_before = deepcopy(self.state.data)
         applied: list[tuple[Change, Any]] = []
+        self.skipped.clear()
         try:
             for change in self.pending.values():
-                old = self.settings.get(change.schema, change.key)
+                try:
+                    old = self.settings.get(change.schema, change.key)
+                    value=change.value
+                    if change.schema=="org.gnome.shell" and change.key in {"enabled-extensions","disabled-extensions"}:
+                        current=list(old);wanted=COMPANION_UUID in value
+                        if wanted and COMPANION_UUID not in current:current.append(COMPANION_UUID)
+                        if not wanted and COMPANION_UUID in current:current.remove(COMPANION_UUID)
+                        value=current
+                    self.settings.set(change.schema, change.key, value)
+                except Exception as exc:
+                    if not change.best_effort:
+                        raise
+                    self.skipped.append((change, str(exc)))
+                    continue
                 self.state.remember_original(change.domain, f"{change.schema}:{change.key}", old)
-                value=change.value
-                if change.schema=="org.gnome.shell" and change.key in {"enabled-extensions","disabled-extensions"}:
-                    current=list(old);wanted=COMPANION_UUID in value
-                    if wanted and COMPANION_UUID not in current:current.append(COMPANION_UUID)
-                    if not wanted and COMPANION_UUID in current:current.remove(COMPANION_UUID)
-                    value=current
-                self.settings.set(change.schema, change.key, value)
                 applied.append((change, old))
         except Exception as exc:
             for change, old in reversed(applied):

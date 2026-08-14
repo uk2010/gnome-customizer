@@ -24,6 +24,9 @@ class TransactionTests(unittest.TestCase):
         self.manager.stage(Change('desktop','s','a','new','A'));self.manager.stage(Change('desktop','s','b',2,'B'));self.backend.fail='b'
         with self.assertRaises(TransactionError):self.manager.apply()
         self.assertEqual(self.backend.values['s','a'],'old');self.assertEqual(self.store.original('desktop'),{})
+    def test_best_effort_change_does_not_abort_the_transaction(self):
+        self.backend.values[('power','profile')]='balanced';self.manager.stage(Change('desktop','power','profile','performance','Power profile',best_effort=True));self.manager.stage(Change('desktop','s','a','new','A'));self.backend.fail='profile'
+        self.assertEqual(self.manager.apply(),1);self.assertEqual(self.backend.values['s','a'],'new');self.assertEqual(len(self.manager.skipped),1);self.assertEqual(self.manager.skipped[0][0].key,'profile');self.assertEqual(self.store.original('desktop'),{'s:a':'old'})
     def test_extension_delta_preserves_unrelated_extensions(self):
         uuid='gnome-customizer@io.github.gnomecustomizer';self.manager.stage(Change('shell','org.gnome.shell','enabled-extensions',[uuid],'Companion'));self.backend.values['org.gnome.shell','enabled-extensions'].append('added-later@example');self.manager.apply();self.assertEqual(set(self.backend.values['org.gnome.shell','enabled-extensions']),{'other@example','added-later@example',uuid});self.manager.restore('shell');self.assertEqual(set(self.backend.values['org.gnome.shell','enabled-extensions']),{'other@example','added-later@example'})
     def test_native_dock_setting_does_not_enable_companion(self):

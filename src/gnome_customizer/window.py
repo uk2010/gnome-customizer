@@ -10,7 +10,7 @@ from .backend.assets import copy_managed_image, remove_managed_images
 from .backend.app_theme import ApplicationThemeManager, NautilusTransparencyManager
 from .backend.login_theme import clear_login_theme_snapshot, remember_applied_login_theme
 from .backend.transactions import Change
-from .backend.settings import SettingsBackend, yaru_theme_for_accent
+from .backend.settings import POWER_PROFILE_KEY, POWER_PROFILES_SCHEMA, SettingsBackend, yaru_theme_for_accent
 from .backend.state import StateStore
 from .backend.transactions import ChangeManager, TransactionError
 from .backend.system_proxy import SystemHelperProxy
@@ -83,7 +83,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
             for schema,values in desktop.get("settings",{}).items():
                 domain="shell" if schema in {"io.github.gnomecustomizer.shell","org.gnome.shell.extensions.dash-to-dock"} else "desktop"
                 for key,value in values.items():
-                    if self.settings.supports(schema,key):self.changes.stage(Change(domain,schema,key,value,f"Theme {schema} {key}"))
+                    if self.settings.supports(schema,key):self.changes.stage(Change(domain,schema,key,value,f"Theme {schema} {key}",best_effort=schema == POWER_PROFILES_SCHEMA and key == POWER_PROFILE_KEY))
             for key,(schema,setting) in DESKTOP_THEME_SETTINGS.items():
                 if key in desktop and self.settings.supports(schema,setting):self.changes.stage(Change("desktop",schema,setting,desktop[key],f"Theme {key}"))
             if "color_scheme" in desktop and self.settings.supports("org.gnome.shell.ubuntu","color-scheme"):
@@ -414,9 +414,12 @@ class CustomizerWindow(Adw.ApplicationWindow):
         except Exception as exc:GLib.idle_add(self._apply_failure,context,exc)
     def _apply_success(self,context):
         pending,_,_,_,desktop,transaction,_=context;privileged=bool(transaction);shell_changed=any(change.domain=="shell" for change in pending.values())
+        skipped=self.changes.skipped
         try:remember_applied_login_theme(self.state,transaction)
         except Exception as exc:self.toast(f"Changes applied, but the login theme snapshot could not be saved: {exc}")
-        self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message);return GLib.SOURCE_REMOVE
+        self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message)
+        for change,reason in skipped:self.toast(f"{change.label} was skipped: {reason}")
+        return GLib.SOURCE_REMOVE
     def _apply_failure(self,context,exc):
         pending_before,state_before,old_values,desktop_applied,_,_,files_snapshot=context
         if files_snapshot is not None:
