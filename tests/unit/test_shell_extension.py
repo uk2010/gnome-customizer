@@ -109,6 +109,9 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("this._settings.get_double('folder-brightness')",extension)
         self.assertIn("function colorWithBrightness",extension)
         self.assertIn("color=colorWithBrightness(color,brightness)",extension)
+        self.assertIn("const FOLDER_DIALOG_SHADE_ALPHA=204",extension)
+        self.assertIn("record.shade.background_color=folderDialogShade(brightness)",extension)
+        self.assertIn("actor.get_parent()?.get_parent()",extension)
         self.assertIn("if (!enabled && brightness === 1)",extension)
 
     def test_unenabled_surfaces_leave_gnome_shell_in_control(self):

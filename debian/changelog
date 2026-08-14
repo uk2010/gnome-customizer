@@ -1,3 +1,10 @@
+gnome-customizer (1.04) resolute; urgency=high
+
+  * Brighten the actual GNOME Shell shade behind opened app folders.
+  * Make Folder Brightness work when the folder surface is transparent.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Fri, 14 Aug 2026 17:20:00 -0500
+
 gnome-customizer (1.03) resolute; urgency=high
 
   * Add brightness control for overview app-folder tiles and opened folder dialogs.

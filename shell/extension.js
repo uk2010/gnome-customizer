@@ -1,4 +1,5 @@
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
@@ -8,6 +9,8 @@ import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+const FOLDER_DIALOG_SHADE_ALPHA=204;
 
 function colorWithOpacity(color, opacity) {
     const match = color.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
@@ -22,6 +25,11 @@ function colorWithBrightness(color, brightness) {
     if (!match) return color;
     const channel = value => Math.max(0, Math.min(255, Math.round(Number(value) * brightness)));
     return `rgba(${channel(match[1])}, ${channel(match[2])}, ${channel(match[3])}, ${match[4]})`;
+}
+
+function folderDialogShade(brightness) {
+    const alpha=Math.max(0,Math.min(255,Math.round(FOLDER_DIALOG_SHADE_ALPHA / Math.max(.2,brightness))));
+    return new Cogl.Color({red:0,green:0,blue:0,alpha});
 }
 
 function backgroundStyle(settings, prefix, opacity=1) {
@@ -96,8 +104,10 @@ export default class CustomizerExtension extends Extension {
             const classes=actor.get_style_class_name?.()?.split(' ') ?? [];
             const kind=classes.includes('app-folder-dialog') ? 'dialog' : classes.includes('app-folder') ? 'tile' : null;
             if (kind && !this._appFolderActors.has(actor)) {
-                const record={kind,style:actor.get_style(),color:actorBackgroundColor(actor),hoverId:0,destroyId:0};
+                const shade=kind === 'dialog' ? actor.get_parent()?.get_parent() : null;
+                const record={kind,style:actor.get_style(),color:actorBackgroundColor(actor),shade,shadeVisibleId:0,hoverId:0,destroyId:0};
                 if (kind === 'tile') record.hoverId=actor.connect('notify::hover', () => this._syncAppFolderActor(actor));
+                if (shade) record.shadeVisibleId=shade.connect('notify::visible', () => this._syncAppFolderActor(actor));
                 record.destroyId=actor.connect('destroy', () => this._appFolderActors?.delete(actor));
                 this._appFolderActors.set(actor,record);
             }
@@ -112,6 +122,7 @@ export default class CustomizerExtension extends Extension {
         const enabled=this._settings.get_boolean(`${prefix}-transparency-enabled`);
         const brightness=this._settings.get_double('folder-brightness');
         const hovered=record.kind === 'tile' && (actor.get_hover?.() ?? actor.hover);
+        if (record.kind === 'dialog' && record.shade?.visible) record.shade.background_color=folderDialogShade(brightness);
         if (!enabled && brightness === 1) { actor.set_style(record.style);return; }
         let color;
         if (hovered) {
@@ -175,6 +186,7 @@ export default class CustomizerExtension extends Extension {
         for (const [actor,record] of this._appFolderActors) {
             try {
                 if (record.hoverId) actor.disconnect(record.hoverId);
+                if (record.shade && record.shadeVisibleId) record.shade.disconnect(record.shadeVisibleId);
                 actor.disconnect(record.destroyId);actor.set_style(record.style);
             } catch (_) {}
         }
