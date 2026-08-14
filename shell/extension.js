@@ -17,6 +17,13 @@ function colorWithOpacity(color, opacity) {
     return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${Math.max(0, Math.min(1, sourceAlpha * opacity)).toFixed(3)})`;
 }
 
+function colorWithBrightness(color, brightness) {
+    const match = color.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/i);
+    if (!match) return color;
+    const channel = value => Math.max(0, Math.min(255, Math.round(Number(value) * brightness)));
+    return `rgba(${channel(match[1])}, ${channel(match[2])}, ${channel(match[3])}, ${match[4]})`;
+}
+
 function backgroundStyle(settings, prefix, opacity=1) {
     if (opacity <= 0) return 'background-color: transparent;';
     const color = colorWithOpacity(settings.get_string(`${prefix}-color`), opacity);
@@ -25,9 +32,11 @@ function backgroundStyle(settings, prefix, opacity=1) {
     return `background-gradient-direction: ${settings.get_string(`${prefix}-gradient-direction`)}; background-gradient-start: ${color}; background-gradient-end: ${end};`;
 }
 
-function actorBackgroundRgb(actor) {
+function actorBackgroundColor(actor) {
     const color=actor.get_theme_node().get_background_color();
-    return [color.red,color.green,color.blue];
+    const alphaValue=color.alpha ?? 255;
+    const alpha=alphaValue > 1 ? alphaValue / 255 : alphaValue;
+    return [color.red,color.green,color.blue,alpha];
 }
 
 export default class CustomizerExtension extends Extension {
@@ -87,7 +96,7 @@ export default class CustomizerExtension extends Extension {
             const classes=actor.get_style_class_name?.()?.split(' ') ?? [];
             const kind=classes.includes('app-folder-dialog') ? 'dialog' : classes.includes('app-folder') ? 'tile' : null;
             if (kind && !this._appFolderActors.has(actor)) {
-                const record={kind,style:actor.get_style(),color:actorBackgroundRgb(actor),hoverId:0,destroyId:0};
+                const record={kind,style:actor.get_style(),color:actorBackgroundColor(actor),hoverId:0,destroyId:0};
                 if (kind === 'tile') record.hoverId=actor.connect('notify::hover', () => this._syncAppFolderActor(actor));
                 record.destroyId=actor.connect('destroy', () => this._appFolderActors?.delete(actor));
                 this._appFolderActors.set(actor,record);
@@ -101,16 +110,18 @@ export default class CustomizerExtension extends Extension {
         const record=this._appFolderActors.get(actor);if (!record) return;
         const prefix=record.kind === 'tile' ? 'folder-tile' : 'folder-dialog';
         const enabled=this._settings.get_boolean(`${prefix}-transparency-enabled`);
+        const brightness=this._settings.get_double('folder-brightness');
         const hovered=record.kind === 'tile' && (actor.get_hover?.() ?? actor.hover);
-        if (!enabled) { actor.set_style(record.style);return; }
+        if (!enabled && brightness === 1) { actor.set_style(record.style);return; }
         let color;
         if (hovered) {
             const opacity=this._settings.get_double('overview-hover-opacity');
-            color=colorWithOpacity(this._settings.get_string('overview-hover-color'),opacity);
+            color=colorWithBrightness(colorWithOpacity(this._settings.get_string('overview-hover-color'),opacity),brightness);
         } else {
-            const opacity=this._settings.get_double(`${prefix}-opacity`);
-            const [red,green,blue]=record.color;
+            const [red,green,blue,baseOpacity]=record.color;
+            const opacity=enabled ? this._settings.get_double(`${prefix}-opacity`) : baseOpacity;
             color=opacity <= 0 ? 'transparent' : `rgba(${red}, ${green}, ${blue}, ${Math.max(0,Math.min(1,opacity)).toFixed(3)})`;
+            color=colorWithBrightness(color,brightness);
         }
         actor.set_style(`${record.style ?? ''} background-color: ${color};`);
     }

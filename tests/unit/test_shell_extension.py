@@ -102,6 +102,15 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("this._restoreAppFolders()",extension)
         self.assertNotIn("actor.set_opacity",extension)
 
+    def test_app_folder_brightness_only_changes_the_surface(self):
+        extension=(ROOT/"shell/extension.js").read_text();preferences=(ROOT/"src/gnome_customizer/pages/preferences.py").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
+        self.assertIn('name="folder-brightness"',schema)
+        self.assertIn('"Folder Brightness",schema,"folder-brightness"',preferences)
+        self.assertIn("this._settings.get_double('folder-brightness')",extension)
+        self.assertIn("function colorWithBrightness",extension)
+        self.assertIn("color=colorWithBrightness(color,brightness)",extension)
+        self.assertIn("if (!enabled && brightness === 1)",extension)
+
     def test_unenabled_surfaces_leave_gnome_shell_in_control(self):
         extension=(ROOT/"shell/extension.js").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
         self.assertIn('<key name="panel-enabled" type="b"><default>false</default></key>',schema)

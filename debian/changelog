@@ -1,3 +1,10 @@
+gnome-customizer (1.03) resolute; urgency=high
+
+  * Add brightness control for overview app-folder tiles and opened folder dialogs.
+  * Preserve folder icons and text while adjusting the folder background surface.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Fri, 14 Aug 2026 17:05:00 -0500
+
 gnome-customizer (1.02) resolute; urgency=high
 
   * Make transparent app-folder tiles honor the configured overview hover

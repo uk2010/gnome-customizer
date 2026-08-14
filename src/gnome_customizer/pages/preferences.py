@@ -179,6 +179,7 @@ class PreferencesFactory:
         self.spin(folders,"Folder Tile Background Opacity",schema,"folder-tile-opacity",0,1,.01)
         self.switch(folders,"Translucent Open Folders",schema,"folder-dialog-transparency-enabled",subtitle="Shows the overview wallpaper through an opened app folder")
         self.spin(folders,"Open Folder Background Opacity",schema,"folder-dialog-opacity",0,1,.01)
+        self.spin(folders,"Folder Brightness",schema,"folder-brightness",.2,1.5,.05)
         menus=self.group(p,"Menus &amp; Popovers");self.switch(menus,"Enable Custom Menu Appearance",schema,"menu-enabled");self.color(menus,"Surface Color",schema,"menu-color");self.switch(menus,"Gradient",schema,"menu-gradient-enabled");self.color(menus,"Gradient End Color",schema,"menu-color2");self.combo(menus,"Gradient Direction",schema,"menu-gradient-direction");self.spin(menus,"Opacity",schema,"menu-opacity",.2,1,.01);self.spin(menus,"Corner Radius",schema,"menu-radius",0,32);self.color(menus,"Text Color",schema,"menu-text-color");self.color(menus,"Border Color",schema,"menu-border-color")
         return p
 

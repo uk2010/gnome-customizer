@@ -24,6 +24,7 @@
     <key name="folder-tile-opacity" type="d"><range min="0.0" max="1.0"/><default>0.0</default></key>
     <key name="folder-dialog-transparency-enabled" type="b"><default>false</default></key>
     <key name="folder-dialog-opacity" type="d"><range min="0.0" max="1.0"/><default>0.55</default></key>
+    <key name="folder-brightness" type="d"><range min="0.2" max="1.5"/><default>1.0</default></key>
     <key name="menu-blur" type="i"><range min="0" max="100"/><default>16</default></key>
     <key name="menu-enabled" type="b"><default>false</default></key>
     <key name="menu-color" type="s"><default>'#202026'</default></key>
