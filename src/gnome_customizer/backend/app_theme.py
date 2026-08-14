@@ -15,6 +15,10 @@ BEGIN = b"/* GNOME Customizer application theme: begin */"
 END = b"/* GNOME Customizer application theme: end */"
 BLOCK = re.compile(re.escape(BEGIN) + rb".*?" + re.escape(END) + rb"\n?", re.DOTALL)
 
+FILES_BEGIN = b"/* GNOME Customizer Files transparency: begin */"
+FILES_END = b"/* GNOME Customizer Files transparency: end */"
+FILES_BLOCK = re.compile(re.escape(FILES_BEGIN) + rb".*?" + re.escape(FILES_END) + rb"\n?", re.DOTALL)
+
 DEFAULT_APPLICATION_PALETTE = {
     "window_color": "#18181C",
     "view_color": "#111114",
@@ -71,6 +75,43 @@ def unmanaged_bytes(existing: bytes) -> bytes:
     if (BEGIN in existing) != (END in existing):
         raise ValueError("Existing GTK CSS contains an incomplete GNOME Customizer block")
     return BLOCK.sub(b"", existing) if BLOCK.search(existing) else existing
+
+
+def nautilus_transparency_css(opacity: float) -> str:
+    value = min(1.0, max(0.0, float(opacity)))
+    alpha = f"{value:.3f}".rstrip("0").rstrip(".")
+    return f"""window.nautilus-window {{
+  --window-bg-color: alpha(@window_bg_color, {alpha});
+  --view-bg-color: alpha(@view_bg_color, {alpha});
+  --headerbar-bg-color: alpha(@headerbar_bg_color, {alpha});
+  --headerbar-backdrop-color: alpha(@headerbar_backdrop_color, {alpha});
+  --sidebar-bg-color: alpha(@sidebar_bg_color, {alpha});
+  --sidebar-backdrop-color: alpha(@sidebar_backdrop_color, {alpha});
+  background-color: var(--window-bg-color);
+}}
+window.nautilus-window .view,
+window.nautilus-window listview,
+window.nautilus-window gridview,
+window.nautilus-window columnview {{ background-color: var(--view-bg-color); }}
+window.nautilus-window .sidebar-pane,
+window.nautilus-window .navigation-sidebar {{ background-color: var(--sidebar-bg-color); }}
+window.nautilus-window headerbar,
+window.nautilus-window toolbarview > .top-bar {{ background-color: var(--headerbar-bg-color); }}
+"""
+
+
+def managed_nautilus_bytes(existing: bytes, opacity: float) -> bytes:
+    if (FILES_BEGIN in existing) != (FILES_END in existing):
+        raise ValueError("Existing GTK CSS contains an incomplete GNOME Customizer Files transparency block")
+    clean = FILES_BLOCK.sub(b"", existing)
+    css = nautilus_transparency_css(opacity).encode("utf-8")
+    return clean + FILES_BEGIN + b"\n" + css + FILES_END + b"\n"
+
+
+def unmanaged_nautilus_bytes(existing: bytes) -> bytes:
+    if (FILES_BEGIN in existing) != (FILES_END in existing):
+        raise ValueError("Existing GTK CSS contains an incomplete GNOME Customizer Files transparency block")
+    return FILES_BLOCK.sub(b"", existing) if FILES_BLOCK.search(existing) else existing
 
 
 class ApplicationThemeManager:
@@ -151,6 +192,71 @@ class ApplicationThemeManager:
         metadata = self.state.data.get("application_theme", {})
         palette = metadata.get("palette", {}) if isinstance(metadata, dict) else {}
         return {**DEFAULT_APPLICATION_PALETTE, **palette}
+
+
+class NautilusTransparencyManager:
+    """Own one reversible, Nautilus-scoped block in the GTK 4 user stylesheet."""
+
+    def __init__(self, state: StateStore, home: Path | None = None):
+        self.state = state
+        root = home or Path.home()
+        self.target = root / ".config/gtk-4.0/gtk.css"
+
+    def snapshot(self) -> tuple[bool, bytes, int]:
+        path = self.target
+        if path.is_symlink():
+            raise ValueError(f"Refusing symbolic-link GTK CSS: {path}")
+        if path.exists() and not path.is_file():
+            raise ValueError(f"GTK CSS path is not a regular file: {path}")
+        exists = path.is_file()
+        return exists, path.read_bytes() if exists else b"", stat.S_IMODE(path.stat().st_mode) if exists else 0o600
+
+    def restore_snapshot(self, snapshot: tuple[bool, bytes, int]) -> None:
+        existed, content, mode = snapshot
+        if existed:
+            ApplicationThemeManager._atomic(self.target, content, mode)
+        else:
+            self.target.unlink(missing_ok=True)
+
+    def sync(self, enabled: bool, opacity: float) -> bool:
+        before = self.snapshot()
+        state_before = deepcopy(self.state.data)
+        existed, content, mode = before
+        metadata = self.state.data.get("nautilus_transparency", {})
+        was_created = bool(metadata.get("created", False)) if isinstance(metadata, dict) else False
+        try:
+            if enabled:
+                updated = managed_nautilus_bytes(content, opacity)
+                if updated != content:
+                    ApplicationThemeManager._atomic(self.target, updated, mode if existed else 0o600)
+                self.state.data["nautilus_transparency"] = {
+                    "created": was_created or not existed,
+                    "opacity": min(1.0, max(0.0, float(opacity))),
+                }
+                self.state.save()
+                return updated != content
+            clean = unmanaged_nautilus_bytes(content)
+            changed = clean != content
+            if changed:
+                if not clean.strip() and was_created:
+                    self.target.unlink(missing_ok=True)
+                else:
+                    ApplicationThemeManager._atomic(self.target, clean, mode)
+            if "nautilus_transparency" in self.state.data:
+                self.state.data.pop("nautilus_transparency", None)
+                self.state.save()
+            return changed
+        except Exception:
+            self.restore_snapshot(before)
+            self.state.data = state_before
+            try:
+                self.state.save()
+            except Exception:
+                pass
+            raise
+
+    def restore(self) -> bool:
+        return self.sync(False, 1.0)
 
 
 def migrate_managed_application_css() -> int:

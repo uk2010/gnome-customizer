@@ -1,3 +1,11 @@
+gnome-customizer (1.01) resolute; urgency=high
+
+  * Add reversible GNOME Files background transparency and opacity controls.
+  * Add native power-profile selection with Power Saver, Balanced, and Performance.
+  * Add independent app-folder tile and dialog transparency controls.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Fri, 14 Aug 2026 15:30:00 -0500
+
 gnome-customizer (1.0) resolute; urgency=high
 
   * Promote the verified 0.3.30 implementation to the 1.0 stable release.

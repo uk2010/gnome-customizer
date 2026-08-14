@@ -7,7 +7,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 from PIL import Image
 from .backend.constants import ASSETS_DIR
 from .backend.assets import copy_managed_image, remove_managed_images
-from .backend.app_theme import ApplicationThemeManager
+from .backend.app_theme import ApplicationThemeManager, NautilusTransparencyManager
 from .backend.login_theme import clear_login_theme_snapshot, remember_applied_login_theme
 from .backend.transactions import Change
 from .backend.settings import SettingsBackend, yaru_theme_for_accent
@@ -25,7 +25,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
     def __init__(self,app):
         super().__init__(application=app,title="GNOME Customizer",default_width=950,default_height=700,width_request=720,height_request=520)
         self.add_css_class("gnome-customizer-window")
-        self.settings=SettingsBackend();self.state=StateStore();self._migrate_native_theme_ownership();self._migrate_shell_surface_ownership();self.changes=ChangeManager(self.settings,self.state);self.app_theme=ApplicationThemeManager(self.state);self.helper=SystemHelperProxy();self.gdm_pending={};self.gdm_resource={};self.gdm_assets={};self._login_dirty=False
+        self.settings=SettingsBackend();self.state=StateStore();self._migrate_native_theme_ownership();self._migrate_shell_surface_ownership();self.changes=ChangeManager(self.settings,self.state);self.app_theme=ApplicationThemeManager(self.state);self.files_theme=NautilusTransparencyManager(self.state);self.helper=SystemHelperProxy();self.gdm_pending={};self.gdm_resource={};self.gdm_assets={};self._login_dirty=False
         self.gdm_resource_values={"wallpaper":False,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_gradient_enabled":False,"panel_gradient_direction":"horizontal","panel_text_color":"#FFFFFF","panel_opacity":1.0,"panel_radius":0}
         self._theme_cache={}
         self.toast_overlay=Adw.ToastOverlay();self.set_content(self.toast_overlay);root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.toast_overlay.set_child(root)
@@ -39,6 +39,8 @@ class CustomizerWindow(Adw.ApplicationWindow):
         self.factory=PreferencesFactory(self.settings,self.changes,self._stage_gdm);self._build_pages();self.mode_stack.connect("notify::visible-child-name",lambda *_:self._fill_nav())
         action=Gtk.Box(spacing=10,halign=Gtk.Align.END);self.action_box=action;action.set_margin_top(9);action.set_margin_bottom(9);action.set_margin_end(12);self.pending_label=Gtk.Label();discard=Gtk.Button(label="Discard");self.discard_button=discard;discard.connect("clicked",lambda *_:self._discard());self.apply=Gtk.Button(label="Apply",css_classes=["suggested-action"]);self.apply.connect("clicked",self._apply);action.append(self.pending_label);action.append(discard);action.append(self.apply);root.append(action)
         self.changes.listeners.append(self._pending);self._fill_nav();self._pending()
+        try:self._sync_files_transparency()
+        except Exception as exc:self.toast(f"Files transparency could not be synchronized: {exc}")
     def _migrate_shell_surface_ownership(self):
         """Turn off the old implicitly-enabled overview once; surfaces now require opt-in."""
         marker="shell_surface_opt_in_v1"
@@ -175,6 +177,12 @@ class CustomizerWindow(Adw.ApplicationWindow):
             threading.Thread(target=worker,daemon=True).start()
         return row
     def _extend_appearance(self,page):
+        files=Adw.PreferencesGroup(title="Files Appearance",description="Applies only to GNOME Files (Nautilus). Close and reopen Files after applying a change.");page.add(files)
+        schema="io.github.gnomecustomizer"
+        toggle=self.factory.switch(files,"Transparent Files Background",schema,"files-transparency-enabled",subtitle="Makes window surfaces translucent without fading file names or icons")
+        opacity=self.factory.spin(files,"Files Background Opacity",schema,"files-background-opacity",0,1,.01)
+        if toggle and opacity:
+            opacity.set_sensitive(toggle.get_active());toggle.connect("notify::active",lambda row,_:opacity.set_sensitive(row.get_active()))
         g=Adw.PreferencesGroup(title="Wallpaper",description="PNG, JPEG, or WebP files are copied into managed storage");page.add(g)
         self.desktop_preview=Gtk.Picture(height_request=180,can_shrink=True,content_fit=Gtk.ContentFit.COVER,css_classes=["card"]);g.add(self.desktop_preview)
         try:
@@ -337,7 +345,10 @@ class CustomizerWindow(Adw.ApplicationWindow):
     def _confirm_restore(self,title,callback):
         dialog=Adw.AlertDialog(heading=title,body="Only GNOME Customizer-owned changes in this scope will be restored.");dialog.add_response("cancel","Cancel");dialog.add_response("restore","Restore");dialog.set_response_appearance("restore",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:callback() if response=="restore" else None);dialog.present(self)
     def _restore_domain(self,domain):
-        try:self.toast(f"Restored {self.changes.restore(domain)} {domain} settings")
+        try:
+            count=self.changes.restore(domain)
+            if domain=="desktop":self._sync_files_transparency()
+            self.toast(f"Restored {count} {domain} settings")
         except Exception as exc:self.toast(exc)
     def _restore_login(self):
         try:self.helper.call("RestoreGdmDefaults");clear_login_theme_snapshot(self.state);self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending();self.toast("Login screen restored. Reboot before checking the login screen.")
@@ -352,7 +363,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         try:
             self.helper.call("RestoreGdmDefaults",{"factory":True})
             clear_login_theme_snapshot(self.state)
-            count=self.changes.reset_factory(("desktop","shell"));files=self.app_theme.reset_factory();images=remove_managed_images(ASSETS_DIR)
+            count=self.changes.reset_factory(("desktop","shell"));self.files_theme.restore();files=self.app_theme.reset_factory();images=remove_managed_images(ASSETS_DIR)
             self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending()
             self.toast(f"Reset {count} settings, {files} application theme files, and {images} managed wallpapers. Reboot before checking the login screen.")
         except Exception as exc:self.toast(f"Could not reset all customizations: {exc}")
@@ -375,10 +386,13 @@ class CustomizerWindow(Adw.ApplicationWindow):
         count=self._count();self.pending_label.set_label(f"{count} pending change{'s' if count!=1 else ''}");self.apply.set_sensitive(count>0)
     def _discard(self):self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._pending();self.toast("Pending changes discarded")
     def _apply(self,*_):
-        pending_before=dict(self.changes.pending);state_before=deepcopy(self.state.data);old_values={};desktop_applied=False
+        pending_before=dict(self.changes.pending);state_before=deepcopy(self.state.data);old_values={};desktop_applied=False;files_snapshot=None
         try:
             for change in pending_before.values():old_values[(change.schema,change.key)]=self.settings.get(change.schema,change.key)
+            files_changed=any(change.schema=="io.github.gnomecustomizer" and change.key in {"files-transparency-enabled","files-background-opacity"} for change in pending_before.values())
+            if files_changed:files_snapshot=self.files_theme.snapshot()
             desktop=self.changes.apply() if self.changes.pending else 0;desktop_applied=desktop>0
+            if files_changed:self._sync_files_transparency()
             transaction={}
             if self._login_dirty:
                 if self.gdm_assets:transaction["assets"]=self.gdm_assets
@@ -389,22 +403,25 @@ class CustomizerWindow(Adw.ApplicationWindow):
                     except OSError:self.monitor_xml=""
                 if self.monitor_xml:transaction["monitors"]=self.monitor_xml
                 else:transaction["monitor_default"]=True
-            context=(pending_before,state_before,old_values,desktop_applied,desktop,transaction)
+            context=(pending_before,state_before,old_values,desktop_applied,desktop,transaction,files_snapshot)
             if transaction:
                 self.body.set_sensitive(False);self.apply.set_sensitive(False);self.discard_button.set_sensitive(False);self.apply.set_label("Applying…");threading.Thread(target=self._apply_worker,args=(transaction,context),daemon=True).start();return
             self._apply_success(context)
         except Exception as exc:
-            self._apply_failure((pending_before,state_before,old_values,desktop_applied,0,{}),exc)
+            self._apply_failure((pending_before,state_before,old_values,desktop_applied,0,{},files_snapshot),exc)
     def _apply_worker(self,transaction,context):
         try:self.helper.call("ApplyTransaction",transaction);GLib.idle_add(self._apply_success,context)
         except Exception as exc:GLib.idle_add(self._apply_failure,context,exc)
     def _apply_success(self,context):
-        pending,_,_,_,desktop,transaction=context;privileged=bool(transaction);shell_changed=any(change.domain=="shell" for change in pending.values())
+        pending,_,_,_,desktop,transaction,_=context;privileged=bool(transaction);shell_changed=any(change.domain=="shell" for change in pending.values())
         try:remember_applied_login_theme(self.state,transaction)
         except Exception as exc:self.toast(f"Changes applied, but the login theme snapshot could not be saved: {exc}")
         self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message);return GLib.SOURCE_REMOVE
     def _apply_failure(self,context,exc):
-        pending_before,state_before,old_values,desktop_applied,_,_=context
+        pending_before,state_before,old_values,desktop_applied,_,_,files_snapshot=context
+        if files_snapshot is not None:
+            try:self.files_theme.restore_snapshot(files_snapshot)
+            except Exception:pass
         if desktop_applied:
             for (schema,key),value in old_values.items():
                 try:self.settings.set(schema,key,value)
@@ -414,3 +431,6 @@ class CustomizerWindow(Adw.ApplicationWindow):
         self._finish_apply();message=str(exc);self.toast(message)
         dialog=Adw.AlertDialog(heading="Changes could not be applied",body=message);dialog.add_response("close","Close");dialog.set_default_response("close");dialog.set_close_response("close");dialog.present(self);return GLib.SOURCE_REMOVE
     def _finish_apply(self):self.body.set_sensitive(True);self.discard_button.set_sensitive(True);self.apply.set_label("Apply");self._pending()
+    def _sync_files_transparency(self):
+        schema="io.github.gnomecustomizer"
+        return self.files_theme.sync(self.settings.get(schema,"files-transparency-enabled"),self.settings.get(schema,"files-background-opacity"))

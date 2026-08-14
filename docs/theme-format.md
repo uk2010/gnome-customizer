@@ -4,7 +4,7 @@
 
 Assets use exactly `assets/<safe-name>.(png|jpg|jpeg|webp)`. References are copied into managed storage. The normative machine-readable definition is `data/themes/gnome-customizer-theme.schema.json`; the application additionally applies archive and decoded-image limits.
 
-Surface objects can record whether customization is enabled and select controlled colors, gradient angle, opacity, blur, brightness, saturation, hover-background tint/opacity, text/border colors, radius, and shadow. Dock snapshots preserve the installed Ubuntu Dock/Dash-to-Dock extension's native position, Panel Mode, sizing, monitor, contents, visibility, transparency, color, indicator, theme, and corner values. Bounds in the JSON Schema are part of the format; no replacement dock is rendered.
+Surface objects can record whether customization is enabled and select controlled colors, gradient angle, opacity, blur, brightness, saturation, hover-background tint/opacity, app-folder tile/dialog transparency, text/border colors, radius, and shadow. Dock snapshots preserve the installed Ubuntu Dock/Dash-to-Dock extension's native position, Panel Mode, sizing, monitor, contents, visibility, transparency, color, indicator, theme, and corner values. Bounds in the JSON Schema are part of the format; no replacement dock is rendered.
 
 The `applications` palette is retained as preview and interchange metadata. It is not injected into GTK3, GTK4, Libadwaita, or Files because persistent user CSS competes with GNOME Settings. Native GNOME color-scheme, accent, GTK-theme, icon-theme, and cursor-theme keys remain authoritative.
 

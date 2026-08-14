@@ -85,6 +85,19 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn("actor.set_style(record.style)",extension)
         self.assertNotIn("icon.set_opacity",extension)
 
+    def test_app_folder_tiles_and_dialogs_have_independent_transparency(self):
+        extension=(ROOT/"shell/extension.js").read_text();preferences=(ROOT/"src/gnome_customizer/pages/preferences.py").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
+        for key in ("folder-tile-transparency-enabled","folder-tile-opacity","folder-dialog-transparency-enabled","folder-dialog-opacity"):
+            self.assertIn(f'name="{key}"',schema)
+            self.assertIn(f'"{key}"',preferences)
+        self.assertIn("classes.includes('app-folder-dialog')",extension)
+        self.assertIn("classes.includes('app-folder')",extension)
+        self.assertIn("actor.connect('notify::hover', () => this._syncAppFolderActor(actor))",extension)
+        self.assertIn("actor.set_style(record.style)",extension)
+        self.assertIn("background-color: ${color}",extension)
+        self.assertIn("this._restoreAppFolders()",extension)
+        self.assertNotIn("actor.set_opacity",extension)
+
     def test_unenabled_surfaces_leave_gnome_shell_in_control(self):
         extension=(ROOT/"shell/extension.js").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text()
         self.assertIn('<key name="panel-enabled" type="b"><default>false</default></key>',schema)

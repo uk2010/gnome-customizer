@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from gi.repository import Adw, Gtk
 from ..backend.transactions import Change
+from ..backend.settings import POWER_PROFILES_SCHEMA, POWER_PROFILE_KEY
 from ..color import color_button, hex_color
 
 
@@ -41,11 +42,11 @@ class PreferencesFactory:
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
         row=Adw.SwitchRow(title=title,subtitle=subtitle); row.set_active(bool(self.backend.get(schema,key)))
         row.connect("notify::active",lambda r,_:self.manager.stage(Change(domain,schema,key,r.get_active(),title)));group.add(row);return row
-    def combo(self,group,title,schema,key,labels=None,domain=None):
+    def combo(self,group,title,schema,key,labels=None,domain=None,subtitle=""):
         choices=self.backend.choices(schema,key)
         if not choices:return None
         self._factory(domain,schema,key)
-        domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");labels=labels or {x:x.replace("-"," ").title() for x in choices}; model=Gtk.StringList.new([labels.get(x,x) for x in choices]);row=Adw.ComboRow(title=title,model=model)
+        domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");labels=labels or {x:x.replace("-"," ").title() for x in choices}; model=Gtk.StringList.new([labels.get(x,x) for x in choices]);row=Adw.ComboRow(title=title,subtitle=subtitle,model=model)
         current=self.backend.get(schema,key);row.set_selected(choices.index(current) if current in choices else 0)
         row.connect("notify::selected",lambda r,_:self.manager.stage(Change(domain,schema,key,choices[r.get_selected()],title)));group.add(row);return row
     def spin(self,group,title,schema,key,low,high,step=1,domain=None):
@@ -143,7 +144,12 @@ class PreferencesFactory:
         self.switch(overview,"Alphabetical App Grid","io.github.gnomecustomizer.shell","alphabetical-app-grid",subtitle="Orders applications and folders by name; search results remain relevance-ranked")
         return p
     def power(self):
-        p=self.page("Power");g=self.group(p,"Energy")
+        p=self.page("Power")
+        profiles=self.group(p,"Power Profile","Uses the system power-profiles-daemon service; Performance stays visible even when hardware support is unavailable")
+        if self.backend.supports(POWER_PROFILES_SCHEMA,POWER_PROFILE_KEY):
+            self.combo(profiles,"Mode",POWER_PROFILES_SCHEMA,POWER_PROFILE_KEY,{"power-saver":"Power Saver","balanced":"Balanced","performance":"Performance"},subtitle=self.backend.power_profile_summary())
+        else:profiles.add(Adw.ActionRow(title="Power profiles unavailable",subtitle="Install and start power-profiles-daemon to manage system power modes"))
+        g=self.group(p,"Energy")
         self.combo(g,"Power Button Action","org.gnome.settings-daemon.plugins.power","power-button-action");self.switch(g,"Power Saver on Low Battery","org.gnome.settings-daemon.plugins.power","power-saver-profile-on-low-battery");self.switch(g,"Dim Screen","org.gnome.settings-daemon.plugins.power","idle-dim");self.spin(g,"Dimmed Brightness","org.gnome.settings-daemon.plugins.power","idle-brightness",0,100);self.switch(g,"Ambient Light Sensor","org.gnome.settings-daemon.plugins.power","ambient-enabled");self.duration(g,"Blank Screen Delay (minutes)","org.gnome.desktop.session","idle-delay");self.combo(g,"AC Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-type");self.duration(g,"AC Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-timeout");self.combo(g,"Battery Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-type");self.duration(g,"Battery Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-timeout")
         return p
     def night_light(self):
@@ -168,6 +174,11 @@ class PreferencesFactory:
         p=self.page(title);g=self.group(p,section)
         for label,key in (("Panel Blur","panel-blur"),("Menu Blur","menu-blur")):self.spin(g,label,schema,key,0,100)
         overview=self.group(p,"Overview &amp; App Grid","Blurred wallpaper treatment behind workspaces, search, and applications");self.switch(overview,"Enable Overview Blur",schema,"overview-enabled");self.color(overview,"Backdrop Tint",schema,"overview-color");self.spin(overview,"Tint Opacity",schema,"overview-opacity",0,1,.01);self.spin(overview,"Blur Strength",schema,"overview-blur",0,100);self.spin(overview,"Brightness",schema,"overview-brightness",.2,1.5,.05);self.spin(overview,"Saturation",schema,"overview-saturation",0,1,.05);self.color(overview,"Hover Background Tint",schema,"overview-hover-color");self.spin(overview,"Hover Background Opacity",schema,"overview-hover-opacity",0,1,.05)
+        folders=self.group(p,"App Folders","Customize folders such as System and Utilities; zero opacity is fully transparent")
+        self.switch(folders,"Transparent Folder Tiles",schema,"folder-tile-transparency-enabled",subtitle="Makes resting folder previews transparent while keeping GNOME's hover highlight")
+        self.spin(folders,"Folder Tile Background Opacity",schema,"folder-tile-opacity",0,1,.01)
+        self.switch(folders,"Translucent Open Folders",schema,"folder-dialog-transparency-enabled",subtitle="Shows the overview wallpaper through an opened app folder")
+        self.spin(folders,"Open Folder Background Opacity",schema,"folder-dialog-opacity",0,1,.01)
         menus=self.group(p,"Menus &amp; Popovers");self.switch(menus,"Enable Custom Menu Appearance",schema,"menu-enabled");self.color(menus,"Surface Color",schema,"menu-color");self.switch(menus,"Gradient",schema,"menu-gradient-enabled");self.color(menus,"Gradient End Color",schema,"menu-color2");self.combo(menus,"Gradient Direction",schema,"menu-gradient-direction");self.spin(menus,"Opacity",schema,"menu-opacity",.2,1,.01);self.spin(menus,"Corner Radius",schema,"menu-radius",0,32);self.color(menus,"Text Color",schema,"menu-text-color");self.color(menus,"Border Color",schema,"menu-border-color")
         return p
 

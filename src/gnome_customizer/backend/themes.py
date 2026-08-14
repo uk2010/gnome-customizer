@@ -17,6 +17,7 @@ from functools import lru_cache
 from urllib.parse import unquote, urlparse
 from xml.etree import ElementTree
 from PIL import Image, ImageColor
+from .settings import POWER_PROFILES_SCHEMA, POWER_PROFILE_KEY
 
 from .constants import MIN_GNOME, THEMES_DIR
 
@@ -28,7 +29,7 @@ ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 ACCENTS = {"blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate", "brown"}
-SURFACE_FIELDS = {"enabled", "background_type", "color", "color1", "color2", "gradient_angle", "opacity", "blur", "brightness", "saturation", "hover_color", "hover_opacity", "text_color", "muted_text_color", "selected_color", "border_color", "corner_radius", "shadow_strength", "icon_size", "spacing", "indicator_style"}
+SURFACE_FIELDS = {"enabled", "background_type", "color", "color1", "color2", "gradient_angle", "opacity", "blur", "brightness", "saturation", "hover_color", "hover_opacity", "folder_tile_enabled", "folder_tile_opacity", "folder_dialog_enabled", "folder_dialog_opacity", "text_color", "muted_text_color", "selected_color", "border_color", "corner_radius", "shadow_strength", "icon_size", "spacing", "indicator_style"}
 APPLICATION_FIELDS = {"window_color", "view_color", "sidebar_color", "headerbar_color", "card_color", "popover_color", "dialog_color", "text_color", "muted_text_color", "accent_color", "accent_text_color", "border_color", "corner_radius", "shadow_strength"}
 DESKTOP_THEME_SETTINGS = {
     "color_scheme": ("org.gnome.desktop.interface", "color-scheme"),
@@ -66,6 +67,8 @@ DOCK_THEME_SETTINGS = {
     "straight_corners": "force-straight-corner",
 }
 COMPLETE_DESKTOP_SETTINGS = {
+    POWER_PROFILES_SCHEMA: {POWER_PROFILE_KEY},
+    "io.github.gnomecustomizer": {"files-transparency-enabled", "files-background-opacity"},
     "org.gnome.desktop.interface": {"color-scheme","accent-color","cursor-theme","cursor-size","icon-theme","show-battery-percentage","clock-show-date","clock-show-seconds","clock-show-weekday","clock-format","font-name","font-antialiasing","font-hinting","text-scaling-factor","gtk-theme"},
     "org.gnome.desktop.background": {"picture-options","color-shading-type","primary-color","secondary-color"},
     "org.gnome.desktop.sound": {"theme-name","event-sounds","input-feedback-sounds","allow-volume-above-100-percent"},
@@ -78,7 +81,7 @@ COMPLETE_DESKTOP_SETTINGS = {
     "org.gnome.mutter": {"center-new-windows"},
     "org.gnome.shell.extensions.ding": {"start-corner"},
     "org.gnome.shell.ubuntu": {"color-scheme"},
-    "io.github.gnomecustomizer.shell": {"panel-enabled","panel-color","panel-gradient-enabled","panel-color2","panel-gradient-direction","panel-opacity","panel-radius","panel-text-color","panel-blur","overview-enabled","overview-blur","overview-color","overview-opacity","overview-brightness","overview-saturation","overview-hover-opacity","overview-hover-color","alphabetical-app-grid","menu-blur","menu-enabled","menu-color","menu-gradient-enabled","menu-color2","menu-gradient-direction","menu-opacity","menu-radius","menu-text-color","menu-border-color"},
+    "io.github.gnomecustomizer.shell": {"panel-enabled","panel-color","panel-gradient-enabled","panel-color2","panel-gradient-direction","panel-opacity","panel-radius","panel-text-color","panel-blur","overview-enabled","overview-blur","overview-color","overview-opacity","overview-brightness","overview-saturation","overview-hover-opacity","overview-hover-color","alphabetical-app-grid","folder-tile-transparency-enabled","folder-tile-opacity","folder-dialog-transparency-enabled","folder-dialog-opacity","menu-blur","menu-enabled","menu-color","menu-gradient-enabled","menu-color2","menu-gradient-direction","menu-opacity","menu-radius","menu-text-color","menu-border-color"},
     "org.gnome.shell.extensions.dash-to-dock": set(DOCK_THEME_SETTINGS.values()),
 }
 COMPLETE_LOGIN_SETTINGS = {
@@ -95,7 +98,7 @@ COMPLETE_LOGIN_SETTINGS = {
 SHELL_SURFACE_SETTINGS = {
     "panel": {"enabled": "panel-enabled", "color": "panel-color", "color2": "panel-color2", "opacity": "panel-opacity", "blur": "panel-blur", "text_color": "panel-text-color", "corner_radius": "panel-radius"},
     "menus": {"enabled": "menu-enabled", "color": "menu-color", "color2": "menu-color2", "opacity": "menu-opacity", "blur": "menu-blur", "text_color": "menu-text-color", "border_color": "menu-border-color", "corner_radius": "menu-radius"},
-    "overview": {"enabled": "overview-enabled", "color": "overview-color", "opacity": "overview-opacity", "blur": "overview-blur", "brightness": "overview-brightness", "saturation": "overview-saturation", "hover_color": "overview-hover-color", "hover_opacity": "overview-hover-opacity"},
+    "overview": {"enabled": "overview-enabled", "color": "overview-color", "opacity": "overview-opacity", "blur": "overview-blur", "brightness": "overview-brightness", "saturation": "overview-saturation", "hover_color": "overview-hover-color", "hover_opacity": "overview-hover-opacity", "folder_tile_enabled": "folder-tile-transparency-enabled", "folder_tile_opacity": "folder-tile-opacity", "folder_dialog_enabled": "folder-dialog-transparency-enabled", "folder_dialog_opacity": "folder-dialog-opacity"},
 }
 DOCK_FIELDS = set(DOCK_THEME_SETTINGS) | (SURFACE_FIELDS - {"indicator_style", "icon_size", "opacity", "color"})
 
@@ -179,7 +182,9 @@ def _surface(obj: Any, where: str):
     if "enabled" in obj and not isinstance(obj["enabled"], bool): raise ThemeError(f"{where}.enabled must be true or false")
     for field in ("color", "color1", "color2", "hover_color", "text_color", "muted_text_color", "selected_color", "border_color"):
         if field in obj and (not isinstance(obj[field], str) or not COLOR.fullmatch(obj[field])): raise ThemeError(f"Invalid color at {where}.{field}")
-    bounds = {"gradient_angle": (0,360,True), "opacity": (0,1,False), "blur": (0,100,True), "brightness": (.2,1.5,False), "saturation": (0,2,False), "hover_opacity": (0,1,False), "corner_radius": (0,32,True), "shadow_strength": (0,1,False), "icon_size": (16,128,True), "spacing": (0,24,True)}
+    for field in ("folder_tile_enabled", "folder_dialog_enabled"):
+        if field in obj and not isinstance(obj[field], bool): raise ThemeError(f"{where}.{field} must be true or false")
+    bounds = {"gradient_angle": (0,360,True), "opacity": (0,1,False), "blur": (0,100,True), "brightness": (.2,1.5,False), "saturation": (0,2,False), "hover_opacity": (0,1,False), "folder_tile_opacity": (0,1,False), "folder_dialog_opacity": (0,1,False), "corner_radius": (0,32,True), "shadow_strength": (0,1,False), "icon_size": (16,128,True), "spacing": (0,24,True)}
     for field, (low, high, integer) in bounds.items():
         if field in obj: _number(obj[field], f"{where}.{field}", low, high, integer)
     if "background_type" in obj and obj["background_type"] not in {"solid", "gradient"}: raise ThemeError(f"Invalid background type at {where}")

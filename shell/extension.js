@@ -25,9 +25,14 @@ function backgroundStyle(settings, prefix, opacity=1) {
     return `background-gradient-direction: ${settings.get_string(`${prefix}-gradient-direction`)}; background-gradient-start: ${color}; background-gradient-end: ${end};`;
 }
 
+function actorBackgroundRgb(actor) {
+    const color=actor.get_theme_node().get_background_color();
+    return [color.red,color.green,color.blue];
+}
+
 export default class CustomizerExtension extends Extension {
     enable() {
-        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewHoverActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._overviewScanSource = 0; this._injectionManager = new InjectionManager(); this._alphabeticalGridEnabled = false; this._started = false;
+        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewHoverActors = new Map(); this._appFolderActors = new Map(); this._overviewTreeActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._overviewScanSource = 0; this._injectionManager = new InjectionManager(); this._alphabeticalGridEnabled = false; this._started = false;
         this._changed = this._settings.connect('changed', () => this._sync());
         this._startupComplete = 0;
         if (Main.layoutManager._startingUp)
@@ -50,7 +55,9 @@ export default class CustomizerExtension extends Extension {
     _queueOverviewHoverScan() {
         if (this._overviewScanSource || !this._settings) return;
         this._overviewScanSource=GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._overviewScanSource=0;if (this._settings) this._styleOverviewHoverBackgrounds();return GLib.SOURCE_REMOVE;
+            this._overviewScanSource=0;
+            if (this._settings) { this._styleOverviewHoverBackgrounds();this._styleAppFolders(); }
+            return GLib.SOURCE_REMOVE;
         });
     }
     _styleOverviewHoverBackgrounds() {
@@ -68,6 +75,38 @@ export default class CustomizerExtension extends Extension {
         for (const actor of this._overviewHoverActors.keys()) this._syncOverviewHoverBackground(actor);
         const count=this._overviewHoverActors.size;
         if (count !== this._overviewHoverDiagnostic) { this._overviewHoverDiagnostic=count;if (count) console.log(`GNOME Customizer: overview hover backgrounds tracked (${count})`); }
+    }
+    _styleAppFolders() {
+        const visit=actor => {
+            if (!this._overviewTreeActors.has(actor)) {
+                const treeRecord={childId:0,destroyId:0};
+                treeRecord.childId=actor.connect('child-added', () => this._queueOverviewHoverScan());
+                treeRecord.destroyId=actor.connect('destroy', () => this._overviewTreeActors?.delete(actor));
+                this._overviewTreeActors.set(actor,treeRecord);
+            }
+            const classes=actor.get_style_class_name?.()?.split(' ') ?? [];
+            const kind=classes.includes('app-folder-dialog') ? 'dialog' : classes.includes('app-folder') ? 'tile' : null;
+            if (kind && !this._appFolderActors.has(actor)) {
+                const record={kind,style:actor.get_style(),color:actorBackgroundRgb(actor),hoverId:0,destroyId:0};
+                if (kind === 'tile') record.hoverId=actor.connect('notify::hover', () => this._syncAppFolderActor(actor));
+                record.destroyId=actor.connect('destroy', () => this._appFolderActors?.delete(actor));
+                this._appFolderActors.set(actor,record);
+            }
+            for (const child of actor.get_children?.() ?? []) visit(child);
+        };
+        visit(Main.layoutManager.overviewGroup);
+        for (const actor of this._appFolderActors.keys()) this._syncAppFolderActor(actor);
+    }
+    _syncAppFolderActor(actor) {
+        const record=this._appFolderActors.get(actor);if (!record) return;
+        const prefix=record.kind === 'tile' ? 'folder-tile' : 'folder-dialog';
+        const enabled=this._settings.get_boolean(`${prefix}-transparency-enabled`);
+        const hovered=record.kind === 'tile' && (actor.get_hover?.() ?? actor.hover);
+        if (!enabled || hovered) { actor.set_style(record.style);return; }
+        const opacity=this._settings.get_double(`${prefix}-opacity`);
+        const [red,green,blue]=record.color;
+        const color=opacity <= 0 ? 'transparent' : `rgba(${red}, ${green}, ${blue}, ${Math.max(0,Math.min(1,opacity)).toFixed(3)})`;
+        actor.set_style(`${record.style ?? ''} background-color: ${color};`);
     }
     _syncOverviewHoverBackground(actor) {
         const record=this._overviewHoverActors.get(actor);if (!record) return;
@@ -114,6 +153,19 @@ export default class CustomizerExtension extends Extension {
             try { actor.disconnect(record.hoverId);actor.disconnect(record.destroyId);actor.set_style(record.style); } catch (_) {}
         }
         this._overviewHoverActors.clear();
+    }
+    _restoreAppFolders() {
+        for (const [actor,record] of this._appFolderActors) {
+            try {
+                if (record.hoverId) actor.disconnect(record.hoverId);
+                actor.disconnect(record.destroyId);actor.set_style(record.style);
+            } catch (_) {}
+        }
+        this._appFolderActors.clear();
+        for (const [actor,record] of this._overviewTreeActors) {
+            try { actor.disconnect(record.childId);actor.disconnect(record.destroyId); } catch (_) {}
+        }
+        this._overviewTreeActors.clear();
     }
     _blur(actor, name, sigma, brightness=1.0) {
         actor.remove_effect_by_name(name);
@@ -284,6 +336,7 @@ export default class CustomizerExtension extends Extension {
         this._syncPanel();
         this._syncOverviewBackgrounds();
         this._styleOverviewHoverBackgrounds();
+        this._styleAppFolders();
         this._styleMenus();
     }
     disable() {
@@ -297,6 +350,7 @@ export default class CustomizerExtension extends Extension {
         Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.layoutManager.overviewGroup.disconnect(this._overviewAdded); Main.uiGroup.disconnect(this._uiAdded);
         this._destroyOverviewBackgrounds();
         this._restoreOverviewHoverBackgrounds();
+        this._restoreAppFolders();
         Main.panel.remove_effect_by_name('gnome-customizer-panel-blur');
         Main.panel.set_style(this._panelStyle);
         Main.layoutManager.overviewGroup.set_style(this._overviewStyle);

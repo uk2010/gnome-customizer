@@ -2,7 +2,7 @@
 
 GNOME Customizer is a native GTK4/Libadwaita customization application for Ubuntu 26.04 LTS, GNOME Shell 50.1+, GDM 50.1+, and Wayland. It keeps desktop, Shell, and login-screen operations in separate security domains and stages changes before applying them.
 
-It uses native GNOME settings as the single source of truth and never installs persistent GTK color CSS. It does not bundle third-party extensions, run its GUI as root, or allow themes to execute code.
+It uses native GNOME settings as the source of truth. The optional Files transparency control writes one marked, Nautilus-only block to the user's GTK 4 stylesheet and removes that block exactly when disabled. It does not bundle third-party extensions, run its GUI as root, or allow themes to execute code.
 
 ## Architecture
 
@@ -38,12 +38,12 @@ Build a native package:
 dpkg-buildpackage -us -uc -b
 ```
 
-Native amd64 and arm64 builders produce `gnome-customizer_1.0_amd64.deb` and `gnome-customizer_1.0_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
+Native amd64 and arm64 builders produce `gnome-customizer_1.01_amd64.deb` and `gnome-customizer_1.01_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
 
 ## Install and uninstall
 
 ```sh
-sudo apt install ./dist/gnome-customizer_1.0_amd64.deb
+sudo apt install ./gnome-customizer_1.01_amd64.deb
 gnome-customizer
 ```
 
@@ -85,11 +85,12 @@ Choose **Apply Theme** to restore a local or included theme immediately. Local i
 - **Login changes are not visible immediately:** log out or reboot. GNOME Customizer intentionally never restarts GDM.
 - **Resource compilation fails:** the active alternative is left unchanged. The Status page reports the active resource.
 - **Application appearance:** GNOME Settings remains authoritative; imported application palettes are preview metadata and are not injected as GTK CSS.
+- **Files transparency:** turn the switch off and Apply before uninstalling to remove its marked GTK 4 CSS block. Close and reopen Files after changing it.
 - **Restore:** desktop restoration returns values captured before the first Customizer change. Application restore removes only the marked Customizer CSS block; login restore removes only application-owned state.
 
 ## Known limitations
 
-Shell internals can change between GNOME releases; the package targets only GNOME 50.1+. Overview and app-grid backgrounds use per-monitor wallpaper actors with controlled blur, tint opacity, brightness, and desaturation; saturation values above the native level are treated as fully saturated. GDM honors only installed schemas and some visual changes become visible after logout/reboot. Preview blur is an approximation because the app does not run a full compositor inside the preview. Desktop monitor arrangement remains in GNOME Settings so its compositor-owned confirmation rollback is preserved; GNOME Customizer can safely copy that layout to GDM.
+Shell internals can change between GNOME releases; the package targets only GNOME 50.1+. Overview and app-grid backgrounds use per-monitor wallpaper actors with controlled blur, tint opacity, brightness, and desaturation; saturation values above the native level are treated as fully saturated. Files transparency is background alpha only because Nautilus does not expose a supported background-blur API. GDM honors only installed schemas and some visual changes become visible after logout/reboot. Preview blur is an approximation because the app does not run a full compositor inside the preview. Desktop monitor arrangement remains in GNOME Settings so its compositor-owned confirmation rollback is preserved; GNOME Customizer can safely copy that layout to GDM.
 
 ## Testing and security
 

@@ -6,6 +6,11 @@ from pathlib import Path
 
 from gi.repository import Gio, GLib
 
+POWER_PROFILES_SCHEMA = "org.freedesktop.UPower.PowerProfiles"
+POWER_PROFILES_PATH = "/org/freedesktop/UPower/PowerProfiles"
+POWER_PROFILE_KEY = "active-profile"
+POWER_PROFILE_CHOICES = ("power-saver", "balanced", "performance")
+
 
 class SettingsError(RuntimeError):
     pass
@@ -41,11 +46,59 @@ class SettingsBackend:
     def __init__(self):
         self.source = Gio.SettingsSchemaSource.get_default()
         self._settings: dict[str, Gio.Settings] = {}
+        self._power_profiles_proxy = None
+        self._power_profiles_proxy_loaded = False
+
+    def _power_proxy(self):
+        if not self._power_profiles_proxy_loaded:
+            self._power_profiles_proxy_loaded = True
+            try:
+                self._power_profiles_proxy = Gio.DBusProxy.new_for_bus_sync(
+                    Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, None,
+                    POWER_PROFILES_SCHEMA, POWER_PROFILES_PATH,
+                    POWER_PROFILES_SCHEMA, None,
+                )
+            except GLib.Error:
+                self._power_profiles_proxy = None
+        return self._power_profiles_proxy
+
+    def _power_property(self, name: str) -> Any:
+        proxy = self._power_proxy()
+        if proxy is None: raise SettingsError("Power Profiles service is unavailable")
+        try:
+            result = proxy.call_sync(
+                "org.freedesktop.DBus.Properties.Get",
+                GLib.Variant("(ss)", (POWER_PROFILES_SCHEMA, name)),
+                Gio.DBusCallFlags.NONE, -1, None,
+            )
+        except GLib.Error as exc:
+            raise SettingsError(f"Could not read the system power profile: {exc.message}") from exc
+        return result.unpack()[0]
+
+    def power_profile_info(self) -> list[dict[str, Any]]:
+        if not self.supports(POWER_PROFILES_SCHEMA, POWER_PROFILE_KEY): return []
+        profiles = self._power_property("Profiles")
+        return profiles if isinstance(profiles, list) else []
+
+    def power_profile_summary(self) -> str:
+        if not self.supports(POWER_PROFILES_SCHEMA, POWER_PROFILE_KEY):
+            return "Power Profiles service is unavailable"
+        profiles = self.power_profile_info()
+        performance = next((item for item in profiles if item.get("Profile") == "performance"), None)
+        if performance is None:
+            return "Performance remains listed, but this hardware or driver does not currently expose it"
+        degraded = self._power_property("PerformanceDegraded")
+        if degraded:
+            return f"Performance is available but currently degraded: {str(degraded).replace('-', ' ')}"
+        driver = performance.get("CpuDriver") or performance.get("PlatformDriver") or performance.get("Driver")
+        return f"Performance is available{f' through {driver}' if driver else ''}"
 
     def schema(self, schema_id: str):
         return self.source.lookup(schema_id, True) if self.source else None
 
     def supports(self, schema_id: str, key: str) -> bool:
+        if schema_id == POWER_PROFILES_SCHEMA:
+            return key == POWER_PROFILE_KEY and self._power_proxy() is not None
         schema = self.schema(schema_id)
         return bool(schema and schema.has_key(key))
 
@@ -59,15 +112,21 @@ class SettingsBackend:
     def get(self, schema_id: str, key: str) -> Any:
         if not self.supports(schema_id, key):
             raise SettingsError(f"Unsupported setting: {schema_id} {key}")
+        if schema_id == POWER_PROFILES_SCHEMA:
+            return self._power_property("ActiveProfile")
         return self.settings(schema_id).get_value(key).unpack()
 
     def default(self, schema_id: str, key: str) -> Any:
+        if schema_id == POWER_PROFILES_SCHEMA and key == POWER_PROFILE_KEY:
+            return "balanced"
         schema = self.schema(schema_id)
         if not schema or not schema.has_key(key):
             raise SettingsError(f"Unsupported setting: {schema_id} {key}")
         return schema.get_key(key).get_default_value().unpack()
 
     def range(self, schema_id: str, key: str) -> Any:
+        if schema_id == POWER_PROFILES_SCHEMA and key == POWER_PROFILE_KEY:
+            return "enum", POWER_PROFILE_CHOICES
         schema = self.schema(schema_id)
         return schema.get_key(key).get_range().unpack() if schema and schema.has_key(key) else None
 
@@ -79,6 +138,28 @@ class SettingsBackend:
         return []
 
     def set(self, schema_id: str, key: str, value: Any) -> None:
+        if schema_id == POWER_PROFILES_SCHEMA:
+            if key != POWER_PROFILE_KEY or value not in POWER_PROFILE_CHOICES:
+                raise SettingsError(f"Invalid power profile: {value!r}")
+            if self.get(schema_id, key) == value:
+                return
+            available = {item.get("Profile") for item in self.power_profile_info()}
+            if value not in available:
+                raise SettingsError(
+                    f"{value.replace('-', ' ').title()} is not exposed by power-profiles-daemon on this hardware; "
+                    "it cannot be forced safely without driver or firmware support"
+                )
+            try:
+                self._power_proxy().call_sync(
+                    "org.freedesktop.DBus.Properties.Set",
+                    GLib.Variant("(ssv)", (POWER_PROFILES_SCHEMA, "ActiveProfile", GLib.Variant("s", value))),
+                    Gio.DBusCallFlags.NONE, -1, None,
+                )
+            except GLib.Error as exc:
+                raise SettingsError(f"Could not switch to {value.replace('-', ' ')}: {exc.message}") from exc
+            if self.get(schema_id, key) != value:
+                raise SettingsError(f"Power Profiles service did not activate {value.replace('-', ' ')}")
+            return
         if schema_id == "io.github.gnomecustomizer.shell" and (key.endswith("-color") or key.endswith("-color2")):
             if not isinstance(value,str) or not re.fullmatch(r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?",value):raise SettingsError(f"Invalid controlled color for {key}")
         setting = self.settings(schema_id)
@@ -96,6 +177,8 @@ class SettingsBackend:
             raise SettingsError(f"GNOME did not persist {schema_id} {key}")
 
     def reset_value(self, schema_id: str, key: str) -> Any:
+        if schema_id == POWER_PROFILES_SCHEMA and key == POWER_PROFILE_KEY:
+            return "balanced"
         if not self.supports(schema_id, key):
             raise SettingsError(f"Unsupported setting: {schema_id} {key}")
         ubuntu_defaults={
@@ -116,6 +199,8 @@ class SettingsBackend:
     def reset(self, schema_id: str, key: str) -> None:
         if not self.supports(schema_id, key):
             raise SettingsError(f"Unsupported setting: {schema_id} {key}")
+        if schema_id == POWER_PROFILES_SCHEMA:
+            self.set(schema_id, key, self.reset_value(schema_id, key));return
         setting = self.settings(schema_id)
         if not setting.is_writable(key):
             raise SettingsError(f"GNOME has locked {schema_id} {key}")
