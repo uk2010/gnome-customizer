@@ -1,3 +1,10 @@
+gnome-customizer (1.02) resolute; urgency=high
+
+  * Make transparent app-folder tiles honor the configured overview hover
+    tint and opacity instead of restoring GNOME's solid hover background.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Fri, 14 Aug 2026 16:40:00 -0500
+
 gnome-customizer (1.01) resolute; urgency=high
 
   * Add reversible GNOME Files background transparency and opacity controls.

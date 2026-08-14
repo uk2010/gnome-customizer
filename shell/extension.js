@@ -102,10 +102,16 @@ export default class CustomizerExtension extends Extension {
         const prefix=record.kind === 'tile' ? 'folder-tile' : 'folder-dialog';
         const enabled=this._settings.get_boolean(`${prefix}-transparency-enabled`);
         const hovered=record.kind === 'tile' && (actor.get_hover?.() ?? actor.hover);
-        if (!enabled || hovered) { actor.set_style(record.style);return; }
-        const opacity=this._settings.get_double(`${prefix}-opacity`);
-        const [red,green,blue]=record.color;
-        const color=opacity <= 0 ? 'transparent' : `rgba(${red}, ${green}, ${blue}, ${Math.max(0,Math.min(1,opacity)).toFixed(3)})`;
+        if (!enabled) { actor.set_style(record.style);return; }
+        let color;
+        if (hovered) {
+            const opacity=this._settings.get_double('overview-hover-opacity');
+            color=colorWithOpacity(this._settings.get_string('overview-hover-color'),opacity);
+        } else {
+            const opacity=this._settings.get_double(`${prefix}-opacity`);
+            const [red,green,blue]=record.color;
+            color=opacity <= 0 ? 'transparent' : `rgba(${red}, ${green}, ${blue}, ${Math.max(0,Math.min(1,opacity)).toFixed(3)})`;
+        }
         actor.set_style(`${record.style ?? ''} background-color: ${color};`);
     }
     _syncOverviewHoverBackground(actor) {

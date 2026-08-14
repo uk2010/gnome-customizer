@@ -175,7 +175,7 @@ class PreferencesFactory:
         for label,key in (("Panel Blur","panel-blur"),("Menu Blur","menu-blur")):self.spin(g,label,schema,key,0,100)
         overview=self.group(p,"Overview &amp; App Grid","Blurred wallpaper treatment behind workspaces, search, and applications");self.switch(overview,"Enable Overview Blur",schema,"overview-enabled");self.color(overview,"Backdrop Tint",schema,"overview-color");self.spin(overview,"Tint Opacity",schema,"overview-opacity",0,1,.01);self.spin(overview,"Blur Strength",schema,"overview-blur",0,100);self.spin(overview,"Brightness",schema,"overview-brightness",.2,1.5,.05);self.spin(overview,"Saturation",schema,"overview-saturation",0,1,.05);self.color(overview,"Hover Background Tint",schema,"overview-hover-color");self.spin(overview,"Hover Background Opacity",schema,"overview-hover-opacity",0,1,.05)
         folders=self.group(p,"App Folders","Customize folders such as System and Utilities; zero opacity is fully transparent")
-        self.switch(folders,"Transparent Folder Tiles",schema,"folder-tile-transparency-enabled",subtitle="Makes resting folder previews transparent while keeping GNOME's hover highlight")
+        self.switch(folders,"Transparent Folder Tiles",schema,"folder-tile-transparency-enabled",subtitle="Uses the overview hover tint and opacity when a folder is highlighted")
         self.spin(folders,"Folder Tile Background Opacity",schema,"folder-tile-opacity",0,1,.01)
         self.switch(folders,"Translucent Open Folders",schema,"folder-dialog-transparency-enabled",subtitle="Shows the overview wallpaper through an opened app folder")
         self.spin(folders,"Open Folder Background Opacity",schema,"folder-dialog-opacity",0,1,.01)
