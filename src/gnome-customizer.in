@@ -1,3 +1,17 @@
 #!@PYTHON@
+import sys
+from pathlib import Path
+
+# RPM noarch packages can be built on Debian (dist-packages) and installed
+# on Fedora (versioned site-packages).  Make the launcher locate the package
+# beside the interpreter instead of assuming one distribution's path.
+python_roots = [Path('/usr/lib/python3/dist-packages'), Path('/usr/lib/python3/site-packages')]
+for libdir in (Path('/usr/lib'), Path('/usr/lib64')):
+    python_roots.extend(sorted(libdir.glob('python3*/site-packages')))
+for python_root in python_roots:
+    if (python_root / 'gnome_customizer').is_dir():
+        sys.path.insert(0, str(python_root))
+        break
+
 from gnome_customizer.__main__ import main
 raise SystemExit(main())

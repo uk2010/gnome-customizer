@@ -4,9 +4,9 @@
 
 override_dh_auto_configure:
 	if [ "$(DEB_BUILD_ARCH)" != "$(DEB_HOST_ARCH)" ]; then \
-		DH_MESON_CROSS_FILE=$(CURDIR)/debian/cross-arm64.ini dh_auto_configure -- --prefix=/usr; \
+		DH_MESON_CROSS_FILE=$(CURDIR)/debian/cross-arm64.ini dh_auto_configure -- --prefix=/usr -Dbundle-dock=false; \
 	else \
-		dh_auto_configure -- --prefix=/usr; \
+		dh_auto_configure -- --prefix=/usr -Dbundle-dock=false; \
 	fi
 
 override_dh_auto_test:

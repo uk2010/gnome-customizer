@@ -25,8 +25,14 @@ class CustomizerWindow(Adw.ApplicationWindow):
     def __init__(self,app):
         super().__init__(application=app,title="GNOME Customizer",default_width=950,default_height=700,width_request=720,height_request=520)
         self.add_css_class("gnome-customizer-window")
-        self.settings=SettingsBackend();self.state=StateStore();self._migrate_native_theme_ownership();self._migrate_shell_surface_ownership();self.changes=ChangeManager(self.settings,self.state);self.app_theme=ApplicationThemeManager(self.state);self.files_theme=NautilusTransparencyManager(self.state);self.helper=SystemHelperProxy();self.gdm_pending={};self.gdm_resource={};self.gdm_assets={};self._login_dirty=False
-        self.gdm_resource_values={"wallpaper":False,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_gradient_enabled":False,"panel_gradient_direction":"horizontal","panel_text_color":"#FFFFFF","panel_opacity":1.0,"panel_radius":0}
+        self.settings=SettingsBackend();self.state=StateStore();self._migrate_native_theme_ownership();self._migrate_shell_surface_ownership();self.changes=ChangeManager(self.settings,self.state);self.app_theme=ApplicationThemeManager(self.state);self.files_theme=NautilusTransparencyManager(self.state);self.helper=SystemHelperProxy();self._saved_login_appearance=self.helper.login_appearance() or {};self._saved_login_settings=self._saved_login_appearance.get("settings",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("settings",{}),dict) else {};saved_assets=self._saved_login_appearance.get("assets",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("assets",{}),dict) else {};saved_resource=self._saved_login_appearance.get("resource",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("resource",{}),dict) else {};self._saved_login_has_state=bool(self._saved_login_settings or saved_assets or saved_resource or self._saved_login_appearance.get("monitors")) if isinstance(self._saved_login_appearance,dict) else False
+        saved_snapshot=self.state.data.get("login_theme")
+        if isinstance(saved_snapshot,dict) and not any(self._saved_login_appearance.get(key) for key in ("settings","resource","assets","monitors")):self._saved_login_appearance=deepcopy(saved_snapshot)
+        self._saved_login_settings=self._saved_login_appearance.get("settings",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("settings",{}),dict) else {};saved_assets=self._saved_login_appearance.get("assets",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("assets",{}),dict) else {};saved_resource=self._saved_login_appearance.get("resource",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("resource",{}),dict) else {};self._saved_login_has_state=bool(self._saved_login_settings or saved_assets or saved_resource or self._saved_login_appearance.get("monitors")) if isinstance(self._saved_login_appearance,dict) else False
+        saved_login=self._saved_login_settings.get("org.gnome.login-screen") if isinstance(self._saved_login_settings,dict) else None
+        if isinstance(saved_login,dict) and not saved_assets.get("logo"):saved_login["logo"]=""
+        self.gdm_pending={};self.gdm_resource={};self.gdm_assets={};self._login_dirty=False
+        self.gdm_resource_values={"wallpaper":False,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_gradient_enabled":False,"panel_gradient_direction":"horizontal","panel_text_color":"#FFFFFF","panel_opacity":1.0,"panel_radius":0};self.gdm_resource_values.update({key:value for key,value in saved_resource.items() if key in self.gdm_resource_values})
         self._theme_cache={}
         self.toast_overlay=Adw.ToastOverlay();self.set_content(self.toast_overlay);root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.toast_overlay.set_child(root)
         header=Adw.HeaderBar();root.append(header);self.mode=Adw.ViewSwitcher();self.mode_stack=Adw.ViewStack();self.mode.set_stack(self.mode_stack);header.set_title_widget(self.mode);menu=Gio.Menu();menu.append("About GNOME Customizer","app.about");header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",menu_model=menu,tooltip_text="Main Menu"))
@@ -36,7 +42,10 @@ class CustomizerWindow(Adw.ApplicationWindow):
         sidebar=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6);sidebar.set_margin_top(12);sidebar.set_margin_bottom(12);sidebar.set_margin_start(12);sidebar.set_margin_end(12);body.set_sidebar(sidebar)
         self.nav=Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE,css_classes=["navigation-sidebar"]);self.nav.connect("row-selected",self._navigate);sidebar.append(Gtk.ScrolledWindow(child=self.nav,vexpand=True,hscrollbar_policy=Gtk.PolicyType.NEVER))
         self.content=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE);body.set_content(self.content)
-        self.factory=PreferencesFactory(self.settings,self.changes,self._stage_gdm);self._build_pages();self.mode_stack.connect("notify::visible-child-name",lambda *_:self._fill_nav())
+        try:self.settings.ensure_bundled_extensions()
+        except Exception as exc:self.toast(f"Bundled Shell extensions could not be enabled yet: {exc}")
+        self.factory=PreferencesFactory(self.settings,self.changes,self._stage_gdm,self._saved_login_settings);self._build_pages()
+        self.mode_stack.connect("notify::visible-child-name",lambda *_:self._fill_nav())
         action=Gtk.Box(spacing=10,halign=Gtk.Align.END);self.action_box=action;action.set_margin_top(9);action.set_margin_bottom(9);action.set_margin_end(12);self.pending_label=Gtk.Label();discard=Gtk.Button(label="Discard");self.discard_button=discard;discard.connect("clicked",lambda *_:self._discard());self.apply=Gtk.Button(label="Apply",css_classes=["suggested-action"]);self.apply.connect("clicked",self._apply);action.append(self.pending_label);action.append(discard);action.append(self.apply);root.append(action)
         self.changes.listeners.append(self._pending);self._fill_nav();self._pending()
         try:self._sync_files_transparency()
@@ -160,7 +169,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         return sorted(names,key=str.casefold)
     def _theme_combo_async(self,group,title,kind,schema,key,gdm=False):
         if not gdm:self.changes.register_factory("desktop",schema,key)
-        current=self.settings.default(schema,key) if gdm else self.settings.get(schema,key)
+        current=self.factory.gdm_value(schema,key,self.settings.default(schema,key)) if gdm else self.settings.get(schema,key)
         if gdm:self.factory.register_gdm(schema,key,current)
         model=Gtk.StringList.new([current]);row=Adw.ComboRow(title=title,model=model,selected=0);row._theme_values=[current];row._loading=True
         def selected(r,_):
@@ -239,6 +248,8 @@ class CustomizerWindow(Adw.ApplicationWindow):
         g=Adw.PreferencesGroup(title="Installed Sound Theme");page.add(g);self._theme_combo_async(g,"Sound Theme","sound","org.gnome.desktop.sound","theme-name",gdm)
     def _extend_topbar(self,page):
         g=Adw.PreferencesGroup(title="Panel Appearance",description="Off leaves GNOME Shell fully in control of light and dark appearance");page.add(g);schema="io.github.gnomecustomizer.shell";self.factory.switch(g,"Enable Custom Panel Appearance",schema,"panel-enabled",domain="shell");self.factory.color(g,"Background Color",schema,"panel-color");self.factory.switch(g,"Gradient",schema,"panel-gradient-enabled",domain="shell");self.factory.color(g,"Gradient End Color",schema,"panel-color2");self.factory.combo(g,"Gradient Direction",schema,"panel-gradient-direction",domain="shell");self.factory.spin(g,"Opacity",schema,"panel-opacity",0,1,.01,domain="shell");self.factory.spin(g,"Corner Radius",schema,"panel-radius",0,32,domain="shell");self.factory.color(g,"Text Color",schema,"panel-text-color")
+        activities=Adw.PreferencesGroup(title="Activities",description="Hide the Activities button in the top-left corner without changing the overview itself")
+        if self.factory.switch(activities,"Show Activities Button",schema,"activities-button-enabled",domain="shell",subtitle="Turn this off to remove the Activities button from the top bar") is not None:page.add(activities)
     def _stage_extension(self,on,uuid):
         enabled=list(self.settings.get("org.gnome.shell","enabled-extensions"));
         if on and uuid not in enabled:enabled.append(uuid)
@@ -257,18 +268,38 @@ class CustomizerWindow(Adw.ApplicationWindow):
         for title,key,kind in (("Icon Theme","icon-theme","icon"),("Cursor Theme","cursor-theme","cursor")):
             if self.settings.supports("org.gnome.desktop.interface",key):self._theme_combo_async(style,title,kind,"org.gnome.desktop.interface",key,True)
         g=Adw.PreferencesGroup(title="Wallpaper and Logo");page.add(g)
-        self.factory.register_gdm("org.gnome.login-screen","logo",str(self.settings.default("org.gnome.login-screen","logo")))
+        self.factory.register_gdm("org.gnome.login-screen","logo",str(self.factory.gdm_value("org.gnome.login-screen","logo","")))
         self.login_image_rows={}
         for title,role in (("Login Wallpaper","wallpaper"),("Login Logo","logo")):
             row=Adw.ActionRow(title=title,subtitle="No image selected");self.login_image_rows[role]=row;default=Gtk.Button(icon_name="edit-undo-symbolic",tooltip_text="Use GNOME default",valign=Gtk.Align.CENTER);default.connect("clicked",lambda _,r=row,role=role:self._default_gdm_image(r,role));b=Gtk.Button(label="Choose Image",valign=Gtk.Align.CENTER);b.connect("clicked",lambda _,r=row,role=role:self._choose_gdm_image(r,role));row.add_suffix(default);row.add_suffix(b);g.add(row)
-        banner_value=str(self.settings.default("org.gnome.login-screen","banner-message-text"));self.factory.register_gdm("org.gnome.login-screen","banner-message-text",banner_value);banner=Adw.EntryRow(title="Welcome Message",text=banner_value);banner.connect("notify::text",lambda r,_:self._stage_gdm("org.gnome.login-screen","banner-message-text",r.get_text()));g.add(banner)
+        banner_value=str(self.factory.gdm_value("org.gnome.login-screen","banner-message-text",self.settings.default("org.gnome.login-screen","banner-message-text")));self.factory.register_gdm("org.gnome.login-screen","banner-message-text",banner_value);banner=Adw.EntryRow(title="Welcome Message",text=banner_value);banner.connect("notify::text",lambda r,_:self._stage_gdm("org.gnome.login-screen","banner-message-text",r.get_text()));g.add(banner)
         colors=Adw.PreferencesGroup(title="Controlled Appearance");page.add(colors)
-        gradient=Adw.SwitchRow(title="Top Bar Gradient");gradient.connect("notify::active",lambda r,_:self._stage_resource("panel_gradient_enabled",r.get_active()));colors.add(gradient)
+        gradient=Adw.SwitchRow(title="Top Bar Gradient");gradient.set_active(bool(self.gdm_resource_values.get("panel_gradient_enabled",False)));gradient.connect("notify::active",lambda r,_:self._stage_resource("panel_gradient_enabled",r.get_active()));colors.add(gradient)
         for title,key,initial in (("Background Color","background_color","#101820"),("Top Bar Color","panel_color","#16161A"),("Top Bar Gradient End","panel_color2","#303044"),("Top Bar Text","panel_text_color","#FFFFFF")):
-            row=Adw.ActionRow(title=title);button=color_button(initial,title);button.connect("notify::rgba",lambda b,_,k=key:self._stage_resource(k,hex_color(b.get_rgba())));row.add_suffix(button);row.set_activatable_widget(button);colors.add(row)
-        direction=Adw.ComboRow(title="Top Bar Gradient Direction",model=Gtk.StringList.new(["Horizontal","Vertical"]));direction.connect("notify::selected",lambda r,_:self._stage_resource("panel_gradient_direction",("horizontal","vertical")[r.get_selected()]));colors.add(direction)
-        opacity=Adw.SpinRow.new_with_range(0,1,.01);opacity.set_title("Top Bar Opacity");opacity.set_value(1);opacity.connect("notify::value",lambda r,_:self._stage_resource("panel_opacity",r.get_value()));colors.add(opacity)
-        radius=Adw.SpinRow.new_with_range(0,32,1);radius.set_title("Top Bar Corner Radius");radius.connect("notify::value",lambda r,_:self._stage_resource("panel_radius",int(r.get_value())));colors.add(radius)
+            row=Adw.ActionRow(title=title);button=color_button(self.gdm_resource_values.get(key,initial),title);button.connect("notify::rgba",lambda b,_,k=key:self._stage_resource(k,hex_color(b.get_rgba())));row.add_suffix(button);row.set_activatable_widget(button);colors.add(row)
+        direction=Adw.ComboRow(title="Top Bar Gradient Direction",model=Gtk.StringList.new(["Horizontal","Vertical"]));direction.set_selected(1 if self.gdm_resource_values.get("panel_gradient_direction","horizontal")=="vertical" else 0);direction.connect("notify::selected",lambda r,_:self._stage_resource("panel_gradient_direction",("horizontal","vertical")[r.get_selected()]));colors.add(direction)
+        opacity=Adw.SpinRow.new_with_range(0,1,.01);opacity.set_title("Top Bar Opacity");opacity.set_value(float(self.gdm_resource_values.get("panel_opacity",1)));opacity.connect("notify::value",lambda r,_:self._stage_resource("panel_opacity",r.get_value()));colors.add(opacity)
+        radius=Adw.SpinRow.new_with_range(0,32,1);radius.set_title("Top Bar Corner Radius");radius.set_value(float(self.gdm_resource_values.get("panel_radius",0)));radius.connect("notify::value",lambda r,_:self._stage_resource("panel_radius",int(r.get_value())));colors.add(radius)
+        self._restore_login_preview()
+    def _restore_login_preview(self):
+        """Restore saved login assets in the preview without staging changes."""
+        saved=self._saved_login_appearance if isinstance(self._saved_login_appearance,dict) else {}
+        assets=saved.get("assets",{}) if isinstance(saved.get("assets",{}),dict) else {}
+        for role in ("wallpaper","logo"):
+            path=Path(assets[role]) if isinstance(assets.get(role),str) else None
+            row=self.login_image_rows[role]
+            if path and path.is_file() and not path.is_symlink():
+                row.set_subtitle(path.name)
+                picture=self.login_preview_picture if role=="wallpaper" else self.login_preview_logo
+                picture.set_file(Gio.File.new_for_path(str(path)))
+                if role=="logo":self.login_preview_logo.set_visible(True)
+            else:
+                row.set_subtitle("GNOME default")
+                if role=="wallpaper":self.login_preview_picture.set_file(None)
+                else:self.login_preview_logo.set_visible(False);self.login_preview_logo.set_file(None)
+        settings=saved.get("settings",{}) if isinstance(saved.get("settings",{}),dict) else {}
+        login=settings.get("org.gnome.login-screen",{}) if isinstance(settings.get("org.gnome.login-screen",{}),dict) else {}
+        self.login_preview_banner.set_label(str(login.get("banner-message-text") or "Welcome"))
     def _choose_gdm_image(self,row,role):Gtk.FileDialog(title=row.get_title()).open(self,None,lambda d,res:self._gdm_image_done(d,res,row,role))
     def _default_gdm_image(self,row,role):
         self.gdm_assets.pop(role,None);row.set_subtitle("GNOME default");self._login_dirty=True
@@ -295,8 +326,8 @@ class CustomizerWindow(Adw.ApplicationWindow):
         else:row.add_css_class("error")
     def _update_login_preview(self):
         if not hasattr(self,"_login_preview_provider"):return
-        background=self.gdm_resource.get("background_color","#101820");panel=self.gdm_resource.get("panel_color","#16161A");end=self.gdm_resource.get("panel_color2","#303044");text=self.gdm_resource.get("panel_text_color","#FFFFFF");opacity=self.gdm_resource.get("panel_opacity",1);radius=self.gdm_resource.get("panel_radius",0)
-        panel_bg=f"linear-gradient(to right,{css_rgba(panel,opacity)},{css_rgba(end,opacity)})" if self.gdm_resource.get("panel_gradient_enabled",False) else css_rgba(panel,opacity)
+        resource={**self.gdm_resource_values,**self.gdm_resource};background=resource.get("background_color","#101820");panel=resource.get("panel_color","#16161A");end=resource.get("panel_color2","#303044");text=resource.get("panel_text_color","#FFFFFF");opacity=resource.get("panel_opacity",1);radius=resource.get("panel_radius",0)
+        panel_bg=f"linear-gradient(to right,{css_rgba(panel,opacity)},{css_rgba(end,opacity)})" if resource.get("panel_gradient_enabled",False) else css_rgba(panel,opacity)
         try:self._login_preview_provider.load_from_string(f"#login-live-preview{{background:{background};}} #login-live-bar{{background:{panel_bg};color:{text};border-radius:{radius}px;}}")
         except GLib.Error:pass
     def _login_top(self):
@@ -341,7 +372,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         p=Adw.PreferencesPage(title="Apply & Restore",description="Restoration only touches values and files managed by GNOME Customizer");g=Adw.PreferencesGroup(title="Restore Pre-Customizer State");p.add(g)
         for title,subtitle,callback in (("Restore Desktop Appearance","Returns settings captured before their first change",lambda:self._restore_domain("desktop")),("Restore Application Theme","Removes only the managed GTK3/GTK4 CSS block",self._restore_application_theme),("Restore Shell Appearance","Restores companion settings without touching other extensions",lambda:self._restore_domain("shell")),("Restore Login Screen Appearance","Removes the owned dconf, resource, assets, and display state",self._restore_login),("Restore All GNOME Customizer Changes","Restores all four scopes",self._restore_all)):
             row=Adw.ActionRow(title=title,subtitle=subtitle);button=Gtk.Button(label="Restore",valign=Gtk.Align.CENTER,css_classes=["destructive-action"]);button.connect("clicked",lambda _,cb=callback,t=title:self._confirm_restore(t,cb));row.add_suffix(button);g.add(row)
-        g=Adw.PreferencesGroup(title="Ubuntu Factory Defaults",description="Resets every setting exposed by this app, including changes made by other customization tools");p.add(g);row=Adw.ActionRow(title="Reset Everything to Ubuntu Defaults",subtitle="Restores Yaru, stock wallpapers and GDM, and removes user GTK CSS");button=Gtk.Button(label="Factory Reset",valign=Gtk.Align.CENTER,css_classes=["destructive-action"]);button.connect("clicked",lambda *_:self._confirm_defaults());row.add_suffix(button);g.add(row);return p
+        g=Adw.PreferencesGroup(title="Factory Defaults",description="Resets every setting exposed by this app, including changes made by other customization tools");p.add(g);row=Adw.ActionRow(title="Reset Everything to GNOME Defaults",subtitle="Restores the installed desktop defaults and GDM, and removes user GTK CSS");button=Gtk.Button(label="Factory Reset",valign=Gtk.Align.CENTER,css_classes=["destructive-action"]);button.connect("clicked",lambda *_:self._confirm_defaults());row.add_suffix(button);g.add(row);return p
     def _confirm_restore(self,title,callback):
         dialog=Adw.AlertDialog(heading=title,body="Only GNOME Customizer-owned changes in this scope will be restored.");dialog.add_response("cancel","Cancel");dialog.add_response("restore","Restore");dialog.set_response_appearance("restore",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:callback() if response=="restore" else None);dialog.present(self)
     def _restore_domain(self,domain):
@@ -358,7 +389,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         except Exception as exc:self.toast(exc)
     def _restore_all(self):self._restore_domain("desktop");self._restore_application_theme();self._restore_domain("shell");self._restore_login()
     def _confirm_defaults(self):
-        dialog=Adw.AlertDialog(heading="Reset Everything to Ubuntu Defaults",body="Every desktop, Shell, dock, application, wallpaper, display, and login-screen setting exposed here will be reset, even if another program changed it. User GTK CSS and local GDM overrides will be removed. Unrelated files and settings outside this app's scope are preserved.");dialog.add_response("cancel","Cancel");dialog.add_response("reset","Factory Reset");dialog.set_response_appearance("reset",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:self._reset_defaults() if response=="reset" else None);dialog.present(self)
+        dialog=Adw.AlertDialog(heading="Reset Everything to GNOME Defaults",body="Every desktop, Shell, dock, application, wallpaper, display, and login-screen setting exposed here will be reset, even if another program changed it. User GTK CSS and local GDM overrides will be removed. Unrelated files and settings outside this app's scope are preserved.");dialog.add_response("cancel","Cancel");dialog.add_response("reset","Factory Reset");dialog.set_response_appearance("reset",Adw.ResponseAppearance.DESTRUCTIVE);dialog.set_default_response("cancel");dialog.set_close_response("cancel");dialog.connect("response",lambda _,response:self._reset_defaults() if response=="reset" else None);dialog.present(self)
     def _reset_defaults(self):
         try:
             self.helper.call("RestoreGdmDefaults",{"factory":True})
@@ -399,8 +430,10 @@ class CustomizerWindow(Adw.ApplicationWindow):
                 transaction["resource"]={**self.gdm_resource_values,**self.gdm_resource}
                 transaction["settings"]=self.factory.gdm_settings()
                 if not hasattr(self,"monitor_xml"):
-                    try:self.monitor_xml=(Path.home()/".config/monitors.xml").read_text()
-                    except OSError:self.monitor_xml=""
+                    if self._saved_login_has_state and isinstance(self._saved_login_appearance.get("monitors"),str):self.monitor_xml=self._saved_login_appearance["monitors"]
+                    else:
+                        try:self.monitor_xml=(Path.home()/".config/monitors.xml").read_text()
+                        except OSError:self.monitor_xml=""
                 if self.monitor_xml:transaction["monitors"]=self.monitor_xml
                 else:transaction["monitor_default"]=True
             context=(pending_before,state_before,old_values,desktop_applied,desktop,transaction,files_snapshot)

@@ -17,6 +17,7 @@ appstream_file = i18n.merge_file(
 )
 
 install_data('icons/hicolor/scalable/apps/io.github.gnomecustomizer.svg', install_dir: datadir / 'icons/hicolor/scalable/apps')
+install_data('autostart/io.github.gnomecustomizer-extensions.desktop', install_dir: datadir / 'autostart')
 install_data('schemas/io.github.gnomecustomizer.gschema.xml', install_dir: datadir / 'glib-2.0/schemas')
 install_data('polkit/io.github.gnomecustomizer.policy', install_dir: datadir / 'polkit-1/actions')
 install_data('dbus/io.github.gnomecustomizer.SystemHelper.xml', install_dir: datadir / 'dbus-1/interfaces')

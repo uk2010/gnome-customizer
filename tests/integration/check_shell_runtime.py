@@ -33,10 +33,18 @@ def main() -> None:
         if install_root
         else ROOT / "data/schemas/io.github.gnomecustomizer.gschema.xml"
     )
-    python_source = install_root / "usr/lib/python3/dist-packages" if install_root else ROOT / "src"
+    if install_root:
+        python_source = next((candidate for candidate in (install_root / "usr/lib/python3/dist-packages", install_root / "usr/lib/python3/site-packages") if candidate.is_dir()), install_root / "usr/lib/python3/dist-packages")
+    else:
+        python_source = ROOT / "src"
     for required_path in (shell_source / "extension.js", shell_source / "schemas", schema_source, python_source):
         if not required_path.exists():
             raise SystemExit(f"Missing runtime-test input: {required_path}")
+    renderer = shell_source / "blur-my-shell/native-dynamic-blur.js"
+    if not renderer.exists():
+        raise SystemExit(f"Missing bundled blur renderer: {renderer}")
+    if "global.blur_my_shell" in (shell_source / "extension.js").read_text():
+        raise SystemExit("The Shell companion must not depend on a separately installed Blur My Shell extension")
 
     with tempfile.TemporaryDirectory(prefix="gnome-customizer-shell-") as temporary:
         base = Path(temporary)
@@ -48,6 +56,13 @@ def main() -> None:
         (base / "schemas").mkdir()
         for name in ("extension.js", "metadata.json", "stylesheet.css"):
             shutil.copy2(shell_source / name, extension / name)
+        # The companion imports its self-contained blur effect implementation.
+        # Copy that payload into the isolated extension exactly as Meson
+        # installs it; copying only extension.js makes the test report a
+        # loader error before any Shell behavior is exercised.
+        companion_blur = extension / "blur-my-shell"
+        companion_blur.mkdir()
+        shutil.copytree(shell_source / "blur-my-shell", companion_blur, dirs_exist_ok=True)
         shutil.copytree(shell_source / "schemas", extension / "schemas")
         subprocess.run(["glib-compile-schemas", str(extension / "schemas")], check=True)
         shutil.copy2(schema_source, base / "schemas")

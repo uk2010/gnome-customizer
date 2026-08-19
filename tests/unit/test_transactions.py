@@ -33,6 +33,14 @@ class TransactionTests(unittest.TestCase):
         self.manager.stage(Change('shell','org.gnome.shell.extensions.dash-to-dock','autohide',True,'Auto-hide'))
         self.assertEqual(set(self.manager.pending),{('org.gnome.shell.extensions.dash-to-dock','autohide')})
         self.assertEqual(self.manager.apply(),1);self.assertTrue(self.backend.values['org.gnome.shell.extensions.dash-to-dock','autohide'])
+    def test_native_dock_setting_enables_its_detected_extension(self):
+        self.manager.dock_extension_uuid='dash-to-dock@micxgx.gmail.com'
+        self.backend.values['org.gnome.shell','disabled-extensions']=['dash-to-dock@micxgx.gmail.com']
+        self.manager.stage(Change('shell','org.gnome.shell.extensions.dash-to-dock','autohide',True,'Auto-hide'))
+        self.manager.apply()
+        self.assertIn('dash-to-dock@micxgx.gmail.com',self.backend.values['org.gnome.shell','enabled-extensions'])
+        self.assertNotIn('dash-to-dock@micxgx.gmail.com',self.backend.values['org.gnome.shell','disabled-extensions'])
+        self.assertFalse(self.backend.values['org.gnome.shell','disable-user-extensions'])
     def test_native_accent_updates_yaru_gtk_and_folder_icons(self):
         self.manager.stage(Change('desktop','org.gnome.desktop.interface','accent-color','red','Accent Color'))
         self.assertEqual(self.manager.pending[('org.gnome.desktop.interface','gtk-theme')].value,'Yaru-red')

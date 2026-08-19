@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=GNOME Customizer Shell Extension Setup
+Comment=Restore GNOME Customizer Shell extensions for this session
+Exec=gnome-customizer --ensure-extensions
+NoDisplay=true
+OnlyShowIn=GNOME;
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Initialization

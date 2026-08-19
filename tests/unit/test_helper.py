@@ -12,8 +12,8 @@ def png():
 class HelperTests(unittest.TestCase):
     def setUp(self):
         self.temp=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,self.temp)
-        self.old={name:getattr(helper,name) for name in ("ROOT","STATE","ASSETS","RESOURCE","DCONF","GDM_DCONF_DIR","GDM_DCONF_DB","GDM_USER_DBS","GDM_STATE","RESOURCE_STATE","PROFILE","PROFILE_MARK","PREVIOUS","PREV_MON","MON_MARK","MONITORS","LINK","COMPILE_RESOURCES","run")}
-        helper.ROOT=self.temp/"root";helper.STATE=helper.ROOT/"state";helper.ASSETS=helper.ROOT/"assets";helper.RESOURCE=helper.ROOT/"theme.gresource";helper.GDM_DCONF_DIR=self.temp/"etc/gdm.d";helper.DCONF=helper.GDM_DCONF_DIR/"99-customizer";helper.GDM_DCONF_DB=self.temp/"etc/gdm";helper.GDM_USER_DBS=(self.temp/"gdm3/user",self.temp/"gdm/user");helper.GDM_STATE=helper.STATE/"gdm-settings.json";helper.RESOURCE_STATE=helper.STATE/"resource-settings.json";helper.PROFILE=self.temp/"profile";helper.PROFILE_MARK=helper.STATE/"profile-created";helper.PREVIOUS=helper.STATE/"previous";helper.PREV_MON=helper.STATE/"monitors.previous";helper.MON_MARK=helper.STATE/"monitors-created";helper.MONITORS=self.temp/"monitors.xml";helper.LINK=self.temp/"gdm-theme.gresource";helper.COMPILE_RESOURCES=shutil.which("glib-compile-resources") or str(HERE/".build-tools/glib-dev-root/usr/bin/glib-compile-resources")
+        self.old={name:getattr(helper,name) for name in ("ROOT","STATE","ASSETS","RESOURCE","DCONF","GDM_DCONF_DIR","GDM_DCONF_DB","GDM_USER_DBS","GDM_STATE","RESOURCE_STATE","PROFILE","PROFILE_MARK","PREVIOUS","STOCK_BACKUP","STOCK","PREV_MON","MON_MARK","MONITORS","LINK","COMPILE_RESOURCES","run")}
+        helper.ROOT=self.temp/"root";helper.STATE=helper.ROOT/"state";helper.ASSETS=helper.ROOT/"assets";helper.RESOURCE=helper.ROOT/"theme.gresource";helper.GDM_DCONF_DIR=self.temp/"etc/gdm.d";helper.DCONF=helper.GDM_DCONF_DIR/"99-customizer";helper.GDM_DCONF_DB=self.temp/"etc/gdm";helper.GDM_USER_DBS=(self.temp/"gdm3/user",self.temp/"gdm/user");helper.GDM_STATE=helper.STATE/"gdm-settings.json";helper.RESOURCE_STATE=helper.STATE/"resource-settings.json";helper.PROFILE=self.temp/"profile";helper.PROFILE_MARK=helper.STATE/"profile-created";helper.PREVIOUS=helper.STATE/"previous";helper.STOCK_BACKUP=helper.STATE/"stock-resource";helper.PREV_MON=helper.STATE/"monitors.previous";helper.MON_MARK=helper.STATE/"monitors-created";helper.MONITORS=self.temp/"monitors.xml";helper.LINK=self.temp/"gdm-theme.gresource";helper.COMPILE_RESOURCES=shutil.which("glib-compile-resources") or str(HERE/".build-tools/glib-dev-root/usr/bin/glib-compile-resources")
         self.addCleanup(lambda:[setattr(helper,k,v) for k,v in self.old.items()])
         self.service=helper.Helper(None)
     def test_setting_enums_and_logo_path(self):
@@ -33,9 +33,8 @@ class HelperTests(unittest.TestCase):
     def test_asset_and_resource_compile(self):
         self.service.assets({"assets":{"wallpaper":{"mime":"image/png","data":base64.b64encode(png()).decode()}}})
         result=self.service.resource({"wallpaper":True,"panel_color":"#111122","panel_opacity":.8});self.assertEqual(len(result["sha256"]),64);self.assertTrue(helper.RESOURCE.is_file());self.service.resource({"wallpaper":False,"panel_gradient_enabled":False,"panel_text_color":"#FFFFFF"})
-        import subprocess
-        listed=subprocess.run(["gresource","list",helper.RESOURCE],text=True,capture_output=True,check=True).stdout;self.assertIn("/org/gnome/shell/theme/gdm.css",listed)
-        css=subprocess.run(["gresource","extract",helper.RESOURCE,"/org/gnome/shell/theme/gdm.css"],text=True,capture_output=True,check=True).stdout;controlled=css.rsplit("GNOME Customizer controlled appearance",1)[-1];self.assertNotIn("background-image",controlled);self.assertNotIn("background-gradient-start",controlled);self.assertIn("rgba(17, 17, 34, 0.800)",controlled);self.assertNotIn("opacity:",controlled)
+        resource=helper.load_resource(helper.RESOURCE);listed=tuple(helper.resource_paths(resource));css_path=next((path for path in ("/org/gnome/shell/theme/gdm.css","/org/gnome/shell/theme/gnome-shell.css") if path in listed),next((path for path in listed if path.startswith("/org/gnome/shell/theme/") and path.endswith(".css")),None));self.assertIsNotNone(css_path);self.assertIn(css_path,listed)
+        css=resource.lookup_data(css_path,helper.Gio.ResourceLookupFlags.NONE).get_data().decode();controlled=css.rsplit("GNOME Customizer controlled appearance",1)[-1];self.assertNotIn("background-image",controlled);self.assertNotIn("background-gradient-start",controlled);self.assertIn("rgba(17, 17, 34, 0.800)",controlled);self.assertNotIn("opacity:",controlled)
         with self.assertRaises(ValueError):self.service.resource({"wallpaper":"yes"})
     def test_request_size_and_shape(self):
         with self.assertRaises(ValueError):helper.require_dict("[]")
@@ -94,6 +93,15 @@ class HelperTests(unittest.TestCase):
         with patch.object(helper,"YARU",stock),patch.object(helper,"STOCK",stock),patch.object(helper,"current",side_effect=lambda:active[0]),patch.object(helper,"run",side_effect=execute),patch.object(helper.subprocess,"run",side_effect=execute):
             self.service.restore_resource({})
         self.assertEqual(active[0],stock);self.assertFalse(helper.RESOURCE.exists())
+
+    def test_fedora_direct_gnome_shell_resource_is_backed_up_and_restored(self):
+        helper.STOCK=helper.LINK
+        helper.LINK.parent.mkdir(parents=True,exist_ok=True);helper.LINK.write_bytes(b"fedora stock")
+        helper.RESOURCE.parent.mkdir(parents=True,exist_ok=True);helper.RESOURCE.write_bytes(b"custom")
+        self.service.activate({})
+        self.assertEqual(helper.LINK.read_bytes(),b"custom");self.assertTrue(helper.STOCK_BACKUP.exists())
+        self.service.restore_resource({})
+        self.assertEqual(helper.LINK.read_bytes(),b"fedora stock");self.assertFalse(helper.STOCK_BACKUP.exists());self.assertFalse(helper.RESOURCE.exists())
     def test_factory_reset_ignores_previous_resource_and_selects_yaru(self):
         yaru=self.temp/"yaru.gresource";yaru.write_bytes(b"yaru");previous=self.temp/"previous.gresource";previous.write_bytes(b"previous")
         helper.STATE.mkdir(parents=True);helper.RESOURCE.write_bytes(b"custom");helper.PREVIOUS.write_text(str(previous));active=[previous]

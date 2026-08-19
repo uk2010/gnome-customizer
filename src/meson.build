@@ -29,5 +29,5 @@ python.install_sources(
   subdir: 'gnome_customizer/pages',
 )
 
-launcher = configure_file(input: 'gnome-customizer.in', output: 'gnome-customizer', configuration: {'PYTHON': python.full_path()})
+launcher = configure_file(input: 'gnome-customizer.in', output: 'gnome-customizer', configuration: {'PYTHON': '/usr/bin/python3'})
 install_data(launcher, install_dir: get_option('bindir'), install_mode: 'rwxr-xr-x')

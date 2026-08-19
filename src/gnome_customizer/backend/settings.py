@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import subprocess
 import re
 from pathlib import Path
 
@@ -95,6 +96,114 @@ class SettingsBackend:
 
     def schema(self, schema_id: str):
         return self.source.lookup(schema_id, True) if self.source else None
+
+    @staticmethod
+    def _extension_roots():
+        return (
+            Path.home() / ".local/share/gnome-shell/extensions",
+            Path("/usr/local/share/gnome-shell/extensions"),
+            Path("/usr/share/gnome-shell/extensions"),
+        )
+
+    @classmethod
+    def extension_available(cls, uuid: str) -> bool:
+        """Return true only when the extension has a usable installed payload."""
+        required = ["metadata.json", "extension.js"]
+        if uuid == "blur-my-shell@aunetx":
+            required.append("components/panel.js")
+        elif uuid == "dash-to-dock@micxgx.gmail.com":
+            required.append("dependencies/gi.js")
+        return any(all((root / uuid / name).is_file() for name in required) for root in cls._extension_roots())
+
+    def ensure_bundled_extensions(self):
+        """Use bundled upstream extensions when the distro has no provider."""
+        if not self.supports("org.gnome.shell", "enabled-extensions"):
+            return []
+        installed = self.extension_available
+        enabled = list(self.get("org.gnome.shell", "enabled-extensions"))
+        disabled = list(self.get("org.gnome.shell", "disabled-extensions")) if self.supports("org.gnome.shell", "disabled-extensions") else []
+        candidates = {
+            "blur-my-shell@aunetx": ("blur-my-shell@aunetx",),
+            "dock": ("ubuntu-dock@ubuntu.com", "dash-to-dock@micxgx.gmail.com"),
+        }
+        selected = []
+        removed = []
+        for group in candidates.values():
+            # A desktop may have both Ubuntu Dock and upstream Dash to Dock
+            # installed.  Only one actor can own the dash; prefer an already
+            # active provider, then prefer Ubuntu Dock when it is installed.
+            candidate = next((uuid for uuid in group if installed(uuid) and uuid in enabled and uuid not in disabled), None)
+            candidate = candidate or next((uuid for uuid in group if installed(uuid)), None)
+            if not candidate:
+                continue
+            if candidate not in enabled or candidate in disabled:
+                selected.append(candidate)
+            for uuid in group:
+                if uuid != candidate and uuid in enabled:
+                    enabled.remove(uuid)
+                    removed.append(uuid)
+                if uuid != candidate and uuid in disabled:
+                    disabled.remove(uuid)
+        for uuid in selected:
+            if uuid not in enabled:
+                enabled.append(uuid)
+            if uuid in disabled:
+                disabled.remove(uuid)
+        # The earlier GNOME Customizer companion contained a partial blur and
+        # must not run beside the complete upstream Blur My Shell extension.
+        # If the upstream extension is only installed per-user, however, its
+        # schema is not necessarily visible to this application's GSettings
+        # schema source. In that fallback case the companion still owns the
+        # overview controls and must remain enabled across a session restart.
+        companion = "gnome-customizer@io.github.gnomecustomizer"
+        upstream_schema_available = bool(self.schema("org.gnome.shell.extensions.blur-my-shell"))
+        companion_schema = "io.github.gnomecustomizer.shell"
+        companion_surface_keys = (
+            "panel-enabled", "menu-enabled", "overview-enabled",
+            "alphabetical-app-grid", "folder-tile-transparency-enabled",
+            "folder-dialog-transparency-enabled",
+        )
+        companion_needed = any(
+            self.supports(companion_schema, key) and bool(self.get(companion_schema, key))
+            for key in companion_surface_keys
+        )
+        companion_needed = companion_needed or (
+            self.supports(companion_schema, "activities-button-enabled")
+            and not self.get(companion_schema, "activities-button-enabled")
+        )
+        if installed("blur-my-shell@aunetx") and upstream_schema_available and companion in enabled and not companion_needed:
+            enabled.remove(companion)
+            removed.append(companion)
+        elif installed(companion) and (not upstream_schema_available or companion_needed) and (companion not in enabled or companion in disabled):
+            selected.append(companion)
+        original_enabled = list(self.get("org.gnome.shell", "enabled-extensions"))
+        original_disabled = list(self.get("org.gnome.shell", "disabled-extensions")) if self.supports("org.gnome.shell", "disabled-extensions") else []
+        global_extensions_disabled = (
+            self.supports("org.gnome.shell", "disable-user-extensions")
+            and self.get("org.gnome.shell", "disable-user-extensions")
+        )
+        changed = (
+            enabled != original_enabled
+            or disabled != original_disabled
+            or global_extensions_disabled
+        )
+        if changed:
+            self.set("org.gnome.shell", "enabled-extensions", enabled)
+            if self.supports("org.gnome.shell", "disable-user-extensions"):
+                self.set("org.gnome.shell", "disable-user-extensions", False)
+            if self.supports("org.gnome.shell", "disabled-extensions"):
+                self.set("org.gnome.shell", "disabled-extensions", disabled)
+        for uuid in selected:
+            try:
+                subprocess.run(["gnome-extensions", "enable", uuid], check=False, timeout=10, capture_output=True)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        for uuid in removed:
+            try:
+                subprocess.run(["gnome-extensions", "disable", uuid], check=False, timeout=10, capture_output=True)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        return selected
 
     def supports(self, schema_id: str, key: str) -> bool:
         if schema_id == POWER_PROFILES_SCHEMA:

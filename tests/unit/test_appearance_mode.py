@@ -31,6 +31,14 @@ class AppearanceModeTests(unittest.TestCase):
         self.assertEqual(SHELL_SURFACE_SETTINGS["panel"]["enabled"],"panel-enabled")
         self.assertEqual(SHELL_SURFACE_SETTINGS["menus"]["enabled"],"menu-enabled")
 
+    def test_shell_extensions_are_repaired_without_opening_the_window(self):
+        entrypoint=(Path(__file__).parents[2]/"src/gnome_customizer/__main__.py").read_text()
+        autostart=(Path(__file__).parents[2]/"data/autostart/io.github.gnomecustomizer-extensions.desktop").read_text()
+        settings=(Path(__file__).parents[2]/"src/gnome_customizer/backend/settings.py").read_text()
+        self.assertIn('"--ensure-extensions"',entrypoint)
+        self.assertIn('Exec=gnome-customizer --ensure-extensions',autostart)
+        self.assertIn('or global_extensions_disabled',settings)
+
     def test_gnome_50_yaru_accent_mapping_in_light_and_dark(self):
         source=(Path(__file__).parents[2]/"src/gnome_customizer/window.py").read_text()
         self.assertIn('marker="native_accent_ownership_v3"',source)
@@ -47,8 +55,14 @@ class AppearanceModeTests(unittest.TestCase):
 
     def test_ubuntu_wallpaper_defaults_are_real_image_uris(self):
         backend=SettingsBackend()
-        self.assertEqual(backend.reset_value("org.gnome.desktop.background","picture-uri"),"file:///usr/share/backgrounds/warty-final-ubuntu.png")
-        self.assertEqual(backend.reset_value("org.gnome.desktop.background","picture-uri-dark"),"file:///usr/share/backgrounds/ubuntu-wallpaper-d.png")
+        light=backend.reset_value("org.gnome.desktop.background","picture-uri")
+        dark=backend.reset_value("org.gnome.desktop.background","picture-uri-dark")
+        if Path("/usr/share/themes/Yaru").is_dir():
+            self.assertEqual(light,"file:///usr/share/backgrounds/warty-final-ubuntu.png")
+            self.assertEqual(dark,"file:///usr/share/backgrounds/ubuntu-wallpaper-d.png")
+        else:
+            self.assertEqual(light,backend.default("org.gnome.desktop.background","picture-uri"))
+            self.assertEqual(dark,backend.default("org.gnome.desktop.background","picture-uri-dark"))
 
     def test_theme_apply_refreshes_wallpaper_names_and_saves_complete_login_state(self):
         source=(ROOT/"src/gnome_customizer/window.py").read_text()

@@ -9,6 +9,7 @@ import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension, InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {NativeDynamicBlurEffect} from './blur-my-shell/native-dynamic-blur.js';
 
 const FOLDER_DIALOG_SHADE_ALPHA=204;
 
@@ -49,7 +50,7 @@ function actorBackgroundColor(actor) {
 
 export default class CustomizerExtension extends Extension {
     enable() {
-        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewHoverActors = new Map(); this._appFolderActors = new Map(); this._overviewTreeActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._overviewScanSource = 0; this._injectionManager = new InjectionManager(); this._alphabeticalGridEnabled = false; this._started = false;
+        this._settings = this.getSettings(); this._effects = []; this._menuActors = new Map(); this._overviewHoverActors = new Map(); this._appFolderActors = new Map(); this._overviewTreeActors = new Map(); this._overviewBackgrounds = []; this._panelRestoreSource = 0; this._overviewScanSource = 0; this._startupSyncSource = 0; this._injectionManager = new InjectionManager(); this._alphabeticalGridEnabled = false; this._started = false;
         this._changed = this._settings.connect('changed', () => this._sync());
         this._startupComplete = 0;
         if (Main.layoutManager._startingUp)
@@ -61,13 +62,21 @@ export default class CustomizerExtension extends Extension {
         if (!this._settings || this._started) return;
         if (this._startupComplete) { Main.layoutManager.disconnect(this._startupComplete); this._startupComplete=0; }
         this._started=true;
-        this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style();
+        this._panelStyle = Main.panel.get_style(); this._overviewStyle = Main.layoutManager.overviewGroup.get_style(); this._activitiesButton = null;
         this._monitors = Main.layoutManager.connect('monitors-changed', () => this._rebuildOverviewBackgrounds());
         this._overviewShowing = Main.overview.connect('showing', () => { this._lowerOverviewBackground();this._queueOverviewHoverScan(); });
         this._overviewHidden = Main.overview.connect('hidden', () => this._queuePanelStyleRestore());
         this._overviewAdded = Main.layoutManager.overviewGroup.connect('child-added', () => this._queueOverviewHoverScan());
         this._uiAdded = Main.uiGroup.connect('child-added', () => GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { if (this._settings) this._styleMenus(); return GLib.SOURCE_REMOVE; }));
         this._rebuildOverviewBackgrounds(); this._sync();
+        // startup-complete can fire while other Shell components are still
+        // rebuilding the panel. Re-apply once the remaining startup work has
+        // reached the main loop's timed queue.
+        this._startupSyncSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+            this._startupSyncSource = 0;
+            if (this._settings) this._sync();
+            return GLib.SOURCE_REMOVE;
+        });
     }
     _queueOverviewHoverScan() {
         if (this._overviewScanSource || !this._settings) return;
@@ -196,10 +205,10 @@ export default class CustomizerExtension extends Extension {
         }
         this._overviewTreeActors.clear();
     }
-    _blur(actor, name, sigma, brightness=1.0) {
+    _blur(actor, name, sigma, brightness=1.0, cornerRadius=0) {
         actor.remove_effect_by_name(name);
         if (sigma > 0 && actor.width > 0 && actor.height > 0) {
-            const effect = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness, radius: sigma});
+            const effect = new NativeDynamicBlurEffect({brightness, unscaled_radius: sigma, unscaled_corner_radius: cornerRadius});
             actor.add_effect_with_name(name, effect);
             if (!this._effects.some(([existing, effectName]) => existing === actor && effectName === name)) this._effects.push([actor,name]);
         }
@@ -233,7 +242,7 @@ export default class CustomizerExtension extends Extension {
     _syncMenuActor(actor) {
         const opacity=this._settings.get_double('menu-opacity'), radius=this._settings.get_int('menu-radius'), sigma=this._settings.get_int('menu-blur'), text=this._settings.get_string('menu-text-color'), border=this._settings.get_string('menu-border-color');
         actor.set_style(`${backgroundStyle(this._settings, 'menu', opacity)} border-radius: ${radius}px; color: ${text}; border: 1px solid ${border}; box-shadow: none;`);
-        this._blur(actor, 'gnome-customizer-menu-blur', sigma);
+        this._blur(actor, 'gnome-customizer-menu-blur', sigma, 1.0, radius);
     }
     _restoreMenus() {
         for (const [actor,record] of this._menuActors) {
@@ -349,7 +358,7 @@ export default class CustomizerExtension extends Extension {
             const opacity=this._settings.get_double('panel-opacity'), text=this._settings.get_string('panel-text-color');
             const style=`${backgroundStyle(this._settings, 'panel', opacity)} border-radius: ${this._settings.get_int('panel-radius')}px; color: ${text};`;
             Main.panel.set_style(style);
-            this._blur(Main.panel, 'gnome-customizer-panel-blur', opacity>0 ? this._settings.get_int('panel-blur') : 0);
+            this._blur(Main.panel, 'gnome-customizer-panel-blur', opacity>0 ? this._settings.get_int('panel-blur') : 0, 1.0, this._settings.get_int('panel-radius'));
             const styleApplied=Main.panel.get_style()===style, effectApplied=Boolean(Main.panel.get_effect('gnome-customizer-panel-blur'));
             const diagnostic=`${opacity}:${this._settings.get_int('panel-blur')}:${styleApplied}:${effectApplied}`;
             if (diagnostic !== this._panelDiagnostic) { this._panelDiagnostic=diagnostic;console.log(`GNOME Customizer: panel applied (opacity=${opacity}, blur=${this._settings.get_int('panel-blur')}, style=${styleApplied}, effect=${effectApplied})`); }
@@ -359,10 +368,34 @@ export default class CustomizerExtension extends Extension {
             this._panelDiagnostic='disabled';
         }
     }
+    _syncActivitiesButton() {
+        const item=Main.panel.statusArea.activities;
+        const button=item?.actor ?? item;
+        const container=item?.container ?? button;
+        if (!button || !container) return;
+        if (!this._activitiesButton) this._activitiesButton={button,container,visible:container.visible,reactive:typeof button.reactive === 'boolean' ? button.reactive : true};
+        if (this._settings.get_boolean('activities-button-enabled')) {
+            if (this._activitiesButton.visible) container.show(); else container.hide();
+            button.reactive=this._activitiesButton.reactive;
+        } else {
+            container.hide();
+            button.reactive=false;
+        }
+    }
+    _restoreActivitiesButton() {
+        const record=this._activitiesButton;
+        if (!record) return;
+        try {
+            if (record.visible) record.container.show(); else record.container.hide();
+            record.button.reactive=record.reactive;
+        } catch (_) {}
+        this._activitiesButton=null;
+    }
     _sync() {
         if (!this._started) return;
         this._syncAlphabeticalAppGrid();
         this._syncPanel();
+        this._syncActivitiesButton();
         this._syncOverviewBackgrounds();
         this._styleOverviewHoverBackgrounds();
         this._styleAppFolders();
@@ -372,12 +405,14 @@ export default class CustomizerExtension extends Extension {
         if (this._startupComplete) { Main.layoutManager.disconnect(this._startupComplete); this._startupComplete=0; }
         if (this._panelRestoreSource) { GLib.Source.remove(this._panelRestoreSource); this._panelRestoreSource=0; }
         if (this._overviewScanSource) { GLib.Source.remove(this._overviewScanSource); this._overviewScanSource=0; }
+        if (this._startupSyncSource) { GLib.Source.remove(this._startupSyncSource); this._startupSyncSource=0; }
         this._settings.disconnect(this._changed);
         if (!this._started) { this._settings=null; return; }
         this._injectionManager.clear();
         try { Main.overview._overview._controls._appDisplay._redisplay(); } catch (_) {}
         Main.layoutManager.disconnect(this._monitors); Main.overview.disconnect(this._overviewShowing); Main.overview.disconnect(this._overviewHidden); Main.layoutManager.overviewGroup.disconnect(this._overviewAdded); Main.uiGroup.disconnect(this._uiAdded);
         this._destroyOverviewBackgrounds();
+        this._restoreActivitiesButton();
         this._restoreOverviewHoverBackgrounds();
         this._restoreAppFolders();
         Main.panel.remove_effect_by_name('gnome-customizer-panel-blur');

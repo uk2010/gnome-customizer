@@ -14,3 +14,7 @@ stage.*/
 verify.*/
 package-check.*/
 dist/
+.rpmbuild/
+.rpmbuild-*/
+stage-*/
+release/

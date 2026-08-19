@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import platform, re, subprocess
+import platform, re, shutil, subprocess
 from pathlib import Path
 from .settings import SettingsBackend
 from .system_proxy import SystemHelperProxy
@@ -18,9 +18,10 @@ def collect(settings: SettingsBackend, helper: SystemHelperProxy, pending=0) -> 
         os_name = values.get("PRETTY_NAME", "Unknown").strip('"')
     except OSError: pass
     shell_version=_command("gnome-shell", "--version")
+    gdm_command = next((candidate for candidate in ("gdm", "gdm3") if shutil.which(candidate)), "gdm")
     result = {
         "Operating System": os_name, "GNOME Shell": shell_version,
-        "GDM": _command("gdm3", "--version"), "Architecture": platform.machine(),
+        "GDM": _command(gdm_command, "--version"), "Architecture": platform.machine(),
         "Session": (Path("/run/systemd/seats").exists() and "Wayland-compatible") or "Unknown",
         "Pending changes": str(pending),
     }

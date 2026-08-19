@@ -55,16 +55,32 @@ DESKTOP_THEME_SETTINGS = {
 }
 DOCK_THEME_SETTINGS = {
     "position": "dock-position", "panel_mode": "extend-height",
-    "icon_size": "dash-max-icon-size", "icon_size_fixed": "icon-size-fixed",
-    "height_fraction": "height-fraction", "multi_monitor": "multi-monitor",
+    "always_center_icons": "always-center-icons", "icon_size": "dash-max-icon-size", "icon_size_fixed": "icon-size-fixed",
+    "height_fraction": "height-fraction", "multi_monitor": "multi-monitor", "preferred_monitor": "preferred-monitor-by-connector",
     "show_favorites": "show-favorites", "show_running": "show-running",
     "show_applications": "show-show-apps-button", "show_applications_first": "show-apps-at-top",
+    "show_applications_edge": "show-apps-always-in-the-edge", "show_windows_preview": "show-windows-preview",
+    "default_windows_preview": "default-windows-preview-to-open", "preview_size": "preview-size-scale", "show_trash": "show-trash",
+    "show_mounts": "show-mounts", "show_mounted_only": "show-mounts-only-mounted", "show_network_mounts": "show-mounts-network",
+    "isolate_locations": "isolate-locations", "isolate_workspaces": "isolate-workspaces", "isolate_monitors": "isolate-monitors",
+    "workspace_urgent": "workspace-agnostic-urgent-windows",
     "always_visible": "dock-fixed", "autohide": "autohide", "intellihide": "intellihide",
+    "intellihide_mode": "intellihide-mode", "manual_hide": "manualhide", "show_delay": "show-delay", "hide_delay": "hide-delay", "animation_time": "animation-time", "require_pressure": "require-pressure-to-show",
+    "pressure_threshold": "pressure-threshold", "fullscreen_autohide": "autohide-in-fullscreen", "urgent_notify": "show-dock-urgent-notify",
+    "scroll_switch_workspace": "scroll-switch-workspace", "disable_overview_startup": "disable-overview-on-startup",
     "transparency": "transparency-mode", "opacity": "background-opacity",
-    "custom_color": "custom-background-color", "color": "background-color",
-    "indicator_style": "running-indicator-style", "built_in_theme": "apply-custom-theme",
-    "shrink_dash": "custom-theme-shrink",
-    "straight_corners": "force-straight-corner",
+    "customize_alphas": "customize-alphas", "min_alpha": "min-alpha", "max_alpha": "max-alpha",
+    "custom_color": "custom-background-color", "color": "background-color", "indicator_style": "running-indicator-style",
+    "indicator_dominant_color": "running-indicator-dominant-color", "built_in_theme": "apply-custom-theme",
+    "shrink_dash": "custom-theme-shrink", "customize_running_indicators": "custom-theme-customize-running-dots",
+    "indicator_color": "custom-theme-running-dots-color", "indicator_border_color": "custom-theme-running-dots-border-color",
+    "indicator_border_width": "custom-theme-running-dots-border-width", "glossy_effect": "apply-glossy-effect", "hide_tooltip": "hide-tooltip", "unity_backlit_items": "unity-backlit-items", "show_icon_emblems": "show-icons-emblems", "show_notification_counters": "show-icons-notifications-counter", "notification_counter_overrides": "application-counter-overrides-notifications",
+    "straight_corners": "force-straight-corner", "minimize_shift": "minimize-shift", "activate_single_window": "activate-single-window",
+    "scroll_to_focused": "scroll-to-focused-application", "dance_urgent": "dance-urgent-applications",
+    "click_action": "click-action", "scroll_action": "scroll-action", "shift_click_action": "shift-click-action",
+    "middle_click_action": "middle-click-action", "shift_middle_click_action": "shift-middle-click-action",
+    "hot_keys": "hot-keys", "hotkeys_show_dock": "hotkeys-show-dock", "hotkeys_overlay": "hotkeys-overlay",
+    "shortcut_text": "shortcut-text", "shortcut_timeout": "shortcut-timeout",
 }
 COMPLETE_DESKTOP_SETTINGS = {
     POWER_PROFILES_SCHEMA: {POWER_PROFILE_KEY},
@@ -81,7 +97,7 @@ COMPLETE_DESKTOP_SETTINGS = {
     "org.gnome.mutter": {"center-new-windows"},
     "org.gnome.shell.extensions.ding": {"start-corner"},
     "org.gnome.shell.ubuntu": {"color-scheme"},
-    "io.github.gnomecustomizer.shell": {"panel-enabled","panel-color","panel-gradient-enabled","panel-color2","panel-gradient-direction","panel-opacity","panel-radius","panel-text-color","panel-blur","overview-enabled","overview-blur","overview-color","overview-opacity","overview-brightness","overview-saturation","overview-hover-opacity","overview-hover-color","alphabetical-app-grid","folder-tile-transparency-enabled","folder-tile-opacity","folder-dialog-transparency-enabled","folder-dialog-opacity","folder-brightness","menu-blur","menu-enabled","menu-color","menu-gradient-enabled","menu-color2","menu-gradient-direction","menu-opacity","menu-radius","menu-text-color","menu-border-color"},
+    "io.github.gnomecustomizer.shell": {"panel-enabled","panel-color","panel-gradient-enabled","panel-color2","panel-gradient-direction","panel-opacity","panel-radius","panel-text-color","panel-blur","activities-button-enabled","overview-enabled","overview-blur","overview-color","overview-opacity","overview-brightness","overview-saturation","overview-hover-opacity","overview-hover-color","alphabetical-app-grid","folder-tile-transparency-enabled","folder-tile-opacity","folder-dialog-transparency-enabled","folder-dialog-opacity","folder-brightness","menu-blur","menu-enabled","menu-color","menu-gradient-enabled","menu-color2","menu-gradient-direction","menu-opacity","menu-radius","menu-text-color","menu-border-color"},
     "org.gnome.shell.extensions.dash-to-dock": set(DOCK_THEME_SETTINGS.values()),
 }
 COMPLETE_LOGIN_SETTINGS = {
@@ -197,14 +213,14 @@ def _dock(obj: Any, where: str):
     legacy = {field: value for field, value in obj.items() if field in SURFACE_FIELDS}
     if legacy.get("indicator_style") in {"DEFAULT", "DOTS", "SQUARES", "DASHES", "SEGMENTED", "SOLID", "CILIORA", "METRO", "BINARY", "DOT"}: legacy.pop("indicator_style")
     _surface(legacy, where)
-    booleans = {"panel_mode", "icon_size_fixed", "multi_monitor", "show_favorites", "show_running", "show_applications", "show_applications_first", "always_visible", "autohide", "intellihide", "custom_color", "built_in_theme", "shrink_dash", "straight_corners"}
+    booleans = {"panel_mode", "always_center_icons", "icon_size_fixed", "multi_monitor", "show_favorites", "show_running", "show_applications", "show_applications_first", "show_applications_edge", "show_windows_preview", "default_windows_preview", "show_trash", "show_mounts", "show_mounted_only", "show_network_mounts", "isolate_locations", "isolate_workspaces", "isolate_monitors", "workspace_urgent", "always_visible", "autohide", "intellihide", "manual_hide", "require_pressure", "fullscreen_autohide", "urgent_notify", "scroll_switch_workspace", "disable_overview_startup", "customize_alphas", "custom_color", "indicator_dominant_color", "built_in_theme", "shrink_dash", "customize_running_indicators", "glossy_effect", "hide_tooltip", "unity_backlit_items", "show_icon_emblems", "show_notification_counters", "notification_counter_overrides", "straight_corners", "minimize_shift", "activate_single_window", "scroll_to_focused", "dance_urgent", "hot_keys", "hotkeys_show_dock", "hotkeys_overlay"}
     for field in booleans:
         if field in obj and not isinstance(obj[field], bool): raise ThemeError(f"{where}.{field} must be true or false")
     if "position" in obj and obj["position"] not in {"TOP", "RIGHT", "BOTTOM", "LEFT"}: raise ThemeError(f"Invalid dock position at {where}")
     if "transparency" in obj and obj["transparency"] not in {"DEFAULT", "FIXED", "DYNAMIC"}: raise ThemeError(f"Invalid dock transparency at {where}")
     if "indicator_style" in obj and obj["indicator_style"] not in {"DEFAULT", "DOTS", "SQUARES", "DASHES", "SEGMENTED", "SOLID", "CILIORA", "METRO", "BINARY", "DOT", "none", "dot", "dash", "line"}: raise ThemeError(f"Invalid dock indicator at {where}")
     if "color" in obj and (not isinstance(obj["color"], str) or not COLOR.fullmatch(obj["color"])): raise ThemeError(f"Invalid color at {where}.color")
-    for field, bounds in {"icon_size": (16,128,True), "height_fraction": (.2,1,False), "opacity": (0,1,False)}.items():
+    for field, bounds in {"icon_size": (16,128,True), "height_fraction": (.2,1,False), "opacity": (0,1,False), "min_alpha": (0,1,False), "max_alpha": (0,1,False), "preview_size": (0,1,False), "show_delay": (0,10,False), "hide_delay": (0,10,False), "animation_time": (0,10,False), "pressure_threshold": (0,1000,False), "indicator_border_width": (0,16,True), "shortcut_timeout": (0,10,False)}.items():
         if field in obj: _number(obj[field], f"{where}.{field}", *bounds)
 
 

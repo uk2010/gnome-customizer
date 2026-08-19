@@ -1,4 +1,8 @@
-gnome-customizer (1.05) resolute; urgency=high
+gnome-customizer (1.05-12) resolute; urgency=high
+
+  * Repair Shell extension activation at session startup.
+  * Reapply panel styling after GNOME Shell completes panel construction.
+  * Add a GUI-free session helper for persistent Shell settings.
 
   * Continue applying themes when the saved power profile is unavailable.
 

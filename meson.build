@@ -12,7 +12,7 @@ subdir('src')
 subdir('helper')
 subdir('shell')
 
-install_data('README.md', 'LICENSE', install_dir: datadir / 'doc/gnome-customizer')
+install_data('README.md', 'LICENSE', 'docs/dash-to-dock.md', install_dir: datadir / 'doc/gnome-customizer')
 
 gnome.post_install(
   glib_compile_schemas: true,

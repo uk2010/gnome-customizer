@@ -15,10 +15,28 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertNotIn("gnome-customizer-dock", stylesheet)
         self.assertNotIn("dock-enabled", schema)
 
+    def test_blur_renderer_is_bundled_without_external_extension_dependency(self):
+        extension = (ROOT / "shell/extension.js").read_text()
+        renderer = (ROOT / "shell/blur-my-shell/native-dynamic-blur.js").read_text()
+        self.assertIn("NativeDynamicBlurEffect", extension)
+        self.assertIn("Source revision:", renderer)
+        self.assertNotIn("global.blur_my_shell", extension)
+        self.assertNotIn("blur-my-shell@aunetx", extension)
+
+    def test_upstream_extensions_are_vendored(self):
+        blur = ROOT / "shell/vendor/blur-my-shell"
+        dock = ROOT / "shell/vendor/dash-to-dock"
+        self.assertTrue((blur / "metadata.json").is_file())
+        self.assertTrue((blur / "src/extension.js").is_file())
+        self.assertTrue((blur / "schemas/org.gnome.shell.extensions.blur-my-shell.gschema.xml").is_file())
+        self.assertTrue((dock / "metadata.json").is_file())
+        self.assertTrue((dock / "extension.js").is_file())
+        self.assertTrue((dock / "schemas/org.gnome.shell.extensions.dash-to-dock.gschema.xml").is_file())
+
     def test_dock_page_uses_native_dash_to_dock_settings(self):
         preferences = (ROOT / "src/gnome_customizer/pages/preferences.py").read_text()
         self.assertIn('schema="org.gnome.shell.extensions.dash-to-dock"', preferences)
-        for key in ("dock-position", "dash-max-icon-size", "show-favorites", "show-running", "show-show-apps-button", "dock-fixed", "autohide", "intellihide", "background-opacity"):
+        for key in ("dock-position", "dash-max-icon-size", "show-favorites", "show-running", "show-show-apps-button", "show-trash", "show-mounts", "show-windows-preview", "dock-fixed", "autohide", "intellihide", "intellihide-mode", "manualhide", "require-pressure-to-show", "background-opacity", "customize-alphas", "min-alpha", "max-alpha", "click-action", "scroll-action", "hot-keys", "shortcut-text"):
             self.assertIn(f'"{key}"', preferences)
         self.assertNotIn('"Enable Custom Dock"', preferences)
         self.assertIn('"Shrink the Dash",schema,"custom-theme-shrink"',preferences)
@@ -36,6 +54,8 @@ class ShellExtensionTests(unittest.TestCase):
         extension=(ROOT/"shell/extension.js").read_text()
         self.assertIn("if (Main.layoutManager._startingUp)",extension)
         self.assertIn("Main.layoutManager.connect('startup-complete', () => this._start())",extension)
+        self.assertIn("this._startupSyncSource = GLib.timeout_add",extension)
+        self.assertIn("GLib.Source.remove(this._startupSyncSource)",extension)
         self.assertIn("if (!this._started) return;",extension)
         self.assertIn("sigma > 0 && actor.width > 0 && actor.height > 0",extension)
 
@@ -121,6 +141,14 @@ class ShellExtensionTests(unittest.TestCase):
         self.assertIn('<key name="overview-enabled" type="b"><default>false</default></key>',schema)
         self.assertIn("get_boolean('panel-enabled')",extension);self.assertIn("get_boolean('menu-enabled')",extension)
         self.assertIn("Main.layoutManager.overviewGroup.set_style(enabled ? 'background-color: transparent;' : this._overviewStyle)",extension)
+
+    def test_activities_button_can_be_hidden_and_restored(self):
+        extension=(ROOT/"shell/extension.js").read_text();schema=(ROOT/"shell/schemas/io.github.gnomecustomizer.shell.gschema.xml").read_text();window=(ROOT/"src/gnome_customizer/window.py").read_text()
+        self.assertIn('<key name="activities-button-enabled" type="b"><default>true</default></key>',schema)
+        self.assertIn('"Show Activities Button",schema,"activities-button-enabled"',window)
+        self.assertIn("Main.panel.statusArea.activities",extension)
+        self.assertIn("container.hide()",extension)
+        self.assertIn("_restoreActivitiesButton()",extension)
 
     def test_surface_opacity_is_applied_to_background_alpha(self):
         extension = (ROOT / "shell/extension.js").read_text()

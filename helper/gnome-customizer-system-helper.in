@@ -15,16 +15,19 @@ ROOT=Path("/usr/local/share/gnome-customizer"); STATE=ROOT/"state"; ASSETS=ROOT/
 DCONF=Path("/etc/dconf/db/gdm.d/99-gdm-customizer"); PROFILE=Path("/etc/dconf/profile/gdm")
 GDM_DCONF_DIR=Path("/etc/dconf/db/gdm.d"); GDM_DCONF_DB=Path("/etc/dconf/db/gdm")
 GDM_USER_DBS=(Path("/var/lib/gdm3/.config/dconf/user"),Path("/var/lib/gdm/.config/dconf/user"))
-RESOURCE=ROOT/"gnome-shell-theme.gresource"; LINK=Path("/usr/share/gnome-shell/gdm-theme.gresource"); ALT="gdm-theme.gresource"
-PREVIOUS=STATE/"previous-resource"; PREV_MON=STATE/"monitors.xml.previous"; MON_MARK=STATE/"monitors-created"
+RESOURCE=ROOT/"gnome-shell-theme.gresource"; ALT="gdm-theme.gresource"
+PREVIOUS=STATE/"previous-resource"; STOCK_BACKUP=STATE/"stock-resource"; PREV_MON=STATE/"monitors.xml.previous"; MON_MARK=STATE/"monitors-created"
 GDM_STATE=STATE/"gdm-settings.json"; PROFILE_MARK=STATE/"profile-created"
 RESOURCE_STATE=STATE/"resource-settings.json"
 # Tests may override this. Production resolves the greeter account's actual
 # home instead of assuming Ubuntu's historical /var/lib/gdm3 path.
 MONITORS=None
+_LINK_CANDIDATES=(Path("/usr/share/gnome-shell/gdm-theme.gresource"),Path("/usr/share/gnome-shell/gnome-shell-theme.gresource"),Path("/usr/share/gnome-shell/theme/gnome-shell-theme.gresource"))
+LINK=next((path for path in _LINK_CANDIDATES if path.exists()),_LINK_CANDIDATES[0])
 YARU=Path("/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"); STOCK=Path("/usr/share/gnome-shell/gnome-shell-theme.gresource")
 MAX_PAYLOAD=56*1024*1024; MAX_ASSET=20*1024*1024
 COMPILE_RESOURCES="/usr/bin/glib-compile-resources"
+ALTERNATIVES=next((path for path in ("/usr/bin/update-alternatives","/usr/sbin/alternatives") if Path(path).exists()),"/usr/bin/update-alternatives")
 INTROSPECTION=Path("/usr/share/dbus-1/interfaces/io.github.gnomecustomizer.SystemHelper.xml")
 COL=re.compile(r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
 ALLOWED={
@@ -53,10 +56,35 @@ def current():
   if not LINK.exists():return None
   return Path(os.path.realpath(LINK))
  except OSError:return None
+def direct_resource_target():
+ # Fedora commonly ships gdm-theme.gresource as a regular file, while
+ # Ubuntu may expose the stock resource through an alternatives symlink.
+ # Both layouts must be handled without requiring the gresource CLI.
+ return LINK == STOCK or (LINK.is_file() and not LINK.is_symlink())
+def custom_resource_active():
+ if direct_resource_target():
+  try:return LINK.is_file() and RESOURCE.is_file() and hashlib.sha256(LINK.read_bytes()).digest()==hashlib.sha256(RESOURCE.read_bytes()).digest()
+  except OSError:return False
+ return current()==RESOURCE
+def stock_resources():
+ candidates=[YARU,STOCK,*_LINK_CANDIDATES,Path("/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource")]
+ seen=set()
+ for path in candidates:
+  if path in seen:continue
+  seen.add(path)
+  if path.is_file() and path!=RESOURCE:yield path
 def base_resource():
- for p in (YARU,STOCK,current()):
+ for p in (*stock_resources(),current()):
   if p and p.is_file() and p != RESOURCE:return p
  raise ValueError("No valid stock GDM resource is installed")
+def load_resource(path):
+ try:return Gio.Resource.load(str(path))
+ except GLib.Error as exc:raise ValueError(f"Could not load GNOME Shell resource: {exc}") from exc
+def resource_paths(resource,prefix="/"):
+ for name in resource.enumerate_children(prefix,Gio.ResourceLookupFlags.NONE):
+  path=prefix+name
+  if name.endswith("/"):yield from resource_paths(resource,path)
+  else:yield path
 def safe_string(v): return "'"+v.replace("\\","\\\\").replace("'","\\'").replace("\r","\\r").replace("\n","\\n").replace("\t","\\t")+"'"
 def css_rgba(value,opacity=1.0):
  raw=value.lstrip("#");alpha=(int(raw[6:8],16)/255 if len(raw)==8 else 1.0)*opacity
@@ -179,14 +207,14 @@ class Helper:
   if type(radius) is not int or not 0<=radius<=32:raise ValueError("Invalid panel radius")
   source=base_resource(); work=Path(tempfile.mkdtemp(prefix="gdm-customizer-")); theme=work/"theme"
   try:
-   theme.mkdir(); resources=run(["/usr/bin/gresource","list",str(source)]).stdout.splitlines()
+   theme.mkdir(); resource=load_resource(source); resources=resource_paths(resource)
    for item in resources:
     prefix="/org/gnome/shell/theme/"
     if not item.startswith(prefix):continue
     rel=item[len(prefix):]
     if not rel or ".." in Path(rel).parts or Path(rel).is_absolute():raise ValueError("Stock resource contains an unsafe path")
     out=theme/rel;out.parent.mkdir(parents=True,exist_ok=True)
-    out.write_bytes(subprocess.run(["/usr/bin/gresource","extract",str(source),item],capture_output=True,check=True).stdout)
+    out.write_bytes(resource.lookup_data(item,Gio.ResourceLookupFlags.NONE).get_data())
    css="\n/* GNOME Customizer controlled appearance */\n.login-dialog { background: transparent; }\n"
    if p.get("wallpaper",False):
     candidates=list(ASSETS.glob("wallpaper.*"))
@@ -199,42 +227,53 @@ class Helper:
     else:css+=f"#panel, #panel.login-screen {{ background-color: {css_rgba(p['panel_color'],opacity)}; border-radius: {radius}px; }}\n"
    if "panel_text_color" in p:css+=f"#panel .panel-button, #panel.login-screen .panel-button {{ color: {p['panel_text_color']}; }}\n"
    found=0
-   for name in ("gdm.css","gnome-shell.css","gnome-shell-dark.css","gnome-shell-light.css","gnome-shell-high-contrast.css"):
-    dest=theme/name
-    if dest.exists():dest.write_text(dest.read_text(errors="strict")+css);found+=1
+   for dest in sorted(theme.rglob("*.css")):
+    dest.write_text(dest.read_text(errors="strict")+css);found+=1
    if not found:raise ValueError("Stock resource has no supported GNOME Shell CSS")
    files=sorted(x.relative_to(theme).as_posix() for x in theme.rglob("*") if x.is_file())
    xml="<?xml version='1.0' encoding='UTF-8'?><gresources><gresource prefix='/org/gnome/shell/theme'>"+"".join(f"<file>{xml_escape(x)}</file>" for x in files)+"</gresource></gresources>"
    (work/"resource.xml").write_text(xml); compiled=work/"theme.gresource"
    run([COMPILE_RESOURCES,f"--sourcedir={theme}",f"--target={compiled}",str(work/"resource.xml")])
-   listed=run(["/usr/bin/gresource","list",str(compiled)]).stdout
-   if "/org/gnome/shell/theme/gdm.css" not in listed:raise ValueError("Compiled resource failed validation")
+   listed=resource_paths(load_resource(compiled))
+   if not any(path.startswith("/org/gnome/shell/theme/") and path.endswith(".css") for path in listed):raise ValueError("Compiled resource failed validation")
    atomic(RESOURCE,compiled.read_bytes());STATE.mkdir(parents=True,exist_ok=True);atomic(RESOURCE_STATE,(json.dumps(p,sort_keys=True,indent=2)+"\n").encode(),0o600);return {"sha256":hashlib.sha256(RESOURCE.read_bytes()).hexdigest()}
   finally:shutil.rmtree(work)
  def activate(self,p):
   if not RESOURCE.is_file():raise ValueError("Custom GDM resource has not been built")
   STATE.mkdir(parents=True,exist_ok=True)
-  cur=current()
-  if not PREVIOUS.exists() and cur and cur!=RESOURCE:atomic(PREVIOUS,(str(cur)+"\n").encode())
-  run(["/usr/bin/update-alternatives","--install",str(LINK),ALT,str(RESOURCE),"5"]);run(["/usr/bin/update-alternatives","--set",ALT,str(RESOURCE)])
-  if current()!=RESOURCE:raise RuntimeError("Custom resource did not become active")
+  if direct_resource_target():
+   if not STOCK_BACKUP.exists():
+    if not LINK.is_file():raise ValueError("The Fedora GNOME Shell resource is not installed")
+    atomic(STOCK_BACKUP,LINK.read_bytes())
+   atomic(LINK,RESOURCE.read_bytes())
+  else:
+   cur=current()
+   if not PREVIOUS.exists() and cur and cur!=RESOURCE:atomic(PREVIOUS,(str(cur)+"\n").encode())
+   run([ALTERNATIVES,"--install",str(LINK),ALT,str(RESOURCE),"5"]);run([ALTERNATIVES,"--set",ALT,str(RESOURCE)])
+  if not custom_resource_active():raise RuntimeError("Custom resource did not become active")
   return {"active":True}
  def restore_resource(self,p):
-  managed=RESOURCE.exists() or current()==RESOURCE or PREVIOUS.exists()
+  managed=RESOURCE.exists() or custom_resource_active() or PREVIOUS.exists() or STOCK_BACKUP.exists()
   factory=p.get("factory") is True
-  if current()==RESOURCE or factory:
+  if direct_resource_target():
+   if custom_resource_active() or factory:
+    if not STOCK_BACKUP.is_file():raise RuntimeError("No captured stock GDM resource can be restored")
+    atomic(LINK,STOCK_BACKUP.read_bytes())
+    if custom_resource_active():raise RuntimeError("The stock GDM resource did not become active")
+   STOCK_BACKUP.unlink(missing_ok=True)
+  elif current()==RESOURCE or factory:
    targets=[YARU,STOCK] if factory else []
    if not factory and PREVIOUS.exists():targets.append(Path(PREVIOUS.read_text().strip()))
    if not factory:targets.extend([YARU,STOCK])
    target=next((x for x in targets if x.is_file() and x!=RESOURCE),None)
    if not target:raise RuntimeError("No safe stock GDM resource can be restored")
-   run(["/usr/bin/update-alternatives","--set",ALT,str(target)])
+   run([ALTERNATIVES,"--set",ALT,str(target)])
    if current()!=target:raise RuntimeError("The stock GDM resource did not become active")
-  if managed:
-   removal=subprocess.run(["/usr/bin/update-alternatives","--remove",ALT,str(RESOURCE)],text=True,capture_output=True)
+  if managed and not direct_resource_target():
+   removal=subprocess.run([ALTERNATIVES,"--remove",ALT,str(RESOURCE)],text=True,capture_output=True)
    if removal.returncode!=0:raise RuntimeError(removal.stderr.strip() or "Could not remove the custom GDM resource alternative")
-  if current()==RESOURCE:raise RuntimeError("The custom GDM resource is still active")
-  RESOURCE.unlink(missing_ok=True);PREVIOUS.unlink(missing_ok=True)
+  if custom_resource_active():raise RuntimeError("The custom GDM resource is still active")
+  RESOURCE.unlink(missing_ok=True);PREVIOUS.unlink(missing_ok=True);STOCK_BACKUP.unlink(missing_ok=True)
   if not p.get("preserve_state"):RESOURCE_STATE.unlink(missing_ok=True)
   return {"active":False}
  def monitors(self,p):
@@ -283,7 +322,7 @@ class Helper:
    PROFILE_MARK.unlink(missing_ok=True)
   elif factory:PROFILE_MARK.unlink(missing_ok=True)
   leftovers=[]
-  if current()==RESOURCE:leftovers.append("active resource")
+  if custom_resource_active():leftovers.append("active resource")
   if DCONF.exists():leftovers.append("dconf override")
   if factory and (PROFILE.exists() or GDM_DCONF_DIR.exists() or GDM_DCONF_DB.exists() or any(path.exists() for path in GDM_USER_DBS)):leftovers.append("non-factory dconf state")
   if ASSETS.exists():leftovers.append("managed assets")
@@ -300,7 +339,7 @@ class Helper:
  def transaction(self,p):
   if set(p)-{"assets","resource","settings","monitors","monitor_default"}:raise ValueError("Unsupported transaction operation")
   if "monitors" in p and "monitor_default" in p:raise ValueError("Choose a monitor configuration or the default, not both")
-  work=Path(tempfile.mkdtemp(prefix="gnome-customizer-rollback-")); paths=[DCONF,GDM_STATE,RESOURCE,RESOURCE_STATE,monitor_path(),PREVIOUS,PREV_MON,MON_MARK,PROFILE,PROFILE_MARK]
+  work=Path(tempfile.mkdtemp(prefix="gnome-customizer-rollback-")); paths=[DCONF,GDM_STATE,RESOURCE,RESOURCE_STATE,monitor_path(),PREVIOUS,STOCK_BACKUP,PREV_MON,MON_MARK,PROFILE,PROFILE_MARK]
   snapshots={}; old_active=current()
   for item in paths:
    snapshots[item]=(item.exists(),item.read_bytes() if item.is_file() else b"")
@@ -316,9 +355,9 @@ class Helper:
    if "resource" in p:result.update(self.activate({}))
    return result
   except Exception:
-   if current()!=old_active:
-    if old_active and old_active.is_file():subprocess.run(["/usr/bin/update-alternatives","--set",ALT,str(old_active)],capture_output=True)
-    else:subprocess.run(["/usr/bin/update-alternatives","--remove",ALT,str(RESOURCE)],capture_output=True)
+   if not direct_resource_target() and current()!=old_active:
+    if old_active and old_active.is_file():subprocess.run([ALTERNATIVES,"--set",ALT,str(old_active)],capture_output=True)
+    else:subprocess.run([ALTERNATIVES,"--remove",ALT,str(RESOURCE)],capture_output=True)
    for item,(existed,data) in snapshots.items():
     if existed:atomic(item,data)
     else:item.unlink(missing_ok=True)
@@ -354,7 +393,7 @@ class Helper:
   queries=(("Accent","org.gnome.desktop.interface","accent-color"),("Color scheme","org.gnome.desktop.interface","color-scheme"),("Clock format","org.gnome.desktop.interface","clock-format"),("Date","org.gnome.desktop.interface","clock-show-date"),("Weekday","org.gnome.desktop.interface","clock-show-weekday"),("Seconds","org.gnome.desktop.interface","clock-show-seconds"),("Font","org.gnome.desktop.interface","font-name"),("Icons","org.gnome.desktop.interface","icon-theme"),("Cursor","org.gnome.desktop.interface","cursor-theme"),("Logo","org.gnome.login-screen","logo"),("Banner enabled","org.gnome.login-screen","banner-message-enable"),("Banner text","org.gnome.login-screen","banner-message-text"),("User list disabled","org.gnome.login-screen","disable-user-list"),("Power buttons disabled","org.gnome.login-screen","disable-restart-buttons"))
   with ThreadPoolExecutor(max_workers=7) as pool:values=pool.map(lambda q:self.gdm_get(q[1],q[2]),queries)
   effective={query[0]:value for query,value in zip(queries,values)}
-  return {"available":True,"gdm_user":gdm_user(),"active_resource":str(current() or ""),"custom_resource_active":current()==RESOURCE,"dconf_override":DCONF.exists(),"monitor_managed":PREV_MON.exists() or MON_MARK.exists(),"effective":effective}
+  return {"available":True,"gdm_user":gdm_user(),"active_resource":str(current() or LINK or ""),"custom_resource_active":custom_resource_active(),"dconf_override":DCONF.exists(),"monitor_managed":PREV_MON.exists() or MON_MARK.exists(),"effective":effective}
 
 def main():
  loop=GLib.MainLoop(); connection=Gio.bus_get_sync(Gio.BusType.SYSTEM,None); helper=Helper(connection)

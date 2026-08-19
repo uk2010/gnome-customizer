@@ -1,1 +1,4 @@
-option('development', type: 'boolean', value: false, description: 'Enable development diagnostics')
+option('bundle-dock',
+  type: 'boolean',
+  value: true,
+  description: 'Install the bundled Dash to Dock extension')

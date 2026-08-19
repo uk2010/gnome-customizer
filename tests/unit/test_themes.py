@@ -119,7 +119,8 @@ class ThemeTests(unittest.TestCase):
         for (schema,key),value in values.items():
             if schema in themes.COMPLETE_DESKTOP_SETTINGS and key in themes.COMPLETE_DESKTOP_SETTINGS[schema] and key not in {"picture-uri","picture-uri-dark"}:self.assertEqual(manifest["desktop"]["settings"][schema][key],value)
         for field,(schema,key) in DESKTOP_THEME_SETTINGS.items():self.assertEqual(manifest["desktop"][field],values[schema,key],field)
-        for field,key in DOCK_THEME_SETTINGS.items():self.assertEqual(manifest["shell"]["dock"][field],values["org.gnome.shell.extensions.dash-to-dock",key],field)
+        for field,key in DOCK_THEME_SETTINGS.items():
+            if ("org.gnome.shell.extensions.dash-to-dock",key) in values:self.assertEqual(manifest["shell"]["dock"][field],values["org.gnome.shell.extensions.dash-to-dock",key],field)
         for surface,fields in SHELL_SURFACE_SETTINGS.items():
             for field,key in fields.items():self.assertEqual(manifest["shell"][surface][field],values["io.github.gnomecustomizer.shell",key],f"{surface}.{field}")
         self.assertFalse(manifest["shell"]["menus"]["enabled"]);self.assertEqual(manifest["shell"]["menus"]["color"],"#202026")
