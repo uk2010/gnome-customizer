@@ -19,6 +19,7 @@ from .backend.wallpaper import wallpaper_keys
 from .pages.preferences import PreferencesFactory
 from .pages.themes import ThemesPage
 from .pages.status import StatusPage
+from .pages.preview import LivePreviewWindow
 from .color import color_button, css_rgba, hex_color
 
 class CustomizerWindow(Adw.ApplicationWindow):
@@ -35,7 +36,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         self.gdm_resource_values={"wallpaper":False,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_gradient_enabled":False,"panel_gradient_direction":"horizontal","panel_text_color":"#FFFFFF","panel_opacity":1.0,"panel_radius":0};self.gdm_resource_values.update({key:value for key,value in saved_resource.items() if key in self.gdm_resource_values})
         self._theme_cache={}
         self.toast_overlay=Adw.ToastOverlay();self.set_content(self.toast_overlay);root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.toast_overlay.set_child(root)
-        header=Adw.HeaderBar();root.append(header);self.mode=Adw.ViewSwitcher();self.mode_stack=Adw.ViewStack();self.mode.set_stack(self.mode_stack);header.set_title_widget(self.mode);menu=Gio.Menu();menu.append("About GNOME Customizer","app.about");header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",menu_model=menu,tooltip_text="Main Menu"))
+        header=Adw.HeaderBar();root.append(header);self.mode=Adw.ViewSwitcher();self.mode_stack=Adw.ViewStack();self.mode.set_stack(self.mode_stack);header.set_title_widget(self.mode);self.preview_window=None;preview_button=Gtk.Button(label="Live Preview",icon_name="view-reveal-symbolic",tooltip_text="See a live preview of staged changes");preview_button.connect("clicked",lambda *_:self._show_preview());header.pack_end(preview_button);menu=Gio.Menu();menu.append("About GNOME Customizer","app.about");header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",menu_model=menu,tooltip_text="Main Menu"))
         self.mode_stack.add_titled_with_icon(Gtk.Box(),"desktop","Desktop","video-display-symbolic");self.mode_stack.add_titled_with_icon(Gtk.Box(),"login","Login Screen","system-lock-screen-symbolic")
         body=Adw.OverlaySplitView(vexpand=True);self.body=body;body.set_min_sidebar_width(190);body.set_max_sidebar_width(240);body.set_sidebar_width_fraction(.23);root.append(body);sidebar_toggle=Gtk.Button(icon_name="sidebar-show-symbolic",tooltip_text="Show Navigation");sidebar_toggle.connect("clicked",lambda *_:body.set_show_sidebar(not body.get_show_sidebar()));header.pack_start(sidebar_toggle)
         breakpoint=Adw.Breakpoint.new(Adw.BreakpointCondition.new_length(Adw.BreakpointConditionLengthType.MAX_WIDTH,800,Adw.LengthUnit.PX));breakpoint.add_setter(body,"collapsed",True);breakpoint.add_setter(body,"show-sidebar",False);self.add_breakpoint(breakpoint)
@@ -74,6 +75,14 @@ class CustomizerWindow(Adw.ApplicationWindow):
             if current.startswith("Yaru") and target!=current and (root/target).is_dir():self.settings.set(schema,key,target)
         self.state.data[marker]=True;self.state.save()
     def toast(self,text):self.toast_overlay.add_toast(Adw.Toast(title=str(text),timeout=4))
+    def _preview_login_state(self):
+        settings=self.factory.gdm_settings() if hasattr(self,"factory") else {}
+        login=settings.get("org.gnome.login-screen",{}) if isinstance(settings.get("org.gnome.login-screen",{}),dict) else {}
+        interface=settings.get("org.gnome.desktop.interface",{}) if isinstance(settings.get("org.gnome.desktop.interface",{}),dict) else {}
+        return {"gdm_pending":deepcopy(self.gdm_pending),"gdm_resource":deepcopy(self.gdm_resource),"gdm_assets":deepcopy(self.gdm_assets),"monitor_pending":hasattr(self,"monitor_xml"),"banner":login.get("banner-message-text") or "Welcome","accent":interface.get("accent-color"),"resource":{**self.gdm_resource_values,**self.gdm_resource}}
+    def _show_preview(self):
+        if self.preview_window is None:self.preview_window=LivePreviewWindow(self,self.settings,self.changes,self._preview_login_state)
+        self.preview_window.present()
     def _add(self,name,widget):self.content.add_named(widget,name)
     def _build_pages(self):
         self.desktop_pages=[("appearance","Appearance","preferences-desktop-wallpaper-symbolic"),("fonts","Fonts, Icons & Cursor","preferences-desktop-font-symbolic"),("themes","Themes","applications-graphics-symbolic"),("dock","Dock","view-app-grid-symbolic"),("blur","Blur","weather-fog-symbolic"),("topbar","Top Bar","preferences-system-time-symbolic"),("placement","Placement","view-grid-symbolic"),("input","Mouse & Touchpad","input-mouse-symbolic"),("keyboard","Keyboard","input-keyboard-symbolic"),("power","Power","battery-symbolic"),("night","Night Light","weather-clear-night-symbolic"),("desktop_displays","Displays","video-display-symbolic"),("sound","Sound","audio-volume-high-symbolic"),("system","Apply & Restore","edit-undo-symbolic"),("status","Status","dialog-information-symbolic")]
@@ -186,13 +195,13 @@ class CustomizerWindow(Adw.ApplicationWindow):
             threading.Thread(target=worker,daemon=True).start()
         return row
     def _extend_appearance(self,page):
-        files=Adw.PreferencesGroup(title="Files Appearance",description="Applies only to GNOME Files (Nautilus). Close and reopen Files after applying a change.");page.add(files)
+        files=Adw.PreferencesGroup(title="Files (Nautilus)",description="Applies only to GNOME Files. Close and reopen Files after applying a change.");page.add(files)
         schema="io.github.gnomecustomizer"
         toggle=self.factory.switch(files,"Transparent Files Background",schema,"files-transparency-enabled",subtitle="Makes window surfaces translucent without fading file names or icons")
         opacity=self.factory.spin(files,"Files Background Opacity",schema,"files-background-opacity",0,1,.01)
         if toggle and opacity:
             opacity.set_sensitive(toggle.get_active());toggle.connect("notify::active",lambda row,_:opacity.set_sensitive(row.get_active()))
-        g=Adw.PreferencesGroup(title="Wallpaper",description="PNG, JPEG, or WebP files are copied into managed storage");page.add(g)
+        g=Adw.PreferencesGroup(title="Wallpaper & Background",description="Choose wallpaper presentation and colors. PNG, JPEG, or WebP files are copied into managed storage");page.add(g)
         self.desktop_preview=Gtk.Picture(height_request=180,can_shrink=True,content_fit=Gtk.ContentFit.COVER,css_classes=["card"]);g.add(self.desktop_preview)
         try:
             dark=self.settings.supports("org.gnome.desktop.background","picture-uri-dark") and self.settings.get("org.gnome.desktop.interface","color-scheme")=="prefer-dark"
@@ -234,10 +243,10 @@ class CustomizerWindow(Adw.ApplicationWindow):
         if not mime:raise ValueError("Choose a PNG, JPEG, or WebP image")
         return mime
     def _fonts_icons(self):
-        p=Adw.PreferencesPage(title="Fonts, Icons & Cursor");g=Adw.PreferencesGroup(title="Installed Themes");p.add(g)
+        p=Adw.PreferencesPage(title="Fonts, Icons & Cursor",description="Choose the visual resources and text rendering used across the desktop.");g=Adw.PreferencesGroup(title="Themes & Icons",description="Select installed GTK, icon, and cursor themes.");p.add(g)
         for title,key,kind in (("GTK Theme (legacy applications)","gtk-theme","gtk"),("Icon Theme","icon-theme","icon"),("Cursor Theme","cursor-theme","cursor")):
             if self.settings.supports("org.gnome.desktop.interface",key):self._theme_combo_async(g,title,kind,"org.gnome.desktop.interface",key)
-        g=Adw.PreferencesGroup(title="Typography");p.add(g)
+        g=Adw.PreferencesGroup(title="Typography & Text Rendering",description="Choose the interface font and how letters are smoothed.");p.add(g)
         if self.settings.supports("org.gnome.desktop.interface","font-name"):
             self.changes.register_factory("desktop","org.gnome.desktop.interface","font-name")
             row=Adw.ActionRow(title="Interface Font");button=Gtk.FontDialogButton.new(Gtk.FontDialog());button.set_font_desc(Pango.FontDescription.from_string(self.settings.get("org.gnome.desktop.interface","font-name")));button.connect("notify::font-desc",lambda b,_:self.changes.stage(Change("desktop","org.gnome.desktop.interface","font-name",b.get_font_desc().to_string(),"Interface Font")));row.add_suffix(button);g.add(row)
@@ -247,8 +256,8 @@ class CustomizerWindow(Adw.ApplicationWindow):
         if not self.settings.supports("org.gnome.desktop.sound","theme-name"):return
         g=Adw.PreferencesGroup(title="Installed Sound Theme");page.add(g);self._theme_combo_async(g,"Sound Theme","sound","org.gnome.desktop.sound","theme-name",gdm)
     def _extend_topbar(self,page):
-        g=Adw.PreferencesGroup(title="Panel Appearance",description="Off leaves GNOME Shell fully in control of light and dark appearance");page.add(g);schema="io.github.gnomecustomizer.shell";self.factory.switch(g,"Enable Custom Panel Appearance",schema,"panel-enabled",domain="shell");self.factory.color(g,"Background Color",schema,"panel-color");self.factory.switch(g,"Gradient",schema,"panel-gradient-enabled",domain="shell");self.factory.color(g,"Gradient End Color",schema,"panel-color2");self.factory.combo(g,"Gradient Direction",schema,"panel-gradient-direction",domain="shell");self.factory.spin(g,"Opacity",schema,"panel-opacity",0,1,.01,domain="shell");self.factory.spin(g,"Corner Radius",schema,"panel-radius",0,32,domain="shell");self.factory.color(g,"Text Color",schema,"panel-text-color")
-        activities=Adw.PreferencesGroup(title="Activities",description="Hide the Activities button in the top-left corner without changing the overview itself")
+        g=Adw.PreferencesGroup(title="Top Bar Appearance",description="Customize the panel surface, gradient, transparency, corners, and text color.");page.add(g);schema="io.github.gnomecustomizer.shell";self.factory.switch(g,"Enable Custom Panel Appearance",schema,"panel-enabled",domain="shell");self.factory.color(g,"Background Color",schema,"panel-color");self.factory.switch(g,"Gradient",schema,"panel-gradient-enabled",domain="shell");self.factory.color(g,"Gradient End Color",schema,"panel-color2");self.factory.combo(g,"Gradient Direction",schema,"panel-gradient-direction",domain="shell");self.factory.spin(g,"Opacity",schema,"panel-opacity",0,1,.01,domain="shell");self.factory.spin(g,"Corner Radius",schema,"panel-radius",0,32,domain="shell");self.factory.color(g,"Text Color",schema,"panel-text-color")
+        activities=Adw.PreferencesGroup(title="Activities Button",description="Hide the Activities button in the top-left corner without changing the overview itself")
         if self.factory.switch(activities,"Show Activities Button",schema,"activities-button-enabled",domain="shell",subtitle="Turn this off to remove the Activities button from the top bar") is not None:page.add(activities)
     def _stage_extension(self,on,uuid):
         enabled=list(self.settings.get("org.gnome.shell","enabled-extensions"));
@@ -262,18 +271,18 @@ class CustomizerWindow(Adw.ApplicationWindow):
             self.changes.stage(Change("shell","org.gnome.shell","disabled-extensions",disabled,"Shell Companion"))
     def _extend_login(self,page):
         preview=Adw.PreferencesGroup(title="Login Screen Preview",description="A safe approximation; log out to see the compositor-rendered result");page.add(preview);self.login_preview=Gtk.Overlay(height_request=240,css_classes=["card"]);self.login_preview.set_name("login-live-preview");self.login_preview_picture=Gtk.Picture(can_shrink=True,content_fit=Gtk.ContentFit.COVER);self.login_preview.set_child(self.login_preview_picture);bar=Gtk.Label(label="Aug 11   10:30",height_request=38,halign=Gtk.Align.FILL,valign=Gtk.Align.START);bar.set_name("login-live-bar");self.login_preview.add_overlay(bar);card=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8,halign=Gtk.Align.CENTER,valign=Gtk.Align.CENTER,width_request=260,css_classes=["card"]);self.login_preview_logo=Gtk.Picture(width_request=72,height_request=48,can_shrink=True,content_fit=Gtk.ContentFit.CONTAIN);self.login_preview_logo.set_visible(False);card.append(self.login_preview_logo);card.append(Gtk.Image.new_from_icon_name("avatar-default-symbolic"));self.login_preview_banner=Gtk.Label(label="Welcome",css_classes=["title-2"]);card.append(self.login_preview_banner);card.append(Gtk.Entry(placeholder_text="Password",sensitive=False));self.login_preview.add_overlay(card);preview.add(self.login_preview);self._login_preview_provider=Gtk.CssProvider();Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),self._login_preview_provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);self._update_login_preview()
-        options=Adw.PreferencesGroup(title="Login Options",description="Every option is stored in complete theme snapshots");page.add(options);self.factory.gdm_switch(options,"Welcome Message","org.gnome.login-screen","banner-message-enable");self.factory.gdm_switch(options,"Hide User List","org.gnome.login-screen","disable-user-list");self.factory.gdm_switch(options,"Hide Restart and Shutdown","org.gnome.login-screen","disable-restart-buttons");self.factory.gdm_switch(options,"Fingerprint Authentication","org.gnome.login-screen","enable-fingerprint-authentication")
+        options=Adw.PreferencesGroup(title="Login Behavior",description="Choose which login controls and authentication options are visible. Every option is stored in complete theme snapshots");page.add(options);self.factory.gdm_switch(options,"Welcome Message","org.gnome.login-screen","banner-message-enable");self.factory.gdm_switch(options,"Hide User List","org.gnome.login-screen","disable-user-list");self.factory.gdm_switch(options,"Hide Restart and Shutdown","org.gnome.login-screen","disable-restart-buttons");self.factory.gdm_switch(options,"Fingerprint Authentication","org.gnome.login-screen","enable-fingerprint-authentication")
         accessibility=Adw.PreferencesGroup(title="Accessibility");page.add(accessibility);self.factory.gdm_switch(accessibility,"Always Show Accessibility Menu","org.gnome.desktop.a11y","always-show-universal-access-status")
-        style=Adw.PreferencesGroup(title="Style and Typography");page.add(style);self.factory.gdm_combo(style,"Accent Color","org.gnome.desktop.interface","accent-color");self.factory.gdm_entry(style,"Interface Font","org.gnome.desktop.interface","font-name");self.factory.gdm_spin(style,"Text Scaling","org.gnome.desktop.interface","text-scaling-factor",.5,3,.05);self.factory.gdm_spin(style,"Cursor Size","org.gnome.desktop.interface","cursor-size",8,128)
+        style=Adw.PreferencesGroup(title="Login Theme & Typography",description="Choose the login-screen accent, font, text scale, and cursor size.");page.add(style);self.factory.gdm_combo(style,"Accent Color","org.gnome.desktop.interface","accent-color");self.factory.gdm_entry(style,"Interface Font","org.gnome.desktop.interface","font-name");self.factory.gdm_spin(style,"Text Scaling","org.gnome.desktop.interface","text-scaling-factor",.5,3,.05);self.factory.gdm_spin(style,"Cursor Size","org.gnome.desktop.interface","cursor-size",8,128)
         for title,key,kind in (("Icon Theme","icon-theme","icon"),("Cursor Theme","cursor-theme","cursor")):
             if self.settings.supports("org.gnome.desktop.interface",key):self._theme_combo_async(style,title,kind,"org.gnome.desktop.interface",key,True)
-        g=Adw.PreferencesGroup(title="Wallpaper and Logo");page.add(g)
+        g=Adw.PreferencesGroup(title="Wallpaper & Logo",description="Choose the login-screen background and optional logo.");page.add(g)
         self.factory.register_gdm("org.gnome.login-screen","logo",str(self.factory.gdm_value("org.gnome.login-screen","logo","")))
         self.login_image_rows={}
         for title,role in (("Login Wallpaper","wallpaper"),("Login Logo","logo")):
             row=Adw.ActionRow(title=title,subtitle="No image selected");self.login_image_rows[role]=row;default=Gtk.Button(icon_name="edit-undo-symbolic",tooltip_text="Use GNOME default",valign=Gtk.Align.CENTER);default.connect("clicked",lambda _,r=row,role=role:self._default_gdm_image(r,role));b=Gtk.Button(label="Choose Image",valign=Gtk.Align.CENTER);b.connect("clicked",lambda _,r=row,role=role:self._choose_gdm_image(r,role));row.add_suffix(default);row.add_suffix(b);g.add(row)
         banner_value=str(self.factory.gdm_value("org.gnome.login-screen","banner-message-text",self.settings.default("org.gnome.login-screen","banner-message-text")));self.factory.register_gdm("org.gnome.login-screen","banner-message-text",banner_value);banner=Adw.EntryRow(title="Welcome Message",text=banner_value);banner.connect("notify::text",lambda r,_:self._stage_gdm("org.gnome.login-screen","banner-message-text",r.get_text()));g.add(banner)
-        colors=Adw.PreferencesGroup(title="Controlled Appearance");page.add(colors)
+        colors=Adw.PreferencesGroup(title="Top Bar Appearance",description="Customize the login-screen background, top bar colors, gradient, opacity, and corners.");page.add(colors)
         gradient=Adw.SwitchRow(title="Top Bar Gradient");gradient.set_active(bool(self.gdm_resource_values.get("panel_gradient_enabled",False)));gradient.connect("notify::active",lambda r,_:self._stage_resource("panel_gradient_enabled",r.get_active()));colors.add(gradient)
         for title,key,initial in (("Background Color","background_color","#101820"),("Top Bar Color","panel_color","#16161A"),("Top Bar Gradient End","panel_color2","#303044"),("Top Bar Text","panel_text_color","#FFFFFF")):
             row=Adw.ActionRow(title=title);button=color_button(self.gdm_resource_values.get(key,initial),title);button.connect("notify::rgba",lambda b,_,k=key:self._stage_resource(k,hex_color(b.get_rgba())));row.add_suffix(button);row.set_activatable_widget(button);colors.add(row)
@@ -318,7 +327,9 @@ class CustomizerWindow(Adw.ApplicationWindow):
         except GLib.Error:pass
         except Exception as exc:self.toast(exc)
     def _stage_resource(self,key,value):
-        self.gdm_resource[key]=value;self.gdm_resource_values[key]=value;self._login_dirty=True
+        # Keep the saved/effective resource separate from the staged overlay so
+        # Discard can return both login previews to their original appearance.
+        self.gdm_resource[key]=value;self._login_dirty=True
         if key=="background_color":self.gdm_resource["wallpaper"]=False;self.login_preview_picture.set_file(None)
         self._update_login_preview();self._pending()
     def _stage_resource_color(self,row,key):
@@ -415,6 +426,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
     def _count(self):return len(self.changes.pending)+sum(len(v) for v in self.gdm_pending.values())+(1 if hasattr(self,"monitor_xml") else 0)+len(self.gdm_resource)+len(self.gdm_assets)
     def _pending(self):
         count=self._count();self.pending_label.set_label(f"{count} pending change{'s' if count!=1 else ''}");self.apply.set_sensitive(count>0)
+        if self.preview_window is not None:self.preview_window._refresh()
     def _discard(self):self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._pending();self.toast("Pending changes discarded")
     def _apply(self,*_):
         pending_before=dict(self.changes.pending);state_before=deepcopy(self.state.data);old_values={};desktop_applied=False;files_snapshot=None
@@ -450,7 +462,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         skipped=self.changes.skipped
         try:remember_applied_login_theme(self.state,transaction)
         except Exception as exc:self.toast(f"Changes applied, but the login theme snapshot could not be saved: {exc}")
-        self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message)
+        self.gdm_resource_values.update(self.gdm_resource);self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message)
         for change,reason in skipped:self.toast(f"{change.label} was skipped: {reason}")
         return GLib.SOURCE_REMOVE
     def _apply_failure(self,context,exc):

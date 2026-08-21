@@ -1,3 +1,11 @@
+gnome-customizer (1.05-13) resolute; urgency=high
+
+  * Add a live staged desktop and login-screen preview window.
+  * Clarify settings with plain-language explanations and task-based groups.
+  * Keep login preview resources reversible until Apply succeeds.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Fri, 21 Aug 2026 00:00:00 -0500
+
 gnome-customizer (1.05-12) resolute; urgency=high
 
   * Repair Shell extension activation at session startup.

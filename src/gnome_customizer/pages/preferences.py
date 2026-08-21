@@ -26,6 +26,39 @@ def _clock_value(text, twelve_hour):
     return h+m/60
 
 
+SETTING_HELP = {
+    ("org.gnome.desktop.interface", "color-scheme"): "Choose whether GNOME and supported apps use light or dark surfaces.",
+    ("org.gnome.desktop.interface", "accent-color"): "Sets the highlight color used for buttons, switches, and selection states.",
+    ("org.gnome.desktop.interface", "text-scaling-factor"): "Scales interface text without changing the display resolution.",
+    ("org.gnome.desktop.interface", "cursor-size"): "Sets the pointer size across the desktop.",
+    ("org.gnome.desktop.background", "picture-options"): "Controls how the wallpaper is fitted or cropped to the screen.",
+    ("org.gnome.desktop.background", "color-shading-type"): "Chooses whether the wallpaper uses one color or a two-color gradient.",
+    ("org.gnome.desktop.peripherals.mouse", "speed"): "Makes the pointer move faster or slower for the same physical movement.",
+    ("org.gnome.desktop.peripherals.touchpad", "speed"): "Makes the touchpad pointer move faster or slower.",
+    ("org.gnome.desktop.peripherals.mouse", "accel-profile"): "Chooses how pointer speed changes with the speed of your hand movement.",
+    ("org.gnome.desktop.peripherals.touchpad", "accel-profile"): "Chooses how touchpad pointer speed changes with finger movement.",
+    ("org.gnome.desktop.peripherals.keyboard", "delay"): "How long a key must be held before it starts repeating.",
+    ("org.gnome.desktop.peripherals.keyboard", "repeat-interval"): "How quickly a held key repeats after the initial delay.",
+    ("org.gnome.settings-daemon.plugins.color", "night-light-temperature"): "Warms the screen by reducing blue light; lower values are warmer.",
+    ("org.gnome.desktop.session", "idle-delay"): "How long the session can be idle before the screen blanks.",
+    ("io.github.gnomecustomizer.shell", "panel-opacity"): "Controls how see-through the top bar is.",
+    ("io.github.gnomecustomizer.shell", "panel-radius"): "Rounds the top bar corners when the Shell theme supports it.",
+    ("io.github.gnomecustomizer.shell", "overview-blur"): "Controls how strongly the wallpaper is blurred behind the overview.",
+    ("io.github.gnomecustomizer.shell", "overview-opacity"): "Controls how much the overview tint covers the wallpaper.",
+    ("io.github.gnomecustomizer.shell", "menu-opacity"): "Controls how see-through menus and popovers are.",
+    ("io.github.gnomecustomizer.shell", "menu-radius"): "Rounds the corners of Shell menus and popovers.",
+    ("org.gnome.shell.extensions.dash-to-dock", "dock-position"): "Places the dock on the top, right, bottom, or left edge of the screen.",
+    ("org.gnome.shell.extensions.dash-to-dock", "extend-height"): "Makes the dock fill the screen edge like a panel.",
+    ("org.gnome.shell.extensions.dash-to-dock", "autohide"): "Hides the dock until the pointer reaches its screen edge.",
+    ("org.gnome.shell.extensions.dash-to-dock", "intellihide"): "Hides the dock only when a window would overlap it.",
+    ("org.gnome.shell.extensions.dash-to-dock", "background-opacity"): "Controls how see-through the dock background is.",
+}
+
+
+def _help(schema, key, title, subtitle=""):
+    return subtitle or SETTING_HELP.get((schema, key)) or f"Controls {title.lower()}."
+
+
 class PreferencesFactory:
     def __init__(self, backend, manager, gdm_stage, gdm_initial=None):
         self.backend=backend; self.manager=manager; self.gdm_stage=gdm_stage; self.gdm_values={}
@@ -56,32 +89,33 @@ class PreferencesFactory:
         if not self.backend.supports(schema,key): return None
         self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
-        row=Adw.SwitchRow(title=title,subtitle=subtitle); row.set_active(bool(self.backend.get(schema,key)))
+        row=Adw.SwitchRow(title=title,subtitle=_help(schema,key,title,subtitle)); row.set_active(bool(self.backend.get(schema,key)))
         row.connect("notify::active",lambda r,_:self.manager.stage(Change(domain,schema,key,r.get_active(),title)));group.add(row);return row
     def combo(self,group,title,schema,key,labels=None,domain=None,subtitle=""):
         choices=self.backend.choices(schema,key)
         if not choices:return None
         self._factory(domain,schema,key)
-        domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");labels=labels or {x:x.replace("-"," ").title() for x in choices}; model=Gtk.StringList.new([labels.get(x,x) for x in choices]);row=Adw.ComboRow(title=title,subtitle=subtitle,model=model)
+        domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");labels=labels or {x:x.replace("-"," ").title() for x in choices}; model=Gtk.StringList.new([labels.get(x,x) for x in choices]);row=Adw.ComboRow(title=title,subtitle=_help(schema,key,title,subtitle),model=model)
         current=self.backend.get(schema,key);row.set_selected(choices.index(current) if current in choices else 0)
         row.connect("notify::selected",lambda r,_:self.manager.stage(Change(domain,schema,key,choices[r.get_selected()],title)));group.add(row);return row
-    def spin(self,group,title,schema,key,low,high,step=1,domain=None):
+    def spin(self,group,title,schema,key,low,high,step=1,domain=None,subtitle=""):
         if not self.backend.supports(schema,key):return None
         self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
-        row=Adw.SpinRow.new_with_range(low,high,step);row.set_title(title);row.set_value(float(self.backend.get(schema,key)))
+        row=Adw.SpinRow.new_with_range(low,high,step);row.set_title(title);row.set_subtitle(_help(schema,key,title,subtitle));row.set_value(float(self.backend.get(schema,key)))
         row.connect("notify::value",lambda r,_:self.manager.stage(Change(domain,schema,key,int(r.get_value()) if step>=1 else r.get_value(),title)));group.add(row);return row
-    def entry(self,group,title,schema,key,domain=None):
+    def entry(self,group,title,schema,key,domain=None,subtitle=""):
         if not self.backend.supports(schema,key):return None
         self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
-        row=Adw.EntryRow(title=title,text=str(self.backend.get(schema,key)));row.connect("notify::text",lambda r,_:self.manager.stage(Change(domain,schema,key,r.get_text(),title)));group.add(row);return row
+        row=Adw.EntryRow(title=title,subtitle=_help(schema,key,title,subtitle),text=str(self.backend.get(schema,key)));row.connect("notify::text",lambda r,_:self.manager.stage(Change(domain,schema,key,r.get_text(),title)));group.add(row);return row
     def strv(self,group,title,schema,key,domain=None,subtitle=""):
         if not self.backend.supports(schema,key):return None
         self._factory(domain,schema,key)
         domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop")
         value=self.backend.get(schema,key);text=", ".join(value if isinstance(value,list) else [])
         row=Adw.EntryRow(title=title,text=text)
+        row.set_subtitle(_help(schema,key,title,subtitle))
         if subtitle:row.set_tooltip_text(subtitle)
         def changed(r,_):
             values=[item.strip() for item in r.get_text().split(",") if item.strip()]
@@ -91,6 +125,7 @@ class PreferencesFactory:
         if not self.backend.supports(schema,key):return None
         self._factory(domain,schema,key);value=self.backend.get(schema,key)
         row=Adw.EntryRow(title=title,text=", ".join(f"{float(item):.3f}" for item in value))
+        row.set_subtitle(_help(schema,key,title,subtitle))
         if subtitle:row.set_tooltip_text(subtitle)
         def changed(r,_):
             try:
@@ -109,35 +144,49 @@ class PreferencesFactory:
             elif type_name=="d":low,high=(0,2)
             else:low,high=(0,max(100,int(current),int(self.backend.default(schema,key))))
             step=1 if type_name=="i" else .01
-            self.spin(group,title,schema,key,float(low),float(high),step,domain=domain)
+            self.spin(group,title,schema,key,float(low),float(high),step,domain=domain,subtitle=summary)
             return
         if type_name=="s":
             if self.backend.choices(schema,key):self.combo(group,title,schema,key,domain=domain,subtitle=summary)
-            else:self.entry(group,title,schema,key,domain=domain)
+            else:self.entry(group,title,schema,key,domain=domain,subtitle=summary)
             return
-        if type_name=="as":self.strv(group,title,schema,key,domain=domain,subtitle=summary);return
+        if type_name=="as":self.strv(group,title,schema,key,domain=domain,subtitle=summary or _help(schema,key,title));return
         if type_name=="(dddd)":self.tuple_entry(group,title,schema,key,domain=domain,subtitle=summary);return
         group.add(Adw.ActionRow(title=title,subtitle=summary or "Managed by the upstream extension"))
     def upstream_schema_controls(self,page,root_schema,domain="shell"):
         root=self.backend.schema(root_schema)
         if not root:return False
-        general=self.group(page,"Blur My Shell — General","Controls are written to the bundled upstream Blur My Shell extension")
+        general=self.group(page,"Blur My Shell — General","Controls are written to the bundled upstream Blur My Shell extension.")
         for key in root.list_keys():
             if key=="pipelines":
                 general.add(Adw.ActionRow(title="Pipelines",subtitle="Use the bundled Blur My Shell pipeline definitions"))
             else:self._schema_control(general,root_schema,key,domain)
+        child_info={
+            "overview":("Overview & App Grid","Blur and tint the wallpaper behind workspaces, search, and applications."),
+            "appfolder":("App Folders","Control the appearance of opened folders and folder tiles."),
+            "panel":("Top Bar","Control the top bar blur and surface treatment."),
+            "dash-to-dock":("Dock","Control the blur behind the installed dock."),
+            "applications":("Applications","Control blur behind application windows."),
+            "screenshot":("Screenshots","Control the screenshot flash and overlay treatment."),
+            "lockscreen":("Lock Screen","Control the lock-screen background treatment."),
+            "window-list":("Window List","Control the window-list background treatment."),
+            "coverflow-alt-tab":("Alt-Tab Switcher","Control the Alt-Tab switcher background treatment."),
+            "popup":("Pop-ups","Control notification and pop-up backgrounds."),
+            "hidetopbar":("Top Bar Visibility","Control the automatic top-bar visibility behavior."),
+            "dash-to-panel":("Dash to Panel","Control the Dash to Panel surface treatment."),
+        }
         for child in root.list_children():
-            schema=f"{root_schema}.{child}";group=self.group(page,child.replace("-"," ").title())
+            schema=f"{root_schema}.{child}";title,description=child_info.get(child,(child.replace("-"," ").title(),"Controls this Blur My Shell surface."));group=self.group(page,title,description)
             for key in self.backend.schema(schema).list_keys():self._schema_control(group,schema,key,domain)
         return True
     def color(self,group,title,schema,key,domain=None):
         if not self.backend.supports(schema,key):return None
         self._factory(domain,schema,key)
-        domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");row=Adw.ActionRow(title=title);button=color_button(self.backend.get(schema,key),title);button.connect("notify::rgba",lambda b,_:self.manager.stage(Change(domain,schema,key,hex_color(b.get_rgba()),title)));row.add_suffix(button);row.set_activatable_widget(button);group.add(row);return row
+        domain=domain or ("shell" if schema=="io.github.gnomecustomizer.shell" else "desktop");row=Adw.ActionRow(title=title,subtitle=_help(schema,key,title));button=color_button(self.backend.get(schema,key),title);button.connect("notify::rgba",lambda b,_:self.manager.stage(Change(domain,schema,key,hex_color(b.get_rgba()),title)));row.add_suffix(button);row.set_activatable_widget(button);group.add(row);return row
     def duration(self,group,title,schema,key,domain="desktop",gdm=False):
         if not self.backend.supports(schema,key):return None
         if not gdm:self._factory(domain,schema,key)
-        row=Adw.SpinRow.new_with_range(0,1440,1);row.set_title(title);value=self.gdm_value(schema,key,self.backend.default(schema,key)) if gdm else self.backend.get(schema,key);row.set_value(value/60)
+        row=Adw.SpinRow.new_with_range(0,1440,1);row.set_title(title);row.set_subtitle(_help(schema,key,title));value=self.gdm_value(schema,key,self.backend.default(schema,key)) if gdm else self.backend.get(schema,key);row.set_value(value/60)
         if gdm:self.register_gdm(schema,key,value)
         if gdm:row.connect("notify::value",lambda r,_:self.gdm_stage(schema,key,int(r.get_value()*60)))
         else:row.connect("notify::value",lambda r,_:self.manager.stage(Change(domain,schema,key,int(r.get_value()*60),title)))
@@ -145,7 +194,7 @@ class PreferencesFactory:
     def time(self,group,title,schema,key,gdm=False):
         if not self.backend.supports(schema,key):return None
         if not gdm:self._factory("desktop",schema,key)
-        value=float(self.gdm_value(schema,key,self.backend.default(schema,key)) if gdm else self.backend.get(schema,key));twelve_hour=self.backend.supports("org.gnome.desktop.interface","clock-format") and self.gdm_value("org.gnome.desktop.interface","clock-format",self.backend.get("org.gnome.desktop.interface","clock-format"))=="12h";row=Adw.EntryRow(title=title,text=_clock_text(value,twelve_hour));row.set_tooltip_text("Use h:mm AM/PM" if twelve_hour else "Use HH:MM (24-hour time)")
+        value=float(self.gdm_value(schema,key,self.backend.default(schema,key)) if gdm else self.backend.get(schema,key));twelve_hour=self.backend.supports("org.gnome.desktop.interface","clock-format") and self.gdm_value("org.gnome.desktop.interface","clock-format",self.backend.get("org.gnome.desktop.interface","clock-format"))=="12h";row=Adw.EntryRow(title=title,subtitle=_help(schema,key,title,"Use h:mm AM/PM" if twelve_hour else "Use HH:MM (24-hour time)"),text=_clock_text(value,twelve_hour));row.set_tooltip_text("Use h:mm AM/PM" if twelve_hour else "Use HH:MM (24-hour time)")
         if gdm:self.register_gdm(schema,key,value)
         def changed(r,_):
             try:
@@ -157,40 +206,46 @@ class PreferencesFactory:
     def gdm_switch(self,group,title,schema,key,default=None,subtitle=""):
         if not self.backend.supports(schema,key):return None
         value=self.gdm_value(schema,key,self.backend.default(schema,key) if default is None else default);self.register_gdm(schema,key,value)
-        row=Adw.SwitchRow(title=title,subtitle=subtitle);row.set_active(value);row.connect("notify::active",lambda r,_:self.gdm_stage(schema,key,r.get_active()));group.add(row);return row
+        row=Adw.SwitchRow(title=title,subtitle=_help(schema,key,title,subtitle));row.set_active(value);row.connect("notify::active",lambda r,_:self.gdm_stage(schema,key,r.get_active()));group.add(row);return row
     def gdm_combo(self,group,title,schema,key,labels=None):
         choices=self.backend.choices(schema,key)
         if not choices:return None
-        labels=labels or {x:x.replace("-"," ").title() for x in choices};row=Adw.ComboRow(title=title,model=Gtk.StringList.new([labels.get(x,x) for x in choices]));default=self.gdm_value(schema,key,self.backend.default(schema,key));value=default if default in choices else choices[0];self.register_gdm(schema,key,value);row.set_selected(choices.index(value));row.connect("notify::selected",lambda r,_:self.gdm_stage(schema,key,choices[r.get_selected()]));group.add(row);return row
+        labels=labels or {x:x.replace("-"," ").title() for x in choices};row=Adw.ComboRow(title=title,subtitle=_help(schema,key,title),model=Gtk.StringList.new([labels.get(x,x) for x in choices]));default=self.gdm_value(schema,key,self.backend.default(schema,key));value=default if default in choices else choices[0];self.register_gdm(schema,key,value);row.set_selected(choices.index(value));row.connect("notify::selected",lambda r,_:self.gdm_stage(schema,key,choices[r.get_selected()]));group.add(row);return row
     def gdm_spin(self,group,title,schema,key,low,high,step=1):
         if not self.backend.supports(schema,key):return None
-        value=self.gdm_value(schema,key,self.backend.default(schema,key));self.register_gdm(schema,key,value);row=Adw.SpinRow.new_with_range(low,high,step);row.set_title(title);row.set_value(float(value));row.connect("notify::value",lambda r,_:self.gdm_stage(schema,key,int(r.get_value()) if step>=1 else r.get_value()));group.add(row);return row
+        value=self.gdm_value(schema,key,self.backend.default(schema,key));self.register_gdm(schema,key,value);row=Adw.SpinRow.new_with_range(low,high,step);row.set_title(title);row.set_subtitle(_help(schema,key,title));row.set_value(float(value));row.connect("notify::value",lambda r,_:self.gdm_stage(schema,key,int(r.get_value()) if step>=1 else r.get_value()));group.add(row);return row
     def gdm_entry(self,group,title,schema,key):
         if not self.backend.supports(schema,key):return None
-        value=str(self.gdm_value(schema,key,self.backend.default(schema,key)));self.register_gdm(schema,key,value);row=Adw.EntryRow(title=title,text=value);row.connect("notify::text",lambda r,_:self.gdm_stage(schema,key,r.get_text()));group.add(row);return row
+        value=str(self.gdm_value(schema,key,self.backend.default(schema,key)));self.register_gdm(schema,key,value);row=Adw.EntryRow(title=title,subtitle=_help(schema,key,title),text=value);row.connect("notify::text",lambda r,_:self.gdm_stage(schema,key,r.get_text()));group.add(row);return row
 
     def desktop_appearance(self):
-        p=self.page("Appearance","Desktop colors, wallpaper, icons, cursor, and typography")
-        g=self.group(p,"Style")
+        p=self.page("Appearance","Desktop colors, wallpaper, files, icons, cursor, and typography")
+        g=self.group(p,"Theme & Colors","Choose the overall light/dark style and accent used by GNOME.")
         color_scheme=self.combo(g,"Color Scheme","org.gnome.desktop.interface","color-scheme")
         if color_scheme and self.backend.supports("org.gnome.shell.ubuntu","color-scheme"):
             self.manager.register_factory("desktop","org.gnome.shell.ubuntu","color-scheme")
             choices=self.backend.choices("org.gnome.desktop.interface","color-scheme")
             color_scheme.connect("notify::selected",lambda r,_:self.manager.stage(Change("desktop","org.gnome.shell.ubuntu","color-scheme",choices[r.get_selected()],"Ubuntu Color Scheme")))
         self.combo(g,"Accent Color","org.gnome.desktop.interface","accent-color")
-        g=self.group(p,"Pointer and Text");self.spin(g,"Cursor Size","org.gnome.desktop.interface","cursor-size",8,128);self.spin(g,"Text Scaling","org.gnome.desktop.interface","text-scaling-factor",.5,3,.05)
+        g=self.group(p,"Pointer & Text","Adjust the cursor and the size of interface text.");self.spin(g,"Cursor Size","org.gnome.desktop.interface","cursor-size",8,128);self.spin(g,"Text Scaling","org.gnome.desktop.interface","text-scaling-factor",.5,3,.05)
         return p
     def topbar(self):
-        p=self.page("Top Bar");g=self.group(p,"Clock")
+        p=self.page("Top Bar","Control the clock and information shown in GNOME's top bar.");g=self.group(p,"Clock Display","Choose the clock format and which date, weekday, seconds, and battery details are visible.")
         self.combo(g,"Clock Format","org.gnome.desktop.interface","clock-format",{"12h":"12-hour","24h":"24-hour"})
         self.switch(g,"Show Date","org.gnome.desktop.interface","clock-show-date");self.switch(g,"Show Weekday","org.gnome.desktop.interface","clock-show-weekday");self.switch(g,"Show Seconds","org.gnome.desktop.interface","clock-show-seconds");self.switch(g,"Battery Percentage","org.gnome.desktop.interface","show-battery-percentage")
         return p
     def mouse_touchpad(self):
         p=self.page("Mouse & Touchpad","Changes are staged until Apply, then written and verified through GNOME settings")
-        mouse="org.gnome.desktop.peripherals.mouse";g=self.group(p,"Mouse")
-        self.combo(g,"Acceleration",mouse,"accel-profile");self.switch(g,"Left-handed Primary Button",mouse,"left-handed");self.switch(g,"Natural Scrolling",mouse,"natural-scroll");self.spin(g,"Pointer Speed",mouse,"speed",-1,1,.05);self.switch(g,"Middle-click Emulation",mouse,"middle-click-emulation");self.spin(g,"Double-click Interval (ms)",mouse,"double-click",100,5000,10);self.spin(g,"Drag Threshold (px)",mouse,"drag-threshold",1,100)
-        touchpad="org.gnome.desktop.peripherals.touchpad";g=self.group(p,"Touchpad")
-        self.combo(g,"Touchpad Mode",touchpad,"send-events");self.combo(g,"Acceleration",touchpad,"accel-profile");self.spin(g,"Pointer Speed",touchpad,"speed",-1,1,.05);self.switch(g,"Tap to Click",touchpad,"tap-to-click");self.switch(g,"Tap and Drag",touchpad,"tap-and-drag");self.switch(g,"Tap and Drag Lock",touchpad,"tap-and-drag-lock");self.switch(g,"Natural Scrolling",touchpad,"natural-scroll");self.switch(g,"Two-finger Scrolling",touchpad,"two-finger-scrolling-enabled");self.switch(g,"Edge Scrolling",touchpad,"edge-scrolling-enabled");self.combo(g,"Click Method",touchpad,"click-method");self.combo(g,"Primary Button",touchpad,"left-handed");self.switch(g,"Middle-click Emulation",touchpad,"middle-click-emulation");self.switch(g,"Disable While Typing",touchpad,"disable-while-typing");self.spin(g,"Typing Guard Timeout (ms)",touchpad,"disable-while-typing-timeout",100,5000,10)
+        mouse="org.gnome.desktop.peripherals.mouse";g=self.group(p,"Mouse Movement","Control pointer speed, acceleration, and scrolling.")
+        self.combo(g,"Acceleration",mouse,"accel-profile");self.switch(g,"Natural Scrolling",mouse,"natural-scroll");self.spin(g,"Pointer Speed",mouse,"speed",-1,1,.05)
+        g=self.group(p,"Mouse Buttons","Configure button handedness, clicks, and drag timing.")
+        self.switch(g,"Left-handed Primary Button",mouse,"left-handed");self.switch(g,"Middle-click Emulation",mouse,"middle-click-emulation");self.spin(g,"Double-click Interval (ms)",mouse,"double-click",100,5000,10);self.spin(g,"Drag Threshold (px)",mouse,"drag-threshold",1,100)
+        touchpad="org.gnome.desktop.peripherals.touchpad";g=self.group(p,"Touchpad Movement","Control touchpad enablement, pointer speed, and scrolling.")
+        self.combo(g,"Touchpad Mode",touchpad,"send-events");self.combo(g,"Acceleration",touchpad,"accel-profile");self.spin(g,"Pointer Speed",touchpad,"speed",-1,1,.05);self.switch(g,"Natural Scrolling",touchpad,"natural-scroll")
+        g=self.group(p,"Touchpad Gestures","Choose how taps, drags, and edge or two-finger scrolling work.")
+        self.switch(g,"Tap to Click",touchpad,"tap-to-click");self.switch(g,"Tap and Drag",touchpad,"tap-and-drag");self.switch(g,"Tap and Drag Lock",touchpad,"tap-and-drag-lock");self.switch(g,"Two-finger Scrolling",touchpad,"two-finger-scrolling-enabled");self.switch(g,"Edge Scrolling",touchpad,"edge-scrolling-enabled");self.switch(g,"Disable While Typing",touchpad,"disable-while-typing");self.spin(g,"Typing Guard Timeout (ms)",touchpad,"disable-while-typing-timeout",100,5000,10)
+        g=self.group(p,"Touchpad Buttons","Configure click method, primary button, and middle-click behavior.")
+        self.combo(g,"Click Method",touchpad,"click-method");self.combo(g,"Primary Button",touchpad,"left-handed");self.switch(g,"Middle-click Emulation",touchpad,"middle-click-emulation")
         return p
     def keyboard(self):
         p=self.page("Keyboard","Supported system-wide typing behavior")
@@ -203,45 +258,52 @@ class PreferencesFactory:
         return p
     def placement(self):
         p=self.page("Placement","Choose where GNOME places newly opened windows and desktop icons")
-        windows=self.group(p,"New Windows")
+        windows=self.group(p,"Window Placement","Choose where newly opened windows appear.")
         self.switch(windows,"Always Center New Windows","org.gnome.mutter","center-new-windows",subtitle="Off lets Mutter choose a free position automatically")
-        icons=self.group(p,"New Desktop Icons")
+        icons=self.group(p,"Desktop Icon Placement","Choose where new icons begin on the desktop.")
         schema="org.gnome.shell.extensions.ding"
         corner=self.combo(icons,"Starting Corner",schema,"start-corner",{"top-left":"Upper Left","top-right":"Upper Right","bottom-left":"Lower Left","bottom-right":"Lower Right"})
         if corner is None:
             icons.add(Adw.ActionRow(title="Desktop icon placement unavailable",subtitle="Install or enable Desktop Icons NG to choose a starting corner."))
-        overview=self.group(p,"Overview &amp; App Grid")
+        overview=self.group(p,"App Grid","Choose how applications are ordered in the overview.")
         self.switch(overview,"Alphabetical App Grid","io.github.gnomecustomizer.shell","alphabetical-app-grid",subtitle="Orders applications and folders by name; search results remain relevance-ranked")
         return p
     def power(self):
-        p=self.page("Power")
-        profiles=self.group(p,"Power Profile","Uses the system power-profiles-daemon service; Performance stays visible even when hardware support is unavailable")
+        p=self.page("Power","Manage power modes, screen idle behavior, and automatic sleep.")
+        profiles=self.group(p,"Power Mode","Uses the system power-profiles-daemon service; Performance stays visible even when hardware support is unavailable")
         if self.backend.supports(POWER_PROFILES_SCHEMA,POWER_PROFILE_KEY):
             self.combo(profiles,"Mode",POWER_PROFILES_SCHEMA,POWER_PROFILE_KEY,{"power-saver":"Power Saver","balanced":"Balanced","performance":"Performance"},subtitle=self.backend.power_profile_summary())
         else:profiles.add(Adw.ActionRow(title="Power profiles unavailable",subtitle="Install and start power-profiles-daemon to manage system power modes"))
-        g=self.group(p,"Energy")
-        self.combo(g,"Power Button Action","org.gnome.settings-daemon.plugins.power","power-button-action");self.switch(g,"Power Saver on Low Battery","org.gnome.settings-daemon.plugins.power","power-saver-profile-on-low-battery");self.switch(g,"Dim Screen","org.gnome.settings-daemon.plugins.power","idle-dim");self.spin(g,"Dimmed Brightness","org.gnome.settings-daemon.plugins.power","idle-brightness",0,100);self.switch(g,"Ambient Light Sensor","org.gnome.settings-daemon.plugins.power","ambient-enabled");self.duration(g,"Blank Screen Delay (minutes)","org.gnome.desktop.session","idle-delay");self.combo(g,"AC Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-type");self.duration(g,"AC Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-timeout");self.combo(g,"Battery Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-type");self.duration(g,"Battery Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-timeout")
+        g=self.group(p,"Screen & Idle","Control dimming, brightness, blanking, and the ambient-light sensor.")
+        self.switch(g,"Dim Screen","org.gnome.settings-daemon.plugins.power","idle-dim");self.spin(g,"Dimmed Brightness","org.gnome.settings-daemon.plugins.power","idle-brightness",0,100);self.switch(g,"Ambient Light Sensor","org.gnome.settings-daemon.plugins.power","ambient-enabled");self.duration(g,"Blank Screen Delay (minutes)","org.gnome.desktop.session","idle-delay")
+        g=self.group(p,"Power Button & Automatic Sleep","Choose what happens when the power button is pressed or the computer is inactive on AC or battery.")
+        self.combo(g,"Power Button Action","org.gnome.settings-daemon.plugins.power","power-button-action");self.switch(g,"Power Saver on Low Battery","org.gnome.settings-daemon.plugins.power","power-saver-profile-on-low-battery");self.combo(g,"AC Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-type");self.duration(g,"AC Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-timeout");self.combo(g,"Battery Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-type");self.duration(g,"Battery Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-timeout")
         return p
     def night_light(self):
-        p=self.page("Night Light");g=self.group(p,"Schedule")
-        self.switch(g,"Night Light","org.gnome.settings-daemon.plugins.color","night-light-enabled");self.spin(g,"Color Temperature","org.gnome.settings-daemon.plugins.color","night-light-temperature",1000,10000,100);self.switch(g,"Sunset to Sunrise","org.gnome.settings-daemon.plugins.color","night-light-schedule-automatic");self.time(g,"Custom Start","org.gnome.settings-daemon.plugins.color","night-light-schedule-from");self.time(g,"Custom End","org.gnome.settings-daemon.plugins.color","night-light-schedule-to")
+        p=self.page("Night Light","Warm the screen at night and choose when the effect runs.");g=self.group(p,"Night Light","Turn the warmer color treatment on and choose its strength.")
+        self.switch(g,"Night Light","org.gnome.settings-daemon.plugins.color","night-light-enabled");self.spin(g,"Color Temperature","org.gnome.settings-daemon.plugins.color","night-light-temperature",1000,10000,100)
+        g=self.group(p,"Schedule","Use automatic sunset/sunrise times or set a custom schedule.")
+        self.switch(g,"Sunset to Sunrise","org.gnome.settings-daemon.plugins.color","night-light-schedule-automatic");self.time(g,"Custom Start","org.gnome.settings-daemon.plugins.color","night-light-schedule-from");self.time(g,"Custom End","org.gnome.settings-daemon.plugins.color","night-light-schedule-to")
         return p
     def sound(self):
-        p=self.page("Sound");g=self.group(p,"Event Sounds")
+        p=self.page("Sound","Control system sounds and feedback from keyboard or pointer actions.");g=self.group(p,"Sound Feedback","Choose which desktop events produce sounds.")
         self.switch(g,"Event Sounds","org.gnome.desktop.sound","event-sounds");self.switch(g,"Input Feedback","org.gnome.desktop.sound","input-feedback-sounds");self.switch(g,"Allow Above 100%","org.gnome.desktop.sound","allow-volume-above-100-percent")
         return p
     def login(self):
         return self.page("Login Screen","Changes are staged and request administrator authentication only when applied")
     def login_input(self):
-        p=self.page("Login Input & Sound");mouse="org.gnome.desktop.peripherals.mouse";g=self.group(p,"Mouse");self.gdm_combo(g,"Acceleration",mouse,"accel-profile");self.gdm_switch(g,"Left-handed Primary Button",mouse,"left-handed");self.gdm_switch(g,"Natural Scrolling",mouse,"natural-scroll");self.gdm_spin(g,"Pointer Speed",mouse,"speed",-1,1,.05);self.gdm_switch(g,"Middle-click Emulation",mouse,"middle-click-emulation");self.gdm_spin(g,"Double-click Interval (ms)",mouse,"double-click",100,5000,10);self.gdm_spin(g,"Drag Threshold (px)",mouse,"drag-threshold",1,100)
-        touchpad="org.gnome.desktop.peripherals.touchpad";g=self.group(p,"Touchpad");self.gdm_combo(g,"Touchpad Mode",touchpad,"send-events");self.gdm_combo(g,"Acceleration",touchpad,"accel-profile");self.gdm_spin(g,"Pointer Speed",touchpad,"speed",-1,1,.05);self.gdm_switch(g,"Tap to Click",touchpad,"tap-to-click");self.gdm_switch(g,"Tap and Drag",touchpad,"tap-and-drag");self.gdm_switch(g,"Tap and Drag Lock",touchpad,"tap-and-drag-lock");self.gdm_switch(g,"Natural Scrolling",touchpad,"natural-scroll");self.gdm_switch(g,"Two-finger Scrolling",touchpad,"two-finger-scrolling-enabled");self.gdm_switch(g,"Edge Scrolling",touchpad,"edge-scrolling-enabled");self.gdm_combo(g,"Click Method",touchpad,"click-method");self.gdm_combo(g,"Primary Button",touchpad,"left-handed");self.gdm_switch(g,"Middle-click Emulation",touchpad,"middle-click-emulation");self.gdm_switch(g,"Disable While Typing",touchpad,"disable-while-typing");self.gdm_spin(g,"Typing Guard Timeout (ms)",touchpad,"disable-while-typing-timeout",100,5000,10)
-        g=self.group(p,"Sound");self.gdm_switch(g,"Event Sounds","org.gnome.desktop.sound","event-sounds");self.gdm_switch(g,"Input Feedback","org.gnome.desktop.sound","input-feedback-sounds");self.gdm_switch(g,"Allow Above 100%","org.gnome.desktop.sound","allow-volume-above-100-percent");return p
+        p=self.page("Login Input & Sound","These settings are copied to the login screen and applied together after administrator authentication.");mouse="org.gnome.desktop.peripherals.mouse";g=self.group(p,"Mouse Movement","Control login-screen pointer speed, acceleration, and scrolling.");self.gdm_combo(g,"Acceleration",mouse,"accel-profile");self.gdm_switch(g,"Natural Scrolling",mouse,"natural-scroll");self.gdm_spin(g,"Pointer Speed",mouse,"speed",-1,1,.05)
+        g=self.group(p,"Mouse Buttons","Configure login-screen button handedness, clicks, and drag timing.");self.gdm_switch(g,"Left-handed Primary Button",mouse,"left-handed");self.gdm_switch(g,"Middle-click Emulation",mouse,"middle-click-emulation");self.gdm_spin(g,"Double-click Interval (ms)",mouse,"double-click",100,5000,10);self.gdm_spin(g,"Drag Threshold (px)",mouse,"drag-threshold",1,100)
+        touchpad="org.gnome.desktop.peripherals.touchpad";g=self.group(p,"Touchpad Gestures","Configure login-screen taps, drags, scrolling, and typing protection.");self.gdm_combo(g,"Touchpad Mode",touchpad,"send-events");self.gdm_combo(g,"Acceleration",touchpad,"accel-profile");self.gdm_spin(g,"Pointer Speed",touchpad,"speed",-1,1,.05);self.gdm_switch(g,"Tap to Click",touchpad,"tap-to-click");self.gdm_switch(g,"Tap and Drag",touchpad,"tap-and-drag");self.gdm_switch(g,"Tap and Drag Lock",touchpad,"tap-and-drag-lock");self.gdm_switch(g,"Natural Scrolling",touchpad,"natural-scroll");self.gdm_switch(g,"Two-finger Scrolling",touchpad,"two-finger-scrolling-enabled");self.gdm_switch(g,"Edge Scrolling",touchpad,"edge-scrolling-enabled");self.gdm_switch(g,"Disable While Typing",touchpad,"disable-while-typing");self.gdm_spin(g,"Typing Guard Timeout (ms)",touchpad,"disable-while-typing-timeout",100,5000,10)
+        g=self.group(p,"Touchpad Buttons","Configure login-screen click method and primary button.");self.gdm_combo(g,"Click Method",touchpad,"click-method");self.gdm_combo(g,"Primary Button",touchpad,"left-handed");self.gdm_switch(g,"Middle-click Emulation",touchpad,"middle-click-emulation")
+        g=self.group(p,"Sound Feedback","Control sounds produced by the login screen.");self.gdm_switch(g,"Event Sounds","org.gnome.desktop.sound","event-sounds");self.gdm_switch(g,"Input Feedback","org.gnome.desktop.sound","input-feedback-sounds");self.gdm_switch(g,"Allow Above 100%","org.gnome.desktop.sound","allow-volume-above-100-percent");return p
     def login_power(self):
-        p=self.page("Login Power & Night Light");g=self.group(p,"Power");self.gdm_combo(g,"Power Button Action","org.gnome.settings-daemon.plugins.power","power-button-action");self.gdm_switch(g,"Power Saver on Low Battery","org.gnome.settings-daemon.plugins.power","power-saver-profile-on-low-battery");self.gdm_switch(g,"Dim Screen","org.gnome.settings-daemon.plugins.power","idle-dim");self.gdm_spin(g,"Dimmed Brightness","org.gnome.settings-daemon.plugins.power","idle-brightness",0,100);self.gdm_switch(g,"Ambient Light Sensor","org.gnome.settings-daemon.plugins.power","ambient-enabled");self.duration(g,"Blank Screen Delay (minutes)","org.gnome.desktop.session","idle-delay",gdm=True);self.gdm_combo(g,"AC Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-type");self.duration(g,"AC Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-timeout",gdm=True);self.gdm_combo(g,"Battery Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-type");self.duration(g,"Battery Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-timeout",gdm=True)
-        g=self.group(p,"Night Light");self.gdm_switch(g,"Night Light","org.gnome.settings-daemon.plugins.color","night-light-enabled");self.gdm_spin(g,"Color Temperature","org.gnome.settings-daemon.plugins.color","night-light-temperature",1000,10000,100);self.gdm_switch(g,"Sunset to Sunrise","org.gnome.settings-daemon.plugins.color","night-light-schedule-automatic");self.time(g,"Custom Start","org.gnome.settings-daemon.plugins.color","night-light-schedule-from",gdm=True);self.time(g,"Custom End","org.gnome.settings-daemon.plugins.color","night-light-schedule-to",gdm=True);return p
+        p=self.page("Login Power & Night Light","Choose what the login screen does when idle and whether it uses Night Light.");g=self.group(p,"Screen & Idle","Control login-screen dimming, blanking, and the ambient-light sensor.");self.gdm_switch(g,"Dim Screen","org.gnome.settings-daemon.plugins.power","idle-dim");self.gdm_spin(g,"Dimmed Brightness","org.gnome.settings-daemon.plugins.power","idle-brightness",0,100);self.gdm_switch(g,"Ambient Light Sensor","org.gnome.settings-daemon.plugins.power","ambient-enabled");self.duration(g,"Blank Screen Delay (minutes)","org.gnome.desktop.session","idle-delay",gdm=True)
+        g=self.group(p,"Power Button & Automatic Sleep","Choose login-screen power-button behavior and AC or battery sleep actions.");self.gdm_combo(g,"Power Button Action","org.gnome.settings-daemon.plugins.power","power-button-action");self.gdm_switch(g,"Power Saver on Low Battery","org.gnome.settings-daemon.plugins.power","power-saver-profile-on-low-battery");self.gdm_combo(g,"AC Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-type");self.duration(g,"AC Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-ac-timeout",gdm=True);self.gdm_combo(g,"Battery Inactive Action","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-type");self.duration(g,"Battery Inactive Timeout (minutes)","org.gnome.settings-daemon.plugins.power","sleep-inactive-battery-timeout",gdm=True)
+        g=self.group(p,"Night Light","Warm the login screen and choose when that effect is scheduled.");self.gdm_switch(g,"Night Light","org.gnome.settings-daemon.plugins.color","night-light-enabled");self.gdm_spin(g,"Color Temperature","org.gnome.settings-daemon.plugins.color","night-light-temperature",1000,10000,100);self.gdm_switch(g,"Sunset to Sunrise","org.gnome.settings-daemon.plugins.color","night-light-schedule-automatic");self.time(g,"Custom Start","org.gnome.settings-daemon.plugins.color","night-light-schedule-from",gdm=True);self.time(g,"Custom End","org.gnome.settings-daemon.plugins.color","night-light-schedule-to",gdm=True);return p
     def shell(self,title,section):
         upstream="org.gnome.shell.extensions.blur-my-shell"
-        p=self.page(title,"Full controls for the bundled Blur My Shell extension")
+        p=self.page(title,"Control blur, tint, brightness, and transparency by Shell surface.")
         has_upstream=self.backend.extension_available("blur-my-shell@aunetx") and self.upstream_schema_controls(p,upstream)
         if has_upstream:
             return p
@@ -250,16 +312,16 @@ class PreferencesFactory:
             unavailable=self.group(p,"Shell extension unavailable")
             unavailable.add(Adw.ActionRow(title="Blur controls unavailable",subtitle="The Shell extension payload is not installed. Reinstall GNOME Customizer before changing these settings."))
             return p
-        p=self.page(title);g=self.group(p,section)
+        p=self.page(title);g=self.group(p,"Panel & Menu Blur","Set the blur strength used by the top bar and menus.")
         for label,key in (("Panel Blur","panel-blur"),("Menu Blur","menu-blur")):self.spin(g,label,schema,key,0,100)
-        overview=self.group(p,"Overview &amp; App Grid","Blurred wallpaper treatment behind workspaces, search, and applications");self.switch(overview,"Enable Overview Blur",schema,"overview-enabled");self.color(overview,"Backdrop Tint",schema,"overview-color");self.spin(overview,"Tint Opacity",schema,"overview-opacity",0,1,.01);self.spin(overview,"Blur Strength",schema,"overview-blur",0,100);self.spin(overview,"Brightness",schema,"overview-brightness",.2,1.5,.05);self.spin(overview,"Saturation",schema,"overview-saturation",0,1,.05);self.color(overview,"Hover Background Tint",schema,"overview-hover-color");self.spin(overview,"Hover Background Opacity",schema,"overview-hover-opacity",0,1,.05)
+        overview=self.group(p,"Overview & App Grid","Blurred wallpaper treatment behind workspaces, search, and applications");self.switch(overview,"Enable Overview Blur",schema,"overview-enabled");self.color(overview,"Backdrop Tint",schema,"overview-color");self.spin(overview,"Tint Opacity",schema,"overview-opacity",0,1,.01);self.spin(overview,"Blur Strength",schema,"overview-blur",0,100);self.spin(overview,"Brightness",schema,"overview-brightness",.2,1.5,.05);self.spin(overview,"Saturation",schema,"overview-saturation",0,1,.05);self.color(overview,"Hover Background Tint",schema,"overview-hover-color");self.spin(overview,"Hover Background Opacity",schema,"overview-hover-opacity",0,1,.05)
         folders=self.group(p,"App Folders","Customize folders such as System and Utilities; zero opacity is fully transparent")
         self.switch(folders,"Transparent Folder Tiles",schema,"folder-tile-transparency-enabled",subtitle="Uses the overview hover tint and opacity when a folder is highlighted")
         self.spin(folders,"Folder Tile Background Opacity",schema,"folder-tile-opacity",0,1,.01)
         self.switch(folders,"Translucent Open Folders",schema,"folder-dialog-transparency-enabled",subtitle="Shows the overview wallpaper through an opened app folder")
         self.spin(folders,"Open Folder Background Opacity",schema,"folder-dialog-opacity",0,1,.01)
         self.spin(folders,"Folder Brightness",schema,"folder-brightness",.2,1.5,.05)
-        menus=self.group(p,"Menus &amp; Popovers");self.switch(menus,"Enable Custom Menu Appearance",schema,"menu-enabled");self.color(menus,"Surface Color",schema,"menu-color");self.switch(menus,"Gradient",schema,"menu-gradient-enabled");self.color(menus,"Gradient End Color",schema,"menu-color2");self.combo(menus,"Gradient Direction",schema,"menu-gradient-direction");self.spin(menus,"Opacity",schema,"menu-opacity",.2,1,.01);self.spin(menus,"Corner Radius",schema,"menu-radius",0,32);self.color(menus,"Text Color",schema,"menu-text-color");self.color(menus,"Border Color",schema,"menu-border-color")
+        menus=self.group(p,"Menus & Popovers","Customize menu colors, gradients, transparency, text, and corners.");self.switch(menus,"Enable Custom Menu Appearance",schema,"menu-enabled");self.color(menus,"Surface Color",schema,"menu-color");self.switch(menus,"Gradient",schema,"menu-gradient-enabled");self.color(menus,"Gradient End Color",schema,"menu-color2");self.combo(menus,"Gradient Direction",schema,"menu-gradient-direction");self.spin(menus,"Opacity",schema,"menu-opacity",.2,1,.01);self.spin(menus,"Corner Radius",schema,"menu-radius",0,32);self.color(menus,"Text Color",schema,"menu-text-color");self.color(menus,"Border Color",schema,"menu-border-color")
         return p
 
     def native_dock(self):
@@ -274,7 +336,7 @@ class PreferencesFactory:
             g=self.group(p,"GNOME Dock")
             g.add(Adw.ActionRow(title="Dock settings unavailable",subtitle="The Dash to Dock schema is installed, but no Dash to Dock extension payload is available."))
             return p
-        layout=self.group(p,"GNOME Dock","These are the dock extension's own GSettings values; no custom dock is created")
+        layout=self.group(p,"Position & Size","Choose the dock edge, icon size, panel behavior, and monitor placement.")
         self.combo(layout,"Position",schema,"dock-position",{"TOP":"Top","RIGHT":"Right","BOTTOM":"Bottom","LEFT":"Left"},domain="shell")
         self.switch(layout,"Panel Mode",schema,"extend-height",domain="shell",subtitle="Extend the dock across the screen edge")
         self.switch(layout,"Center Icons in Panel Mode",schema,"always-center-icons",domain="shell")
@@ -283,7 +345,7 @@ class PreferencesFactory:
         self.spin(layout,"Maximum Screen Fraction",schema,"height-fraction",.2,1,.05,domain="shell")
         self.switch(layout,"Show on All Monitors",schema,"multi-monitor",domain="shell")
         self.entry(layout,"Preferred Monitor",schema,"preferred-monitor-by-connector",domain="shell")
-        content=self.group(p,"Contents")
+        content=self.group(p,"Applications & Previews","Choose which launchers and application previews appear in the dock.")
         self.switch(content,"Show Favorites",schema,"show-favorites",domain="shell")
         self.switch(content,"Show Running Apps",schema,"show-running",domain="shell")
         self.switch(content,"Show Applications",schema,"show-show-apps-button",domain="shell")
@@ -292,15 +354,16 @@ class PreferencesFactory:
         self.switch(content,"Show Windows Preview",schema,"show-windows-preview",domain="shell")
         self.switch(content,"Open Windows Preview by Default",schema,"default-windows-preview-to-open",domain="shell")
         self.spin(content,"Preview Size",schema,"preview-size-scale",0,1,.05,domain="shell")
-        self.switch(content,"Show Trash",schema,"show-trash",domain="shell")
-        self.switch(content,"Show Mounted Volumes",schema,"show-mounts",domain="shell")
-        self.switch(content,"Only Show Mounted Volumes",schema,"show-mounts-only-mounted",domain="shell")
-        self.switch(content,"Show Network Volumes",schema,"show-mounts-network",domain="shell")
-        self.switch(content,"Separate File Locations",schema,"isolate-locations",domain="shell")
-        self.switch(content,"Current Workspace Only",schema,"isolate-workspaces",domain="shell")
-        self.switch(content,"Current Monitor Only",schema,"isolate-monitors",domain="shell")
-        self.switch(content,"Show Urgent Apps on Every Workspace",schema,"workspace-agnostic-urgent-windows",domain="shell")
-        behavior=self.group(p,"Visibility")
+        locations=self.group(p,"Mounted Locations","Control Trash, mounted drives, network volumes, and workspace or monitor filtering.")
+        self.switch(locations,"Show Trash",schema,"show-trash",domain="shell")
+        self.switch(locations,"Show Mounted Volumes",schema,"show-mounts",domain="shell")
+        self.switch(locations,"Only Show Mounted Volumes",schema,"show-mounts-only-mounted",domain="shell")
+        self.switch(locations,"Show Network Volumes",schema,"show-mounts-network",domain="shell")
+        self.switch(locations,"Separate File Locations",schema,"isolate-locations",domain="shell")
+        self.switch(locations,"Current Workspace Only",schema,"isolate-workspaces",domain="shell")
+        self.switch(locations,"Current Monitor Only",schema,"isolate-monitors",domain="shell")
+        self.switch(locations,"Show Urgent Apps on Every Workspace",schema,"workspace-agnostic-urgent-windows",domain="shell")
+        behavior=self.group(p,"Visibility & Auto-hide","Choose when the dock is visible and how quickly it appears or hides.")
         self.switch(behavior,"Always Visible",schema,"dock-fixed",domain="shell")
         self.switch(behavior,"Auto-hide",schema,"autohide",domain="shell")
         self.switch(behavior,"Intelligent Hide",schema,"intellihide",domain="shell")
@@ -315,7 +378,7 @@ class PreferencesFactory:
         self.switch(behavior,"Show for Urgent Notifications",schema,"show-dock-urgent-notify",domain="shell")
         self.switch(behavior,"Switch Workspace by Scrolling",schema,"scroll-switch-workspace",domain="shell")
         self.switch(behavior,"Disable Overview at Startup",schema,"disable-overview-on-startup",domain="shell")
-        appearance=self.group(p,"Appearance")
+        appearance=self.group(p,"Appearance & Indicators","Control transparency, colors, running indicators, and visual details.")
         self.combo(appearance,"Transparency",schema,"transparency-mode",{"DEFAULT":"Default","FIXED":"Fixed","DYNAMIC":"Dynamic"},domain="shell")
         self.spin(appearance,"Background Opacity",schema,"background-opacity",0,1,.01,domain="shell")
         self.switch(appearance,"Customize Transparency Range",schema,"customize-alphas",domain="shell")
@@ -338,14 +401,14 @@ class PreferencesFactory:
         self.switch(appearance,"Show Notification Counters",schema,"show-icons-notifications-counter",domain="shell")
         self.switch(appearance,"Notification Counter Overrides",schema,"application-counter-overrides-notifications",domain="shell")
         self.switch(appearance,"Straight Corners",schema,"force-straight-corner",domain="shell")
-        interaction=self.group(p,"Interaction")
+        interaction=self.group(p,"Click & Scroll Behavior","Choose what clicks, middle-clicks, Shift-clicks, and scrolling do.")
         self.switch(interaction,"Minimize on Shift-click",schema,"minimize-shift",domain="shell")
         self.switch(interaction,"Activate Single Window",schema,"activate-single-window",domain="shell")
         self.switch(interaction,"Scroll to Focused Application",schema,"scroll-to-focused-application",domain="shell")
         self.switch(interaction,"Wiggle Urgent Applications",schema,"dance-urgent-applications",domain="shell")
         for title,key in (("Click Running Application", "click-action"),("Scroll Running Application", "scroll-action"),("Shift-click Running Application", "shift-click-action"),("Middle-click Running Application", "middle-click-action"),("Shift-middle-click Running Application", "shift-middle-click-action")):
             self.combo(interaction,title,schema,key,domain="shell")
-        shortcuts=self.group(p,"Shortcuts","Dash to Dock accepts an accelerator such as Super+Q")
+        shortcuts=self.group(p,"Keyboard Shortcuts","Dash to Dock accepts an accelerator such as Super+Q")
         self.switch(shortcuts,"Enable Super Hotkeys",schema,"hot-keys",domain="shell")
         self.switch(shortcuts,"Show Dock for Hotkeys",schema,"hotkeys-show-dock",domain="shell")
         self.switch(shortcuts,"Show Hotkey Overlay",schema,"hotkeys-overlay",domain="shell")
