@@ -31,8 +31,8 @@ def _rounded_rectangle(context, x, y, width, height, radius):
 class PreviewCanvas(Gtk.DrawingArea):
     """A compositor-independent approximation of the currently staged UI."""
 
-    def __init__(self, settings, changes):
-        super().__init__(content_width=620, content_height=400, hexpand=True, vexpand=True)
+    def __init__(self, settings, changes, content_width=620, content_height=400):
+        super().__init__(content_width=content_width, content_height=content_height, hexpand=True, vexpand=True)
         self.settings = settings
         self.changes = changes
         self.mode = "desktop"
@@ -158,42 +158,39 @@ class PreviewCanvas(Gtk.DrawingArea):
         self._text(context, "Visual approximation — login changes need logout or reboot", 18, height - 12, 11, (.72, .72, .75, 1))
 
 
-class LivePreviewWindow(Adw.Window):
-    def __init__(self, parent, settings, changes, login_state):
-        super().__init__(transient_for=parent, title="Live Preview", default_width=980, default_height=650)
-        self.parent_window = parent
+class LivePreviewPanel(Gtk.Box):
+    """Embedded preview for staged settings; it never opens another window."""
+
+    def __init__(self, settings, changes, login_state):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8, hexpand=True, vexpand=True)
         self.settings = settings
         self.changes = changes
         self.login_state = login_state
         self.mode = "desktop"
         self._listener = self._refresh
         self.changes.listeners.append(self._listener)
-        self.connect("close-request", self._close_request)
 
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.set_content(root)
-        header = Adw.HeaderBar()
-        root.append(header)
+        toolbar = Gtk.Box(spacing=8)
         switcher = Gtk.StackSwitcher()
         self.mode_stack = Gtk.Stack()
         switcher.set_stack(self.mode_stack)
-        header.set_title_widget(switcher)
+        toolbar.append(switcher)
         self.info = Gtk.Label(css_classes=["dim-label"])
-        header.pack_end(self.info)
+        toolbar.append(self.info)
+        self.append(toolbar)
 
-        body = Gtk.Box(spacing=18)
-        body.set_margin_top(18); body.set_margin_bottom(18); body.set_margin_start(18); body.set_margin_end(18)
-        root.append(body)
-        self.canvas = PreviewCanvas(settings, changes)
+        body = Gtk.Box(spacing=12, hexpand=True, vexpand=True)
+        self.append(body)
+        self.canvas = PreviewCanvas(settings, changes, content_width=360, content_height=300)
         self.mode_stack.add_titled(self.canvas, "desktop", "Desktop")
-        login_canvas = PreviewCanvas(settings, changes)
+        login_canvas = PreviewCanvas(settings, changes, content_width=360, content_height=300)
         login_canvas.mode = "login"
         self.login_canvas = login_canvas
         self.mode_stack.add_titled(login_canvas, "login", "Login screen")
         self.mode_stack.connect("notify::visible-child-name", self._mode_changed)
         body.append(self.mode_stack)
 
-        changes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, width_request=330)
+        changes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, width_request=210)
         heading = Gtk.Label(label="Pending changes", xalign=0, css_classes=["title-3"])
         changes_box.append(heading)
         self.change_count = Gtk.Label(xalign=0, css_classes=["dim-label"])
@@ -204,10 +201,6 @@ class LivePreviewWindow(Adw.Window):
         changes_box.append(scroll)
         body.append(changes_box)
         self._refresh()
-
-    def _close_request(self, *_):
-        self.set_visible(False)
-        return True
 
     def _mode_changed(self, *_):
         self.mode = self.mode_stack.get_visible_child_name() or "desktop"

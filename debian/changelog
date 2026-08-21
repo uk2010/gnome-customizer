@@ -1,3 +1,12 @@
+gnome-customizer (1.05-14) resolute; urgency=high
+
+  * Fix application startup on the Dock page by removing unsupported
+    Libadwaita EntryRow subtitle properties.
+  * Embed Live Preview in the main window instead of opening a separate window.
+  * Remove GTK markup warnings from task-group labels.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Fri, 21 Aug 2026 00:00:00 -0500
+
 gnome-customizer (1.05-13) resolute; urgency=high
 
   * Add a live staged desktop and login-screen preview window.

@@ -1,6 +1,6 @@
 Name:           gnome-customizer
 Version:        1.05
-Release:        13%{?dist}
+Release:        14%{?dist}
 Summary:        Native GNOME desktop and login-screen customizer
 License:        GPL-3.0-or-later
 URL:            https://github.com/uk2010/gnome-customizer
