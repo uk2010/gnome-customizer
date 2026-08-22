@@ -1,3 +1,11 @@
+gnome-customizer (1.05-15) resolute; urgency=high
+
+  * Publish the unified embedded desktop and login-screen live preview.
+  * Refresh the preview from staged login settings, including clock controls.
+  * Raise the published package build number and document the app screenshot.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Sat, 22 Aug 2026 00:00:00 -0500
+
 gnome-customizer (1.05-14) resolute; urgency=high
 
   * Fix application startup on the Dock page by removing unsupported
