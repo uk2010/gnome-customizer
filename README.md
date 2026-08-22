@@ -2,6 +2,8 @@
 
 GNOME Customizer is a native GTK4/Libadwaita customization application for Fedora Linux Asahi Remix 44, GNOME Shell 50.1+, GDM 50.1+, and Wayland. It keeps desktop, Shell, and login-screen operations in separate security domains and stages changes before applying them. The Fedora package is architecture-independent and is intended to run natively on aarch64 Apple Silicon systems.
 
+![GNOME Customizer](Screenshots/Screenshot%20From%202026-08-22%2002-51-01.png)
+
 It uses native GNOME settings as the source of truth. The optional Files transparency control writes one marked, Nautilus-only block to the user's GTK 4 stylesheet and removes that block exactly when disabled. Fedora packages include the complete upstream Blur My Shell and Dash to Dock extension payloads; Ubuntu/Debian packages use the distro's Ubuntu Dock or Dash to Dock package to avoid conflicting with its shared schema file. The GUI remains unprivileged and themes cannot execute code.
 
 ## Architecture

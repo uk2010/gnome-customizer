@@ -3,6 +3,7 @@ python.install_sources(
   'gnome_customizer/__main__.py',
   'gnome_customizer/application.py',
   'gnome_customizer/color.py',
+  'gnome_customizer/style.py',
   'gnome_customizer/window.py',
   subdir: 'gnome_customizer',
 )

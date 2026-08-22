@@ -20,11 +20,11 @@ from .pages.preferences import PreferencesFactory
 from .pages.themes import ThemesPage
 from .pages.status import StatusPage
 from .pages.preview import LivePreviewPanel
-from .color import color_button, css_rgba, hex_color
+from .color import color_button, hex_color
 
 class CustomizerWindow(Adw.ApplicationWindow):
     def __init__(self,app):
-        super().__init__(application=app,title="GNOME Customizer",default_width=950,default_height=700,width_request=720,height_request=520)
+        super().__init__(application=app,title="GNOME Customizer",default_width=1440,default_height=900,width_request=1080,height_request=680)
         self.add_css_class("gnome-customizer-window")
         self.settings=SettingsBackend();self.state=StateStore();self._migrate_native_theme_ownership();self._migrate_shell_surface_ownership();self.changes=ChangeManager(self.settings,self.state);self.app_theme=ApplicationThemeManager(self.state);self.files_theme=NautilusTransparencyManager(self.state);self.helper=SystemHelperProxy();self._saved_login_appearance=self.helper.login_appearance() or {};self._saved_login_settings=self._saved_login_appearance.get("settings",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("settings",{}),dict) else {};saved_assets=self._saved_login_appearance.get("assets",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("assets",{}),dict) else {};saved_resource=self._saved_login_appearance.get("resource",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("resource",{}),dict) else {};self._saved_login_has_state=bool(self._saved_login_settings or saved_assets or saved_resource or self._saved_login_appearance.get("monitors")) if isinstance(self._saved_login_appearance,dict) else False
         saved_snapshot=self.state.data.get("login_theme")
@@ -32,22 +32,24 @@ class CustomizerWindow(Adw.ApplicationWindow):
         self._saved_login_settings=self._saved_login_appearance.get("settings",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("settings",{}),dict) else {};saved_assets=self._saved_login_appearance.get("assets",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("assets",{}),dict) else {};saved_resource=self._saved_login_appearance.get("resource",{}) if isinstance(self._saved_login_appearance,dict) and isinstance(self._saved_login_appearance.get("resource",{}),dict) else {};self._saved_login_has_state=bool(self._saved_login_settings or saved_assets or saved_resource or self._saved_login_appearance.get("monitors")) if isinstance(self._saved_login_appearance,dict) else False
         saved_login=self._saved_login_settings.get("org.gnome.login-screen") if isinstance(self._saved_login_settings,dict) else None
         if isinstance(saved_login,dict) and not saved_assets.get("logo"):saved_login["logo"]=""
-        self.gdm_pending={};self.gdm_resource={};self.gdm_assets={};self._login_dirty=False
+        self.gdm_pending={};self.gdm_resource={};self.gdm_assets={};self.gdm_asset_defaults=set();self._login_dirty=False
         self.gdm_resource_values={"wallpaper":False,"background_color":"#101820","panel_color":"#16161A","panel_color2":"#303044","panel_gradient_enabled":False,"panel_gradient_direction":"horizontal","panel_text_color":"#FFFFFF","panel_opacity":1.0,"panel_radius":0};self.gdm_resource_values.update({key:value for key,value in saved_resource.items() if key in self.gdm_resource_values})
         self._theme_cache={}
-        self.toast_overlay=Adw.ToastOverlay();self.set_content(self.toast_overlay);root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL);self.toast_overlay.set_child(root)
-        header=Adw.HeaderBar();root.append(header);self.mode=Adw.ViewSwitcher();self.mode_stack=Adw.ViewStack();self.mode.set_stack(self.mode_stack);header.set_title_widget(self.mode);self.preview_button=Gtk.Button(label="Live Preview",icon_name="view-reveal-symbolic",tooltip_text="Show the embedded preview of staged changes");self.preview_button.connect("clicked",lambda *_:self._toggle_preview());header.pack_end(self.preview_button);menu=Gio.Menu();menu.append("About GNOME Customizer","app.about");header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",menu_model=menu,tooltip_text="Main Menu"))
+        self.toast_overlay=Adw.ToastOverlay();self.set_content(self.toast_overlay);root=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,css_classes=["app-root"]);self.toast_overlay.set_child(root)
+        header=Adw.HeaderBar(css_classes=["gnome-customizer-headerbar"]);root.append(header);self.mode=Adw.ViewSwitcher(css_classes=["mode-switcher"]);self.mode_stack=Adw.ViewStack();self.mode.set_stack(self.mode_stack);header.set_title_widget(self.mode);sidebar_toggle=Gtk.Button(icon_name="sidebar-show-symbolic",tooltip_text="Show Navigation");sidebar_toggle.connect("clicked",lambda *_:body.set_show_sidebar(not body.get_show_sidebar()));header.pack_start(sidebar_toggle);brand=Gtk.Box(spacing=7);brand.append(Gtk.Image.new_from_icon_name("io.github.gnomecustomizer"));brand.append(Gtk.Label(label="GNOME Customizer",css_classes=["title-4"]));header.pack_start(brand);menu=Gio.Menu();menu.append("About GNOME Customizer","app.about");header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",menu_model=menu,tooltip_text="Main Menu"))
         self.mode_stack.add_titled_with_icon(Gtk.Box(),"desktop","Desktop","video-display-symbolic");self.mode_stack.add_titled_with_icon(Gtk.Box(),"login","Login Screen","system-lock-screen-symbolic")
-        main_area=Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,spacing=0,vexpand=True);root.append(main_area);body=Adw.OverlaySplitView(vexpand=True,hexpand=True);self.body=body;body.set_min_sidebar_width(190);body.set_max_sidebar_width(240);body.set_sidebar_width_fraction(.23);main_area.append(body);sidebar_toggle=Gtk.Button(icon_name="sidebar-show-symbolic",tooltip_text="Show Navigation");sidebar_toggle.connect("clicked",lambda *_:body.set_show_sidebar(not body.get_show_sidebar()));header.pack_start(sidebar_toggle)
+        main_area=Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL,wide_handle=True,vexpand=True,css_classes=["main-pane"]);root.append(main_area);body=Adw.OverlaySplitView(vexpand=True,hexpand=True);self.body=body;body.set_min_sidebar_width(190);body.set_max_sidebar_width(240);body.set_sidebar_width_fraction(.23);main_area.set_start_child(body)
         breakpoint=Adw.Breakpoint.new(Adw.BreakpointCondition.new_length(Adw.BreakpointConditionLengthType.MAX_WIDTH,800,Adw.LengthUnit.PX));breakpoint.add_setter(body,"collapsed",True);breakpoint.add_setter(body,"show-sidebar",False);self.add_breakpoint(breakpoint)
         sidebar=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6);sidebar.set_margin_top(12);sidebar.set_margin_bottom(12);sidebar.set_margin_start(12);sidebar.set_margin_end(12);body.set_sidebar(sidebar)
+        self.nav_search=Gtk.SearchEntry(placeholder_text="Find a setting page",hexpand=True,css_classes=["navigation-search"]);self.nav_search.connect("search-changed",lambda *_:self._fill_nav());sidebar.append(self.nav_search)
         self.nav=Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE,css_classes=["navigation-sidebar"]);self.nav.connect("row-selected",self._navigate);sidebar.append(Gtk.ScrolledWindow(child=self.nav,vexpand=True,hscrollbar_policy=Gtk.PolicyType.NEVER))
-        self.content=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE);body.set_content(self.content)
+        self.content=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE,css_classes=["editor-pane"]);body.set_content(self.content)
         try:self.settings.ensure_bundled_extensions()
         except Exception as exc:self.toast(f"Bundled Shell extensions could not be enabled yet: {exc}")
-        self.factory=PreferencesFactory(self.settings,self.changes,self._stage_gdm,self._saved_login_settings);self._build_pages();self.preview_panel=LivePreviewPanel(self.settings,self.changes,self._preview_login_state);self.preview_revealer=Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_LEFT,reveal_child=False,width_request=430,vexpand=True);self.preview_revealer.set_child(self.preview_panel);main_area.append(self.preview_revealer)
-        self.mode_stack.connect("notify::visible-child-name",lambda *_:self._fill_nav())
-        action=Gtk.Box(spacing=10,halign=Gtk.Align.END);self.action_box=action;action.set_margin_top(9);action.set_margin_bottom(9);action.set_margin_end(12);self.pending_label=Gtk.Label();discard=Gtk.Button(label="Discard");self.discard_button=discard;discard.connect("clicked",lambda *_:self._discard());self.apply=Gtk.Button(label="Apply",css_classes=["suggested-action"]);self.apply.connect("clicked",self._apply);action.append(self.pending_label);action.append(discard);action.append(self.apply);root.append(action)
+        self.factory=PreferencesFactory(self.settings,self.changes,self._stage_gdm,self._saved_login_settings);self._build_pages();self.preview_panel=LivePreviewPanel(self.settings,self.changes,self._preview_login_state,self._capture_current_desktop);self.preview_revealer=Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_LEFT,reveal_child=True,width_request=480,vexpand=True,css_classes=["preview-pane"]);self.preview_revealer.set_child(self.preview_panel);main_area.set_end_child(self.preview_revealer);main_area.set_position(920)
+        self.mode_stack.connect("notify::visible-child-name",self._mode_changed)
+        self._sync_preview_mode()
+        action=Gtk.Box(spacing=10,halign=Gtk.Align.FILL,css_classes=["action-bar"]);self.action_box=action;self.pending_label=Gtk.Label(css_classes=["pending-label"],halign=Gtk.Align.START,hexpand=True);discard=Gtk.Button(label="Discard");self.discard_button=discard;discard.connect("clicked",lambda *_:self._discard());self.apply=Gtk.Button(label="Apply Changes",css_classes=["suggested-action"]);self.apply.connect("clicked",self._apply);action.append(self.pending_label);action.append(discard);action.append(self.apply);root.append(action)
         self.changes.listeners.append(self._pending);self._fill_nav();self._pending()
         try:self._sync_files_transparency()
         except Exception as exc:self.toast(f"Files transparency could not be synchronized: {exc}")
@@ -79,14 +81,98 @@ class CustomizerWindow(Adw.ApplicationWindow):
         settings=self.factory.gdm_settings() if hasattr(self,"factory") else {}
         login=settings.get("org.gnome.login-screen",{}) if isinstance(settings.get("org.gnome.login-screen",{}),dict) else {}
         interface=settings.get("org.gnome.desktop.interface",{}) if isinstance(settings.get("org.gnome.desktop.interface",{}),dict) else {}
-        return {"gdm_pending":deepcopy(self.gdm_pending),"gdm_resource":deepcopy(self.gdm_resource),"gdm_assets":deepcopy(self.gdm_assets),"monitor_pending":hasattr(self,"monitor_xml"),"banner":login.get("banner-message-text") or "Welcome","accent":interface.get("accent-color"),"resource":{**self.gdm_resource_values,**self.gdm_resource}}
-    def _toggle_preview(self):
-        visible=not self.preview_revealer.get_reveal_child();self.preview_revealer.set_reveal_child(visible);self.preview_button.set_label("Hide Preview" if visible else "Live Preview");self.preview_button.set_tooltip_text("Hide the embedded preview" if visible else "Show the embedded preview of staged changes")
+        saved=self._saved_login_appearance if isinstance(self._saved_login_appearance,dict) else {}
+        saved_assets=saved.get("assets",{}) if isinstance(saved.get("assets",{}),dict) else {}
+        resource={**self.gdm_resource_values,**self.gdm_resource}
+        assets={role:path for role,path in saved_assets.items() if role not in self.gdm_asset_defaults}
+        assets.update(deepcopy(self.gdm_assets))
+        if not resource.get("wallpaper"):assets.pop("wallpaper",None)
+        return {"gdm_pending":deepcopy(self.gdm_pending),"gdm_resource":deepcopy(self.gdm_resource),"gdm_assets":deepcopy(self.gdm_assets),"assets":assets,"monitor_pending":hasattr(self,"monitor_xml"),"banner":login.get("banner-message-text") or "Welcome","accent":interface.get("accent-color"),"interface":deepcopy(interface),"resource":resource}
+
+    def _capture_current_desktop(self):
+        """Capture the desktop through the Wayland portal, excluding this window."""
+        self.hide()
+        GLib.timeout_add(150, self._request_desktop_capture)
+
+    def _request_desktop_capture(self):
+        try:
+            self._screenshot_proxy=Gio.DBusProxy.new_for_bus_sync(
+                Gio.BusType.SESSION,Gio.DBusProxyFlags.NONE,None,
+                "org.freedesktop.portal.Desktop","/org/freedesktop/portal/desktop",
+                "org.freedesktop.portal.Screenshot",None)
+            options={"interactive":GLib.Variant("b",False)}
+            self._screenshot_proxy.call(
+                "Screenshot",GLib.Variant("(sa{sv})",("",options)),
+                Gio.DBusCallFlags.NONE,-1,None,self._capture_request_done)
+        except Exception as exc:
+            self.present();self.toast(f"Desktop capture unavailable: {exc}")
+        return GLib.SOURCE_REMOVE
+
+    def _capture_request_done(self,proxy,result,_data=None):
+        try:
+            request_path=result.unpack()[0]
+            self._capture_request=Gio.DBusProxy.new_for_bus_sync(
+                Gio.BusType.SESSION,Gio.DBusProxyFlags.NONE,None,
+                "org.freedesktop.portal.Desktop",request_path,
+                "org.freedesktop.portal.Request",None)
+            self._capture_request.connect("g-signal",self._capture_response)
+        except Exception as exc:
+            self.present();self.toast(f"Desktop capture request failed: {exc}")
+
+    def _capture_response(self,_proxy,_sender,signal_name,parameters):
+        if signal_name!="Response":return
+        response,results=parameters.unpack()
+        self.present()
+        if response!=0:
+            self.toast("Desktop capture was cancelled")
+            return
+        uri=results.get("uri") if isinstance(results,dict) else None
+        if uri:
+            self.preview_panel.canvas.set_desktop_capture(uri)
+            self.toast("Actual desktop captured for the live preview")
+        else:
+            self.toast("Desktop capture returned no image")
+    def _mode_changed(self,*_):
+        self._fill_nav()
+        self._sync_preview_mode()
+
+    def _sync_preview_mode(self, *_):
+        if not hasattr(self,"preview_panel"):return
+        mode="login" if self.mode_stack.get_visible_child_name()=="login" else "desktop"
+        self.preview_panel.set_mode(mode)
     def _add(self,name,widget):self.content.add_named(widget,name)
     def _build_pages(self):
-        self.desktop_pages=[("appearance","Appearance","preferences-desktop-wallpaper-symbolic"),("fonts","Fonts, Icons and Cursor","preferences-desktop-font-symbolic"),("themes","Themes","applications-graphics-symbolic"),("dock","Dock","view-app-grid-symbolic"),("blur","Blur","weather-fog-symbolic"),("topbar","Top Bar","preferences-system-time-symbolic"),("placement","Placement","view-grid-symbolic"),("input","Mouse and Touchpad","input-mouse-symbolic"),("keyboard","Keyboard","input-keyboard-symbolic"),("power","Power","battery-symbolic"),("night","Night Light","weather-clear-night-symbolic"),("desktop_displays","Displays","video-display-symbolic"),("sound","Sound","audio-volume-high-symbolic"),("system","Apply and Restore","edit-undo-symbolic"),("status","Status","dialog-information-symbolic")]
+        self.desktop_pages=[("overview","Overview","go-home-symbolic"),("appearance","Appearance","preferences-desktop-wallpaper-symbolic"),("fonts","Fonts, Icons and Cursor","preferences-desktop-font-symbolic"),("themes","Themes","applications-graphics-symbolic"),("dock","Dock","view-app-grid-symbolic"),("blur","Blur","weather-fog-symbolic"),("topbar","Top Bar","preferences-system-time-symbolic"),("placement","Placement","view-grid-symbolic"),("input","Mouse and Touchpad","input-mouse-symbolic"),("keyboard","Keyboard","input-keyboard-symbolic"),("power","Power","battery-symbolic"),("night","Night Light","weather-clear-night-symbolic"),("desktop_displays","Displays","video-display-symbolic"),("sound","Sound","audio-volume-high-symbolic"),("system","Apply and Restore","edit-undo-symbolic"),("status","Status","dialog-information-symbolic")]
         self.login_pages=[("login","Appearance and Options","system-lock-screen-symbolic"),("login_top","Top Bar and Clock","preferences-system-time-symbolic"),("login_input","Mouse, Touchpad and Sound","input-mouse-symbolic"),("login_power","Power and Night Light","battery-symbolic"),("displays","Displays","video-display-symbolic"),("system","Apply and Restore","edit-undo-symbolic"),("status","Status","dialog-information-symbolic")]
-        appearance=self.factory.desktop_appearance();self._extend_appearance(appearance);self._add("appearance",appearance);self._add("fonts",self._fonts_icons());self._add("themes",ThemesPage(self.toast,self._apply_theme,self.settings,self.state,self.helper));self._add("dock",self.factory.native_dock());self._add("blur",self.factory.shell("Blur","Blur"));topbar=self.factory.topbar();self._extend_topbar(topbar);self._add("topbar",topbar);self._add("placement",self.factory.placement());self._add("input",self.factory.mouse_touchpad());self._add("keyboard",self.factory.keyboard());self._add("power",self.factory.power());self._add("night",self.factory.night_light());self._add("desktop_displays",self._desktop_displays());sound=self.factory.sound();self._extend_sound(sound);self._add("sound",sound);login=self.factory.login();self._extend_login(login);self._add("login",login);self._add("login_top",self._login_top());login_input=self.factory.login_input();self._extend_sound(login_input,True);self._add("login_input",login_input);self._add("login_power",self.factory.login_power());self._add("displays",self._displays());self._add("system",self._restore_page());self._add("status",StatusPage(self.settings,self.helper,self._count))
+        self._add("overview",self._overview());appearance=self.factory.desktop_appearance();self._extend_appearance(appearance);self._add("appearance",appearance);self._add("fonts",self._fonts_icons());self._add("themes",ThemesPage(self.toast,self._apply_theme,self.settings,self.state,self.helper));self._add("dock",self.factory.native_dock());self._add("blur",self.factory.shell("Blur","Blur"));topbar=self.factory.topbar();self._extend_topbar(topbar);self._add("topbar",topbar);self._add("placement",self.factory.placement());self._add("input",self.factory.mouse_touchpad());self._add("keyboard",self.factory.keyboard());self._add("power",self.factory.power());self._add("night",self.factory.night_light());self._add("desktop_displays",self._desktop_displays());sound=self.factory.sound();self._extend_sound(sound);self._add("sound",sound);login=self.factory.login();self._extend_login(login);self._add("login",login);self._add("login_top",self._login_top());login_input=self.factory.login_input();self._extend_sound(login_input,True);self._add("login_input",login_input);self._add("login_power",self.factory.login_power());self._add("displays",self._displays());self._add("system",self._restore_page());self._add("status",StatusPage(self.settings,self.helper,self._count))
+    def _overview(self):
+        p=Adw.PreferencesPage(title="Overview",description="A calm starting point for shaping your GNOME desktop")
+        intro=Adw.PreferencesGroup(title="Make GNOME yours",description="Tune the look, feel, and behavior of your desktop. Changes stay staged until you choose Apply Changes.")
+        appearance=self.settings.get("org.gnome.desktop.interface","color-scheme") if self.settings.supports("org.gnome.desktop.interface","color-scheme") else "default"
+        accent=self.settings.get("org.gnome.desktop.interface","accent-color") if self.settings.supports("org.gnome.desktop.interface","accent-color") else "blue"
+        row=Adw.ActionRow(title="Your current style",subtitle=f"{'Dark' if appearance == 'prefer-dark' else 'Light'} appearance · {str(accent).title()} accent")
+        row.add_prefix(Gtk.Image.new_from_icon_name("preferences-desktop-appearance-symbolic"));button=Gtk.Button(label="Customize",valign=Gtk.Align.CENTER,css_classes=["suggested-action"]);button.connect("clicked",lambda *_:self._open_page("appearance"));row.add_suffix(button);intro.add(row);p.add(intro)
+        quick=Adw.PreferencesGroup(title="Quick actions",description="Start with the areas people customize most often")
+        for title,subtitle,icon,page_name in (("Change appearance","Colors, wallpaper, typography, and scaling","preferences-desktop-wallpaper-symbolic","appearance"),("Explore themes","Save, import, and apply complete style snapshots","applications-graphics-symbolic","themes"),("Tune the dock","Position, icons, behavior, and indicators","view-app-grid-symbolic","dock"),("Personalize the login screen","Wallpaper, message, accessibility, and display layout","system-lock-screen-symbolic","login")):
+            action=Adw.ActionRow(title=title,subtitle=subtitle);action.add_prefix(Gtk.Image.new_from_icon_name(icon));open_button=Gtk.Button(label="Open",valign=Gtk.Align.CENTER,css_classes=["flat"]);open_button.connect("clicked",lambda _,name=page_name:self._open_page(name) if name!="login" else self._open_login_page());action.add_suffix(open_button);quick.add(action)
+        p.add(quick)
+        status=Adw.PreferencesGroup(title="Ready when you are")
+        pending=Adw.ActionRow(title="Changes are safe to review",subtitle="Nothing is written until you press Apply Changes")
+        pending.add_prefix(Gtk.Image.new_from_icon_name("emblem-ok-symbolic"));status.add(pending);p.add(status)
+        return p
+    def _open_page(self,name):
+        if name in {"login","login_top","login_input","login_power","displays"}:
+            self.mode_stack.set_visible_child_name("login")
+        self.content.set_visible_child_name(name);self._sync_preview_mode();row=next((child for child in self._nav_rows() if getattr(child,"page_name",None)==name),None)
+        if row:self.nav.select_row(row)
+    def _open_login_page(self):
+        self.mode_stack.set_visible_child_name("login");self._open_page("login")
+    def _nav_rows(self):
+        rows=[];child=self.nav.get_first_child()
+        while child:
+            if hasattr(child,"page_name"):rows.append(child)
+            child=child.get_next_sibling()
+        return rows
     def _apply_theme(self,directory):
         if self._stage_theme(directory):self._apply()
     def _stage_theme(self,directory):
@@ -143,13 +229,14 @@ class CustomizerWindow(Adw.ApplicationWindow):
                 if role in login:
                     path=self._theme_asset(directory,login[role]);mime=self._validate_image(path);self.gdm_assets[role]={"mime":mime,"data":base64.b64encode(path.read_bytes()).decode("ascii")}
                     if hasattr(self,"login_image_rows"):self.login_image_rows[role].set_subtitle(path.name)
-                    if role=="wallpaper":self._stage_resource("wallpaper",True);self.login_preview_picture.set_file(Gio.File.new_for_path(str(path)))
-                    else:self._stage_gdm("org.gnome.login-screen","logo",f"/usr/local/share/gnome-customizer/assets/logo.{ {'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[mime] }");self.login_preview_logo.set_file(Gio.File.new_for_path(str(path)));self.login_preview_logo.set_visible(True)
+                    self.gdm_asset_defaults.discard(role)
+                    if role=="wallpaper":self._stage_resource("wallpaper",True)
+                    else:self._stage_gdm("org.gnome.login-screen","logo",f"/usr/local/share/gnome-customizer/assets/logo.{ {'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[mime] }")
                 else:
-                    self.gdm_assets.pop(role,None)
+                    self.gdm_assets.pop(role,None);self.gdm_asset_defaults.add(role)
                     if hasattr(self,"login_image_rows"):self.login_image_rows[role].set_subtitle("GNOME default")
-                    if role=="wallpaper":self._stage_resource("wallpaper",False);self.login_preview_picture.set_file(None)
-                    else:self._stage_gdm("org.gnome.login-screen","logo","");self.login_preview_logo.set_visible(False);self.login_preview_logo.set_file(None)
+                    if role=="wallpaper":self._stage_resource("wallpaper",False)
+                    else:self._stage_gdm("org.gnome.login-screen","logo","")
             if "background_color" in login:
                 self.gdm_resource["background_color"]=login["background_color"]
                 if "wallpaper" not in login:self.gdm_resource["wallpaper"]=False
@@ -158,7 +245,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
             if "gradient_angle" in login.get("panel",{}):self.gdm_resource["panel_gradient_direction"]="vertical" if 45<=login["panel"]["gradient_angle"]<=135 else "horizontal"
             if login.get("panel"):self.gdm_resource["panel_gradient_enabled"]=login["panel"].get("background_type")=="gradient"
             if "accent" in login:self._stage_gdm("org.gnome.desktop.interface","accent-color",login["accent"])
-            self.gdm_resource_values.update(self.gdm_resource);self._update_login_preview();self._pending();return True
+            self.gdm_resource_values.update(self.gdm_resource);self._pending();return True
         except Exception as exc:self.toast(exc);return False
     @staticmethod
     def _theme_asset(directory,relative):
@@ -269,7 +356,6 @@ class CustomizerWindow(Adw.ApplicationWindow):
             disabled=[item for item in self.settings.get("org.gnome.shell","disabled-extensions") if item!=uuid]
             self.changes.stage(Change("shell","org.gnome.shell","disabled-extensions",disabled,"Shell Companion"))
     def _extend_login(self,page):
-        preview=Adw.PreferencesGroup(title="Login Screen Preview",description="A safe approximation; log out to see the compositor-rendered result");page.add(preview);self.login_preview=Gtk.Overlay(height_request=240,css_classes=["card"]);self.login_preview.set_name("login-live-preview");self.login_preview_picture=Gtk.Picture(can_shrink=True,content_fit=Gtk.ContentFit.COVER);self.login_preview.set_child(self.login_preview_picture);bar=Gtk.Label(label="Aug 11   10:30",height_request=38,halign=Gtk.Align.FILL,valign=Gtk.Align.START);bar.set_name("login-live-bar");self.login_preview.add_overlay(bar);card=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=8,halign=Gtk.Align.CENTER,valign=Gtk.Align.CENTER,width_request=260,css_classes=["card"]);self.login_preview_logo=Gtk.Picture(width_request=72,height_request=48,can_shrink=True,content_fit=Gtk.ContentFit.CONTAIN);self.login_preview_logo.set_visible(False);card.append(self.login_preview_logo);card.append(Gtk.Image.new_from_icon_name("avatar-default-symbolic"));self.login_preview_banner=Gtk.Label(label="Welcome",css_classes=["title-2"]);card.append(self.login_preview_banner);card.append(Gtk.Entry(placeholder_text="Password",sensitive=False));self.login_preview.add_overlay(card);preview.add(self.login_preview);self._login_preview_provider=Gtk.CssProvider();Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),self._login_preview_provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);self._update_login_preview()
         options=Adw.PreferencesGroup(title="Login Behavior",description="Choose which login controls and authentication options are visible. Every option is stored in complete theme snapshots");page.add(options);self.factory.gdm_switch(options,"Welcome Message","org.gnome.login-screen","banner-message-enable");self.factory.gdm_switch(options,"Hide User List","org.gnome.login-screen","disable-user-list");self.factory.gdm_switch(options,"Hide Restart and Shutdown","org.gnome.login-screen","disable-restart-buttons");self.factory.gdm_switch(options,"Fingerprint Authentication","org.gnome.login-screen","enable-fingerprint-authentication")
         accessibility=Adw.PreferencesGroup(title="Accessibility");page.add(accessibility);self.factory.gdm_switch(accessibility,"Always Show Accessibility Menu","org.gnome.desktop.a11y","always-show-universal-access-status")
         style=Adw.PreferencesGroup(title="Login Theme and Typography",description="Choose the login-screen accent, font, text scale, and cursor size.");page.add(style);self.factory.gdm_combo(style,"Accent Color","org.gnome.desktop.interface","accent-color");self.factory.gdm_entry(style,"Interface Font","org.gnome.desktop.interface","font-name");self.factory.gdm_spin(style,"Text Scaling","org.gnome.desktop.interface","text-scaling-factor",.5,3,.05);self.factory.gdm_spin(style,"Cursor Size","org.gnome.desktop.interface","cursor-size",8,128)
@@ -298,21 +384,16 @@ class CustomizerWindow(Adw.ApplicationWindow):
             row=self.login_image_rows[role]
             if path and path.is_file() and not path.is_symlink():
                 row.set_subtitle(path.name)
-                picture=self.login_preview_picture if role=="wallpaper" else self.login_preview_logo
-                picture.set_file(Gio.File.new_for_path(str(path)))
-                if role=="logo":self.login_preview_logo.set_visible(True)
             else:
                 row.set_subtitle("GNOME default")
-                if role=="wallpaper":self.login_preview_picture.set_file(None)
-                else:self.login_preview_logo.set_visible(False);self.login_preview_logo.set_file(None)
         settings=saved.get("settings",{}) if isinstance(saved.get("settings",{}),dict) else {}
         login=settings.get("org.gnome.login-screen",{}) if isinstance(settings.get("org.gnome.login-screen",{}),dict) else {}
-        self.login_preview_banner.set_label(str(login.get("banner-message-text") or "Welcome"))
+        return
     def _choose_gdm_image(self,row,role):Gtk.FileDialog(title=row.get_title()).open(self,None,lambda d,res:self._gdm_image_done(d,res,row,role))
     def _default_gdm_image(self,row,role):
-        self.gdm_assets.pop(role,None);row.set_subtitle("GNOME default");self._login_dirty=True
-        if role=="wallpaper":self._stage_resource("wallpaper",False);self.login_preview_picture.set_file(None)
-        else:self._stage_gdm("org.gnome.login-screen","logo","");self.login_preview_logo.set_visible(False);self.login_preview_logo.set_file(None)
+        self.gdm_assets.pop(role,None);self.gdm_asset_defaults.add(role);row.set_subtitle("GNOME default");self._login_dirty=True
+        if role=="wallpaper":self._stage_resource("wallpaper",False)
+        else:self._stage_gdm("org.gnome.login-screen","logo","")
         self._pending()
     def _gdm_image_done(self,dialog,result,row,role):
         try:
@@ -320,8 +401,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
             self._login_dirty=True
             if role=="wallpaper":self._stage_resource("wallpaper",True)
             else:self._stage_gdm("org.gnome.login-screen","logo",f"/usr/local/share/gnome-customizer/assets/logo.{ {'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[mime] }")
-            (self.login_preview_picture if role=="wallpaper" else self.login_preview_logo).set_file(Gio.File.new_for_path(str(path)))
-            if role=="logo":self.login_preview_logo.set_visible(True)
+            self.gdm_asset_defaults.discard(role)
             self._pending()
         except GLib.Error:pass
         except Exception as exc:self.toast(exc)
@@ -329,17 +409,11 @@ class CustomizerWindow(Adw.ApplicationWindow):
         # Keep the saved/effective resource separate from the staged overlay so
         # Discard can return both login previews to their original appearance.
         self.gdm_resource[key]=value;self._login_dirty=True
-        if key=="background_color":self.gdm_resource["wallpaper"]=False;self.login_preview_picture.set_file(None)
-        self._update_login_preview();self._pending()
+        if key=="background_color":self.gdm_resource["wallpaper"]=False
+        self._pending()
     def _stage_resource_color(self,row,key):
         if re.fullmatch(r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?",row.get_text()):row.remove_css_class("error");self._stage_resource(key,row.get_text())
         else:row.add_css_class("error")
-    def _update_login_preview(self):
-        if not hasattr(self,"_login_preview_provider"):return
-        resource={**self.gdm_resource_values,**self.gdm_resource};background=resource.get("background_color","#101820");panel=resource.get("panel_color","#16161A");end=resource.get("panel_color2","#303044");text=resource.get("panel_text_color","#FFFFFF");opacity=resource.get("panel_opacity",1);radius=resource.get("panel_radius",0)
-        panel_bg=f"linear-gradient(to right,{css_rgba(panel,opacity)},{css_rgba(end,opacity)})" if resource.get("panel_gradient_enabled",False) else css_rgba(panel,opacity)
-        try:self._login_preview_provider.load_from_string(f"#login-live-preview{{background:{background};}} #login-live-bar{{background:{panel_bg};color:{text};border-radius:{radius}px;}}")
-        except GLib.Error:pass
     def _login_top(self):
         p=Adw.PreferencesPage(title="Login Screen Top Bar");g=Adw.PreferencesGroup(title="Clock");p.add(g)
         self.factory.gdm_combo(g,"Clock Format","org.gnome.desktop.interface","clock-format",{"12h":"12-hour","24h":"24-hour"})
@@ -392,7 +466,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
             self.toast(f"Restored {count} {domain} settings")
         except Exception as exc:self.toast(exc)
     def _restore_login(self):
-        try:self.helper.call("RestoreGdmDefaults");clear_login_theme_snapshot(self.state);self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending();self.toast("Login screen restored. Reboot before checking the login screen.")
+        try:self.helper.call("RestoreGdmDefaults");clear_login_theme_snapshot(self.state);self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.gdm_asset_defaults.clear();self.__dict__.pop("monitor_xml",None);self._pending();self.toast("Login screen restored. Reboot before checking the login screen.")
         except Exception as exc:self.toast(exc)
     def _restore_application_theme(self):
         try:self.toast(f"Removed application theme from {self.app_theme.restore()} GTK configuration files. Reopen applications to see the change.")
@@ -405,28 +479,32 @@ class CustomizerWindow(Adw.ApplicationWindow):
             self.helper.call("RestoreGdmDefaults",{"factory":True})
             clear_login_theme_snapshot(self.state)
             count=self.changes.reset_factory(("desktop","shell"));self.files_theme.restore();files=self.app_theme.reset_factory();images=remove_managed_images(ASSETS_DIR)
-            self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._pending()
+            self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.gdm_asset_defaults.clear();self.__dict__.pop("monitor_xml",None);self._pending()
             self.toast(f"Reset {count} settings, {files} application theme files, and {images} managed wallpapers. Reboot before checking the login screen.")
         except Exception as exc:self.toast(f"Could not reset all customizations: {exc}")
     def _fill_nav(self):
         while child:=self.nav.get_first_child():self.nav.remove(child)
         pages=self.desktop_pages if self.mode_stack.get_visible_child_name()=="desktop" else self.login_pages
-        for name,title,icon in pages:
+        query=self.nav_search.get_text().strip().casefold() if hasattr(self,"nav_search") else ""
+        visible=[page for page in pages if not query or query in page[0].casefold() or query in page[1].casefold()]
+        for name,title,icon in visible:
             row=Gtk.ListBoxRow();row.page_name=name;box=Gtk.Box(spacing=10);box.append(Gtk.Image.new_from_icon_name(icon));box.append(Gtk.Label(label=title,xalign=0));row.set_child(box);self.nav.append(row)
-        self.nav.select_row(self.nav.get_row_at_index(0))
+        if visible:self.nav.select_row(self.nav.get_row_at_index(0))
+        else:
+            empty=Gtk.ListBoxRow(selectable=False);empty.set_child(Gtk.Label(label="No matching pages",css_classes=["navigation-empty"]));self.nav.append(empty)
     def _navigate(self,box,row):
         if row:
             self.content.set_visible_child_name(row.page_name)
+            self._sync_preview_mode()
             if self.body.get_collapsed():self.body.set_show_sidebar(False)
     def _stage_gdm(self,schema,key,value):
         self.gdm_pending.setdefault(schema,{})[key]=value;self.factory.register_gdm(schema,key,value);self._login_dirty=True
-        if key=="banner-message-text" and hasattr(self,"login_preview_banner"):self.login_preview_banner.set_label(value or "Welcome")
         self._pending()
     def _count(self):return len(self.changes.pending)+sum(len(v) for v in self.gdm_pending.values())+(1 if hasattr(self,"monitor_xml") else 0)+len(self.gdm_resource)+len(self.gdm_assets)
     def _pending(self):
         count=self._count();self.pending_label.set_label(f"{count} pending change{'s' if count!=1 else ''}");self.apply.set_sensitive(count>0)
-        if hasattr(self,"preview_panel"):self.preview_panel._refresh()
-    def _discard(self):self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._pending();self.toast("Pending changes discarded")
+        if hasattr(self,"preview_panel"): self.preview_panel._refresh()
+    def _discard(self):self.changes.discard();self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.gdm_asset_defaults.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._pending();self.toast("Pending changes discarded")
     def _apply(self,*_):
         pending_before=dict(self.changes.pending);state_before=deepcopy(self.state.data);old_values={};desktop_applied=False;files_snapshot=None
         try:
@@ -461,7 +539,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         skipped=self.changes.skipped
         try:remember_applied_login_theme(self.state,transaction)
         except Exception as exc:self.toast(f"Changes applied, but the login theme snapshot could not be saved: {exc}")
-        self.gdm_resource_values.update(self.gdm_resource);self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message)
+        self.gdm_resource_values.update(self.gdm_resource);self.gdm_pending.clear();self.gdm_resource.clear();self.gdm_assets.clear();self.gdm_asset_defaults.clear();self.__dict__.pop("monitor_xml",None);self._login_dirty=False;self._finish_apply();message="Changes applied. Log out or reboot to see login-screen changes." if privileged else ("Shell changes applied. Log out and back in if the companion was just installed." if shell_changed else f"Desktop appearance applied ({desktop} changes)");self.toast(message)
         for change,reason in skipped:self.toast(f"{change.label} was skipped: {reason}")
         return GLib.SOURCE_REMOVE
     def _apply_failure(self,context,exc):
