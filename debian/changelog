@@ -1,3 +1,25 @@
+gnome-customizer (1.05-19) resolute; urgency=high
+
+  * Remove the live preview renderer and pane to avoid ARM/Wayland rendering
+    stalls and blank preview surfaces.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Sat, 22 Aug 2026 00:00:00 -0500
+
+gnome-customizer (1.05-18) resolute; urgency=high
+
+  * Bound wallpaper decode size and cache the rendered preview background.
+  * Reduce ARM/Wayland UI stalls during repeated live-preview redraws.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Sat, 22 Aug 2026 00:00:00 -0500
+
+gnome-customizer (1.05-17) resolute; urgency=high
+
+  * Queue a live preview redraw after GTK assigns the DrawingArea its
+    non-zero ARM/Wayland allocation.
+  * Require python3-cairo for clean Debian package builds.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Sat, 22 Aug 2026 00:00:00 -0500
+
 gnome-customizer (1.05-16) resolute; urgency=high
 
   * Fix ARM64 live preview rendering and Cairo initialization.

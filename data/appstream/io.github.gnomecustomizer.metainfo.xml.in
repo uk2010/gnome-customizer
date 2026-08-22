@@ -8,7 +8,7 @@
   <developer id="io.github.gnomecustomizer"><name>GNOME Customizer Contributors</name></developer>
   <url type="homepage">https://github.com/uk2010/gnome-customizer</url>
   <description>
-    <p>GNOME Customizer provides a native, staged interface for desktop, Shell, and GDM settings while keeping GNOME Settings authoritative for application appearance. It includes safe complete settings themes, previews, diagnostics, and scoped restore.</p>
+    <p>GNOME Customizer provides a native, staged interface for desktop, Shell, and GDM settings while keeping GNOME Settings authoritative for application appearance. It includes safe complete settings themes, diagnostics, and scoped restore.</p>
   </description>
   <launchable type="desktop-id">io.github.gnomecustomizer.desktop</launchable>
   <provides><binary>gnome-customizer</binary></provides>

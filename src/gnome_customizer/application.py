@@ -15,4 +15,4 @@ class CustomizerApplication(Adw.Application):
         install_style()
         window=self.props.active_window or CustomizerWindow(self);window.present()
     def _about(self,*_):
-        dialog=Adw.AboutDialog(application_name="GNOME Customizer",application_icon=APP_ID,developer_name="GNOME Customizer Contributors",version="1.05-16",website="https://github.com/uk2010/gnome-customizer",issue_url="https://github.com/uk2010/gnome-customizer/issues",license_type=Gtk.License.GPL_3_0);dialog.present(self.props.active_window)
+        dialog=Adw.AboutDialog(application_name="GNOME Customizer",application_icon=APP_ID,developer_name="GNOME Customizer Contributors",version="1.05-19",website="https://github.com/uk2010/gnome-customizer",issue_url="https://github.com/uk2010/gnome-customizer/issues",license_type=Gtk.License.GPL_3_0);dialog.present(self.props.active_window)

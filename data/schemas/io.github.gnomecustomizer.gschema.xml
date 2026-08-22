@@ -2,7 +2,6 @@
 <schemalist>
   <schema id="io.github.gnomecustomizer" path="/io/github/gnomecustomizer/">
     <key name="last-mode" type="s"><default>'desktop'</default></key>
-    <key name="live-preview" type="b"><default>true</default></key>
     <key name="last-apply" type="s"><default>''</default></key>
     <key name="files-transparency-enabled" type="b"><default>false</default></key>
     <key name="files-background-opacity" type="d"><range min="0.0" max="1.0"/><default>0.65</default></key>

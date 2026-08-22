@@ -8,7 +8,7 @@ It uses native GNOME settings as the source of truth. The optional Files transpa
 
 ## Architecture
 
-- `src/gnome_customizer`: unprivileged Python/PyGObject application, dynamic GSettings backend, transactions, immutable wallpaper staging, previews, themes, and diagnostics.
+- `src/gnome_customizer`: unprivileged Python/PyGObject application, dynamic GSettings backend, transactions, immutable wallpaper staging, themes, and diagnostics.
 - `shell`: GNOME Customizer's companion plus the complete upstream `blur-my-shell@aunetx` and optional `dash-to-dock@micxgx.gmail.com` extensions. Their schemas and controls are integrated into the application. Ubuntu Dock is preferred when it is already present; otherwise the bundled Dash to Dock is enabled.
 - `helper`: root system-bus service. Every mutating call requires `io.github.gnomecustomizer.modify-system` authorization and accepts typed JSON values rather than commands or paths.
 - `data`: GSettings, D-Bus interface, PolicyKit policy, desktop/AppStream metadata, icon, theme schema, and samples.
@@ -24,7 +24,7 @@ Install the system dependencies and RPM build tools:
 ```sh
 sudo dnf install \
   @development-tools rpm-build rpmdevtools meson ninja-build \
-  python3-devel python3-gobject python3-cairo python3-pillow \
+  python3-devel python3-gobject python3-pillow \
   gtk4-devel libadwaita-devel polkit-devel glib2-devel \
   gsettings-desktop-schemas gnome-shell gdm desktop-file-utils \
   systemd-rpm-macros
@@ -49,7 +49,7 @@ Build the architecture-independent Fedora RPM:
 The resulting RPM is written to `.rpmbuild/RPMS/noarch/`. Install it on the Asahi system with:
 
 ```sh
-sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05-16*.noarch.rpm
+sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05*.noarch.rpm
 gnome-customizer
 ```
 
@@ -83,12 +83,12 @@ Build a native package:
 dpkg-buildpackage -us -uc -b
 ```
 
-Native amd64 and arm64 builders produce `gnome-customizer_1.05-16_amd64.deb` and `gnome-customizer_1.05-16_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
+Native amd64 and arm64 builders produce architecture-matched `.deb` packages. On an amd64 development host, the package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
 
 ## Install and uninstall on Fedora
 
 ```sh
-sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05-16*.noarch.rpm
+sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05*.noarch.rpm
 gnome-customizer
 ```
 
@@ -103,7 +103,7 @@ Before removal, the helper restores a valid previous or stock GDM resource if th
 ## Install and uninstall on Ubuntu/Debian
 
 ```sh
-sudo apt install ./gnome-customizer_1.05-16_amd64.deb
+sudo apt install ./gnome-customizer_1.05-19_amd64.deb
 gnome-customizer
 ```
 
@@ -139,10 +139,6 @@ To capture the currently applied appearance, open **Themes** and choose **Save a
 
 Choose **Apply Theme** to restore a local or included theme immediately. Local imported and saved themes also have a trash button with confirmation; included samples are read-only.
 
-## Live preview
-
-The right side of the main window contains one embedded **Live preview**. It automatically follows the Desktop or Login Screen section, updates as settings are changed, and shows a visual approximation alongside the complete list of staged values. The preview is compositor-independent; it never writes settings, and **Apply** is still required before desktop changes take effect.
-
 ## Troubleshooting
 
 - **Authentication cancelled or unavailable:** no privileged operation is applied. On Ubuntu/Debian, make sure `policykit-1-gnome` is installed and that the graphical session has been restarted; it supplies the password dialog used by the login-screen helper.
@@ -151,13 +147,13 @@ The right side of the main window contains one embedded **Live preview**. It aut
 - **Blur My Shell:** the complete extension is included in the package and controlled from the Blur page; installing it separately is unnecessary.
 - **Login changes are not visible immediately:** log out or reboot. GNOME Customizer intentionally never restarts GDM.
 - **Resource compilation fails:** the active alternative is left unchanged. The Status page reports the active resource.
-- **Application appearance:** GNOME Settings remains authoritative; imported application palettes are preview metadata and are not injected as GTK CSS.
+- **Application appearance:** GNOME Settings remains authoritative; imported application palettes are interchange metadata and are not injected as GTK CSS.
 - **Files transparency:** turn the switch off and Apply before uninstalling to remove its marked GTK 4 CSS block. Close and reopen Files after changing it.
 - **Restore:** desktop restoration returns values captured before the first Customizer change. Application restore removes only the marked Customizer CSS block; login restore removes only application-owned state.
 
 ## Known limitations
 
-Shell internals can change between GNOME releases; the package targets only GNOME 50.1+. Overview and app-grid backgrounds use per-monitor wallpaper actors with controlled blur, tint opacity, brightness, and desaturation; saturation values above the native level are treated as fully saturated. Files transparency is background alpha only because Nautilus does not expose a supported background-blur API. GDM honors only installed schemas and some visual changes become visible after logout/reboot. Preview blur is an approximation because the app does not run a full compositor inside the preview. Desktop monitor arrangement remains in GNOME Settings so its compositor-owned confirmation rollback is preserved; GNOME Customizer can safely copy that layout to GDM.
+Shell internals can change between GNOME releases; the package targets only GNOME 50.1+. Overview and app-grid backgrounds use per-monitor wallpaper actors with controlled blur, tint opacity, brightness, and desaturation; saturation values above the native level are treated as fully saturated. Files transparency is background alpha only because Nautilus does not expose a supported background-blur API. GDM honors only installed schemas and some visual changes become visible after logout/reboot. Desktop monitor arrangement remains in GNOME Settings so its compositor-owned confirmation rollback is preserved; GNOME Customizer can safely copy that layout to GDM.
 
 ## Testing and security
 

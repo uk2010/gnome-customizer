@@ -8,7 +8,7 @@ from gi.repository import Gdk, Gtk
 
 APP_CSS = """
 /* GNOME Customizer's own chrome stays intentionally restrained so the
- * settings it previews remain the visual focus. */
+ * settings remain the visual focus. */
 .gnome-customizer-window {
   background: @window_bg_color;
 }
@@ -112,91 +112,6 @@ APP_CSS = """
 
 .editor-scroll > viewport {
   background: transparent;
-}
-
-.preview-pane {
-  min-width: 440px;
-  background: alpha(@headerbar_bg_color, .65);
-  border-left: 1px solid alpha(@window_fg_color, .08);
-}
-
-.preview-toolbar {
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid alpha(@window_fg_color, .08);
-}
-
-.preview-toolbar-title {
-  font-weight: 700;
-}
-
-.preview-toolbar-subtitle {
-  color: alpha(@window_fg_color, .62);
-  font-size: 0.9em;
-}
-
-.preview-stage {
-  padding: 14px;
-}
-
-.preview-frame,
-.preview-inspector {
-  border: 1px solid alpha(@window_fg_color, .10);
-  border-radius: 14px;
-  background: alpha(@card_bg_color, .72);
-  box-shadow: 0 8px 26px alpha(#000000, .12);
-}
-
-.preview-frame {
-  padding: 4px;
-}
-
-.preview-canvas {
-  border-radius: 11px;
-}
-
-.preview-inspector {
-  padding: 14px;
-}
-
-.preview-inspector-title {
-  font-weight: 700;
-  font-size: 1.05em;
-}
-
-.preview-inspector-count {
-  color: alpha(@window_fg_color, .62);
-  font-size: 0.88em;
-}
-
-.preview-empty {
-  color: alpha(@window_fg_color, .62);
-  padding: 18px 10px;
-}
-
-.preview-list row {
-  padding: 8px 0;
-  border-bottom: 1px solid alpha(@window_fg_color, .06);
-}
-
-.preview-list row:last-child {
-  border-bottom: none;
-}
-
-.preview-value {
-  padding: 4px 8px;
-  border-radius: 7px;
-  background: alpha(@window_fg_color, .07);
-  color: alpha(@window_fg_color, .76);
-  font-size: 0.86em;
-}
-
-.status-pill {
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: alpha(@accent_bg_color, .14);
-  color: @accent_color;
-  font-size: 0.82em;
-  font-weight: 600;
 }
 
 .action-bar {

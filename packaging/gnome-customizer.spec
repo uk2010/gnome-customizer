@@ -1,6 +1,6 @@
 Name:           gnome-customizer
 Version:        1.05
-Release:        16%{?dist}
+Release:        19%{?dist}
 Summary:        Native GNOME desktop and login-screen customizer
 License:        GPL-3.0-or-later
 URL:            https://github.com/uk2010/gnome-customizer
@@ -11,7 +11,6 @@ BuildRequires:  meson >= 1.3
 BuildRequires:  ninja-build
 BuildRequires:  python3-devel >= 3.12
 BuildRequires:  python3-gobject
-BuildRequires:  python3-cairo
 BuildRequires:  python3-pillow
 BuildRequires:  gtk4-devel >= 4.14
 BuildRequires:  libadwaita-devel >= 1.5
@@ -24,7 +23,6 @@ BuildRequires:  systemd-rpm-macros
 
 Requires:       python3 >= 3.12
 Requires:       python3-gobject
-Requires:       python3-cairo
 Requires:       python3-pillow
 Requires:       gtk4 >= 4.14
 Requires:       libadwaita >= 1.5

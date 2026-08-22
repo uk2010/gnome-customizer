@@ -25,7 +25,6 @@ python.install_sources(
 python.install_sources(
   'gnome_customizer/pages/__init__.py',
   'gnome_customizer/pages/preferences.py',
-  'gnome_customizer/pages/preview.py',
   'gnome_customizer/pages/themes.py',
   'gnome_customizer/pages/status.py',
   subdir: 'gnome_customizer/pages',
