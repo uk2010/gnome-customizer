@@ -49,7 +49,7 @@ Build the architecture-independent Fedora RPM:
 The resulting RPM is written to `.rpmbuild/RPMS/noarch/`. Install it on the Asahi system with:
 
 ```sh
-sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05-15*.noarch.rpm
+sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05-16*.noarch.rpm
 gnome-customizer
 ```
 
@@ -83,12 +83,12 @@ Build a native package:
 dpkg-buildpackage -us -uc -b
 ```
 
-Native amd64 and arm64 builders produce `gnome-customizer_1.05-15_amd64.deb` and `gnome-customizer_1.05-15_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
+Native amd64 and arm64 builders produce `gnome-customizer_1.05-16_amd64.deb` and `gnome-customizer_1.05-16_arm64.deb`. On an amd64 development host, the architecture-neutral package can also be cross-packaged with `dpkg-buildpackage -us -uc -b -d -aarm64 -Pcross`; Meson uses the documented `debian/cross-arm64.ini`. Cross-packaging verifies package architecture and contents, but the release checklist still requires native arm64 smoke and lifecycle testing.
 
 ## Install and uninstall on Fedora
 
 ```sh
-sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05-15*.noarch.rpm
+sudo dnf install .rpmbuild/RPMS/noarch/gnome-customizer-1.05-16*.noarch.rpm
 gnome-customizer
 ```
 
@@ -103,7 +103,7 @@ Before removal, the helper restores a valid previous or stock GDM resource if th
 ## Install and uninstall on Ubuntu/Debian
 
 ```sh
-sudo apt install ./gnome-customizer_1.05-15_amd64.deb
+sudo apt install ./gnome-customizer_1.05-16_amd64.deb
 gnome-customizer
 ```
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 
+import cairo
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -30,7 +31,12 @@ def _rgba(value, fallback):
 
 
 def _rounded_rectangle(context, x, y, width, height, radius):
-    radius = min(radius, width / 2, height / 2)
+    # A DrawingArea can receive a zero-sized allocation while a split view is
+    # being resized.  Clamp geometry here so that the first ARM/Wayland draw
+    # cannot poison the Cairo context with a negative radius.
+    width = max(0.0, float(width))
+    height = max(0.0, float(height))
+    radius = max(0.0, min(float(radius), width / 2, height / 2))
     context.new_sub_path()
     context.arc(x + width - radius, y + radius, radius, -1.5708, 0)
     context.arc(x + width - radius, y + height - radius, radius, 0, 1.5708)
@@ -46,6 +52,9 @@ def _paint_gradient(context, width, height, start, end, alpha=1.0, vertical=True
     sufficient for this illustrative preview and avoid constructing another
     Cairo pattern in Python, keeping rendering identical on amd64 and arm64.
     """
+    width, height = max(0.0, float(width)), max(0.0, float(height))
+    if width == 0 or height == 0:
+        return
     steps = max(2, min(96, int(height if vertical else width)))
     for index in range(steps):
         fraction = index / (steps - 1)
@@ -75,6 +84,7 @@ class PreviewCanvas(Gtk.DrawingArea):
         self._wallpaper = None
         self._login_asset_cache = {}
         self._dock_icons = {}
+        self._last_draw_error = None
         self.set_draw_func(self._draw)
 
     def update(self, mode, login_state):
@@ -174,7 +184,7 @@ class PreviewCanvas(Gtk.DrawingArea):
 
     @staticmethod
     def _paint_login_image(context, image, x, y, width, height, contain=False):
-        if image is None:
+        if image is None or width <= 0 or height <= 0:
             return
         source_width, source_height = image.get_width(), image.get_height()
         scale = min(width / source_width, height / source_height) if contain else max(width / source_width, height / source_height)
@@ -197,10 +207,34 @@ class PreviewCanvas(Gtk.DrawingArea):
         context.show_text(str(text))
 
     def _draw(self, area, context, width, height):
-        if self.mode == "login":
-            self._draw_login(context, width, height)
-        else:
-            self._draw_desktop(context, width, height)
+        if width <= 0 or height <= 0:
+            return
+        try:
+            if self.mode == "login":
+                self._draw_login(context, width, height)
+            else:
+                self._draw_desktop(context, width, height)
+            self._last_draw_error = None
+        except Exception as exc:
+            # A missing icon, malformed user image, or a backend-specific
+            # Cairo/GDK edge case must not leave the whole preview blank.  The
+            # staged-value inspector remains useful and this fallback gives
+            # the user a visible preview while recording the failure for
+            # diagnostics.
+            self._last_draw_error = f"{type(exc).__name__}: {exc}"
+            self._draw_fallback(context, width, height)
+
+    @staticmethod
+    def _draw_fallback(context, width, height):
+        context.save()
+        context.set_source_rgb(0.11, 0.12, 0.15)
+        context.paint()
+        context.set_source_rgb(0.78, 0.8, 0.85)
+        context.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        context.set_font_size(13)
+        context.move_to(18, max(28, height / 2))
+        context.show_text("Preview rendering is unavailable")
+        context.restore()
 
     def _window(self, context, x, y, w, h, title, kind, dark, accent, text, muted):
         """Draw a small GNOME-style application window, not a bare rectangle."""
@@ -349,12 +383,14 @@ class PreviewCanvas(Gtk.DrawingArea):
             count -= 1
         count = max(1, count)
         if dock_position in {"TOP", "BOTTOM"}:
-            dock_w = min(width - 24, max(width * .48, count * icon_size + (count - 1) * 12 + 32))
+            available_width = max(1, width - 24)
+            dock_w = min(available_width, max(1, max(width * .48, count * icon_size + (count - 1) * 12 + 32)))
             dock_h = icon_size + 28
             icon_size = min(icon_size, max(16, dock_w - 32 - (count - 1) * 8) / count)
         else:
             dock_w = icon_size + 28
-            dock_h = min(height - 70, max(height * .44, count * icon_size + (count - 1) * 12 + 32))
+            available_height = max(1, height - 70)
+            dock_h = min(available_height, max(1, max(height * .44, count * icon_size + (count - 1) * 12 + 32)))
             icon_size = min(icon_size, max(16, dock_h - 32 - (count - 1) * 8) / count)
         if dock_panel and dock_position in {"TOP", "BOTTOM"}:
             dock_w = width
@@ -401,7 +437,11 @@ class PreviewCanvas(Gtk.DrawingArea):
         opacity = max(0.0, min(1.0, float(resource.get("panel_opacity", 1) or 1)))
         if resource.get("panel_gradient_enabled"):
             vertical = resource.get("panel_gradient_direction") == "vertical"
+            context.save()
+            context.rectangle(0, 0, width, 42)
+            context.clip()
             _paint_gradient(context, width, 42, panel, panel_end, alpha=opacity, vertical=vertical)
+            context.restore()
         else:
             context.set_source_rgba(panel.red, panel.green, panel.blue, opacity)
             context.rectangle(0, 0, width, 42)

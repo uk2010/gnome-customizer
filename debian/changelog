@@ -1,3 +1,11 @@
+gnome-customizer (1.05-16) resolute; urgency=high
+
+  * Fix ARM64 live preview rendering and Cairo initialization.
+  * Keep the preview visible during zero-sized allocations and renderer errors.
+  * Add display-independent desktop and login preview regression tests.
+
+ -- GNOME Customizer Contributors <gnome-customizer@example.invalid>  Sat, 22 Aug 2026 00:00:00 -0500
+
 gnome-customizer (1.05-15) resolute; urgency=high
 
   * Publish the unified embedded desktop and login-screen live preview.
