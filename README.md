@@ -24,7 +24,7 @@ Install the system dependencies and RPM build tools:
 ```sh
 sudo dnf install \
   @development-tools rpm-build rpmdevtools meson ninja-build \
-  python3-devel python3-gobject python3-pillow \
+  python3-devel python3-gobject python3-cairo python3-pillow \
   gtk4-devel libadwaita-devel polkit-devel glib2-devel \
   gsettings-desktop-schemas gnome-shell gdm desktop-file-utils \
   systemd-rpm-macros

@@ -190,10 +190,6 @@ APP_CSS = """
   font-size: 0.86em;
 }
 
-.preview-capture {
-  margin-left: 4px;
-}
-
 .status-pill {
   padding: 4px 9px;
   border-radius: 999px;

@@ -39,6 +39,29 @@ def _rounded_rectangle(context, x, y, width, height, radius):
     context.close_path()
 
 
+def _paint_gradient(context, width, height, start, end, alpha=1.0, vertical=True):
+    """Paint a small two-colour gradient without requiring Python Cairo.
+
+    GTK gives the draw callback a Cairo context. Small solid bands are
+    sufficient for this illustrative preview and avoid constructing another
+    Cairo pattern in Python, keeping rendering identical on amd64 and arm64.
+    """
+    steps = max(2, min(96, int(height if vertical else width)))
+    for index in range(steps):
+        fraction = index / (steps - 1)
+        red = start.red + (end.red - start.red) * fraction
+        green = start.green + (end.green - start.green) * fraction
+        blue = start.blue + (end.blue - start.blue) * fraction
+        context.set_source_rgba(red, green, blue, alpha)
+        if vertical:
+            y = height * index / steps
+            context.rectangle(0, y, width, height / steps + 1)
+        else:
+            x = width * index / steps
+            context.rectangle(x, 0, width / steps + 1, height)
+        context.fill()
+
+
 class PreviewCanvas(Gtk.DrawingArea):
     """A compositor-independent approximation of the currently staged UI."""
 
@@ -52,7 +75,6 @@ class PreviewCanvas(Gtk.DrawingArea):
         self._wallpaper = None
         self._login_asset_cache = {}
         self._dock_icons = {}
-        self._desktop_capture = None
         self.set_draw_func(self._draw)
 
     def update(self, mode, login_state):
@@ -61,16 +83,6 @@ class PreviewCanvas(Gtk.DrawingArea):
         if mode == "desktop":
             self._load_wallpaper()
             self._load_dock_icons()
-        self.queue_draw()
-
-    def set_desktop_capture(self, uri):
-        self._desktop_capture = None
-        try:
-            path = Gio.File.new_for_uri(str(uri)).get_path() if uri else None
-            if path:
-                self._desktop_capture = GdkPixbuf.Pixbuf.new_from_file(path)
-        except (GLib.Error, TypeError, ValueError):
-            self._desktop_capture = None
         self.queue_draw()
 
     def _value(self, schema, key, fallback=None):
@@ -119,7 +131,7 @@ class PreviewCanvas(Gtk.DrawingArea):
             pass
 
     def _paint_wallpaper(self, context, width, height, dark):
-        image = self._desktop_capture or self._wallpaper
+        image = self._wallpaper
         if image is not None:
             source_width = image.get_width()
             source_height = image.get_height()
@@ -135,14 +147,7 @@ class PreviewCanvas(Gtk.DrawingArea):
 
         primary = _rgba(self._value("org.gnome.desktop.background", "primary-color", None), "#202124" if dark else "#d9e2f3")
         secondary = _rgba(self._value("org.gnome.desktop.background", "secondary-color", None), "#30343b" if dark else "#f7f9fc")
-        # Cairo's pattern API is available through the context without adding
-        # a dependency on a separate graphics package.
-        import cairo
-        pattern = cairo.LinearGradient(0, 0, width, height)
-        pattern.add_color_stop_rgba(0, primary.red, primary.green, primary.blue, 1)
-        pattern.add_color_stop_rgba(1, secondary.red, secondary.green, secondary.blue, 1)
-        context.set_source(pattern)
-        context.paint()
+        _paint_gradient(context, width, height, primary, secondary)
 
     def _load_login_asset(self, role):
         asset = self.login_state.get("assets", {}).get(role)
@@ -274,10 +279,6 @@ class PreviewCanvas(Gtk.DrawingArea):
     def _draw_desktop(self, context, width, height):
         dark = self._value("org.gnome.desktop.interface", "color-scheme", "default") == "prefer-dark"
         self._paint_wallpaper(context, width, height, dark)
-        if self._desktop_capture is not None:
-            muted = (0.82, 0.82, 0.85, 1)
-            self._text(context, "Current desktop capture · staged values remain in the inspector", 18, height - 12, 11, muted)
-            return
         panel = _rgba(self._value("io.github.gnomecustomizer.shell", "panel-color", None), "#282828" if dark else "#f8f8f8")
         panel2 = _rgba(self._value("io.github.gnomecustomizer.shell", "panel-color2", None), "#40404a")
         accent = self._accent()
@@ -295,16 +296,16 @@ class PreviewCanvas(Gtk.DrawingArea):
         panel_opacity = float(self._value("io.github.gnomecustomizer.shell", "panel-opacity", 1) or 1)
         panel_gradient = bool(self._value("io.github.gnomecustomizer.shell", "panel-gradient-enabled", False))
         panel_radius = float(self._value("io.github.gnomecustomizer.shell", "panel-radius", 0) or 0)
-        _rounded_rectangle(context, 0, 0, width, 42, panel_radius)
         if panel_gradient:
-            import cairo
-            pattern = cairo.LinearGradient(0, 0, width, 0)
-            pattern.add_color_stop_rgba(0, panel.red, panel.green, panel.blue, max(0, min(1, panel_opacity)))
-            pattern.add_color_stop_rgba(1, panel2.red, panel2.green, panel2.blue, max(0, min(1, panel_opacity)))
-            context.set_source(pattern)
+            context.save()
+            _rounded_rectangle(context, 0, 0, width, 42, panel_radius)
+            context.clip()
+            _paint_gradient(context, width, 42, panel, panel2, alpha=max(0, min(1, panel_opacity)), vertical=False)
+            context.restore()
         else:
+            _rounded_rectangle(context, 0, 0, width, 42, panel_radius)
             context.set_source_rgba(panel.red, panel.green, panel.blue, max(0.1, min(1, panel_opacity)))
-        context.fill()
+            context.fill()
         activities = bool(self._value("io.github.gnomecustomizer.shell", "activities-button-enabled", True))
         if activities:
             self._text(context, "Activities", 18, 26, 13, text, True)
@@ -321,16 +322,14 @@ class PreviewCanvas(Gtk.DrawingArea):
         battery = " 82%" if self._value("org.gnome.desktop.interface", "show-battery-percentage", False) else ""
         self._text(context, f"Wi-Fi{battery}", width - 90, 26, 11, muted)
 
-        # Use a restrained pair of representative windows when a real desktop
-        # capture is not available. This makes the preview feel like a real
-        # workspace while keeping the result clearly illustrative.
-        if self._desktop_capture is None:
-            primary_w = min(width * .68, 430)
-            primary_h = min(height * .46, 190)
-            self._window(context, (width - primary_w) * .42, max(58, height * .18), primary_w, primary_h, "Files", "files", dark, accent, text, muted)
-            secondary_w = min(width * .34, 220)
-            secondary_h = min(height * .34, 138)
-            self._window(context, width - secondary_w - 18, max(76, height * .34), secondary_w, secondary_h, "Settings", "settings", dark, accent, text, muted)
+        # Use a restrained pair of representative windows. This makes the
+        # preview feel like a real workspace while keeping it illustrative.
+        primary_w = min(width * .68, 430)
+        primary_h = min(height * .46, 190)
+        self._window(context, (width - primary_w) * .42, max(58, height * .18), primary_w, primary_h, "Files", "files", dark, accent, text, muted)
+        secondary_w = min(width * .34, 220)
+        secondary_h = min(height * .34, 138)
+        self._window(context, width - secondary_w - 18, max(76, height * .34), secondary_w, secondary_h, "Settings", "settings", dark, accent, text, muted)
 
         dock_position = self._value("org.gnome.shell.extensions.dash-to-dock", "dock-position", "BOTTOM")
         dock = _rgba(self._value("org.gnome.shell.extensions.dash-to-dock", "background-color", None), "#1d1f24")
@@ -401,16 +400,12 @@ class PreviewCanvas(Gtk.DrawingArea):
         self._paint_login_image(context, self._load_login_asset("wallpaper"), 0, 0, width, height)
         opacity = max(0.0, min(1.0, float(resource.get("panel_opacity", 1) or 1)))
         if resource.get("panel_gradient_enabled"):
-            import cairo
             vertical = resource.get("panel_gradient_direction") == "vertical"
-            pattern = cairo.LinearGradient(0, 0, 0, 42) if vertical else cairo.LinearGradient(0, 0, width, 0)
-            pattern.add_color_stop_rgba(0, panel.red, panel.green, panel.blue, opacity)
-            pattern.add_color_stop_rgba(1, panel_end.red, panel_end.green, panel_end.blue, opacity)
-            context.set_source(pattern)
+            _paint_gradient(context, width, 42, panel, panel_end, alpha=opacity, vertical=vertical)
         else:
             context.set_source_rgba(panel.red, panel.green, panel.blue, opacity)
-        context.rectangle(0, 0, width, 42)
-        context.fill()
+            context.rectangle(0, 0, width, 42)
+            context.fill()
         interface = self.login_state.get("interface", {})
         clock_format = interface.get("clock-format", "24h")
         clock = "10:30 AM" if clock_format == "12h" else "10:30"
@@ -452,13 +447,12 @@ class PreviewCanvas(Gtk.DrawingArea):
 class LivePreviewPanel(Gtk.Box):
     """Embedded preview for staged settings; it never opens another window."""
 
-    def __init__(self, settings, changes, login_state, capture_desktop=None):
+    def __init__(self, settings, changes, login_state):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0, hexpand=True, vexpand=True)
         self.add_css_class("preview-panel")
         self.settings = settings
         self.changes = changes
         self.login_state = login_state
-        self.capture_desktop = capture_desktop
         self.mode = "desktop"
         self._listener = self._refresh
         self.changes.listeners.append(self._listener)
@@ -469,10 +463,6 @@ class LivePreviewPanel(Gtk.Box):
         title_box.append(Gtk.Label(label="Live preview", xalign=0, css_classes=["preview-toolbar-title"]))
         title_box.append(Gtk.Label(label="See your staged changes before you apply them", xalign=0, css_classes=["preview-toolbar-subtitle"]))
         toolbar_top.append(title_box)
-        if capture_desktop:
-            capture = Gtk.Button(label="Capture", icon_name="camera-photo-symbolic", tooltip_text="Use the actual current desktop as the preview baseline", css_classes=["flat", "preview-capture"])
-            capture.connect("clicked", lambda *_: capture_desktop())
-            toolbar_top.append(capture)
         self.info = Gtk.Label(css_classes=["status-pill"], halign=Gtk.Align.END)
         self.info.set_hexpand(True)
         toolbar_top.append(self.info)

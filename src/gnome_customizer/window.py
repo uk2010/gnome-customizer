@@ -46,7 +46,7 @@ class CustomizerWindow(Adw.ApplicationWindow):
         self.content=Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE,css_classes=["editor-pane"]);body.set_content(self.content)
         try:self.settings.ensure_bundled_extensions()
         except Exception as exc:self.toast(f"Bundled Shell extensions could not be enabled yet: {exc}")
-        self.factory=PreferencesFactory(self.settings,self.changes,self._stage_gdm,self._saved_login_settings);self._build_pages();self.preview_panel=LivePreviewPanel(self.settings,self.changes,self._preview_login_state,self._capture_current_desktop);self.preview_revealer=Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_LEFT,reveal_child=True,width_request=480,vexpand=True,css_classes=["preview-pane"]);self.preview_revealer.set_child(self.preview_panel);main_area.set_end_child(self.preview_revealer);main_area.set_position(920)
+        self.factory=PreferencesFactory(self.settings,self.changes,self._stage_gdm,self._saved_login_settings);self._build_pages();self.preview_panel=LivePreviewPanel(self.settings,self.changes,self._preview_login_state);self.preview_revealer=Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_LEFT,reveal_child=True,width_request=480,vexpand=True,css_classes=["preview-pane"]);self.preview_revealer.set_child(self.preview_panel);main_area.set_end_child(self.preview_revealer);main_area.set_position(920)
         self.mode_stack.connect("notify::visible-child-name",self._mode_changed)
         self._sync_preview_mode()
         action=Gtk.Box(spacing=10,halign=Gtk.Align.FILL,css_classes=["action-bar"]);self.action_box=action;self.pending_label=Gtk.Label(css_classes=["pending-label"],halign=Gtk.Align.START,hexpand=True);discard=Gtk.Button(label="Discard");self.discard_button=discard;discard.connect("clicked",lambda *_:self._discard());self.apply=Gtk.Button(label="Apply Changes",css_classes=["suggested-action"]);self.apply.connect("clicked",self._apply);action.append(self.pending_label);action.append(discard);action.append(self.apply);root.append(action)
@@ -89,49 +89,6 @@ class CustomizerWindow(Adw.ApplicationWindow):
         if not resource.get("wallpaper"):assets.pop("wallpaper",None)
         return {"gdm_pending":deepcopy(self.gdm_pending),"gdm_resource":deepcopy(self.gdm_resource),"gdm_assets":deepcopy(self.gdm_assets),"assets":assets,"monitor_pending":hasattr(self,"monitor_xml"),"banner":login.get("banner-message-text") or "Welcome","accent":interface.get("accent-color"),"interface":deepcopy(interface),"resource":resource}
 
-    def _capture_current_desktop(self):
-        """Capture the desktop through the Wayland portal, excluding this window."""
-        self.hide()
-        GLib.timeout_add(150, self._request_desktop_capture)
-
-    def _request_desktop_capture(self):
-        try:
-            self._screenshot_proxy=Gio.DBusProxy.new_for_bus_sync(
-                Gio.BusType.SESSION,Gio.DBusProxyFlags.NONE,None,
-                "org.freedesktop.portal.Desktop","/org/freedesktop/portal/desktop",
-                "org.freedesktop.portal.Screenshot",None)
-            options={"interactive":GLib.Variant("b",False)}
-            self._screenshot_proxy.call(
-                "Screenshot",GLib.Variant("(sa{sv})",("",options)),
-                Gio.DBusCallFlags.NONE,-1,None,self._capture_request_done)
-        except Exception as exc:
-            self.present();self.toast(f"Desktop capture unavailable: {exc}")
-        return GLib.SOURCE_REMOVE
-
-    def _capture_request_done(self,proxy,result,_data=None):
-        try:
-            request_path=result.unpack()[0]
-            self._capture_request=Gio.DBusProxy.new_for_bus_sync(
-                Gio.BusType.SESSION,Gio.DBusProxyFlags.NONE,None,
-                "org.freedesktop.portal.Desktop",request_path,
-                "org.freedesktop.portal.Request",None)
-            self._capture_request.connect("g-signal",self._capture_response)
-        except Exception as exc:
-            self.present();self.toast(f"Desktop capture request failed: {exc}")
-
-    def _capture_response(self,_proxy,_sender,signal_name,parameters):
-        if signal_name!="Response":return
-        response,results=parameters.unpack()
-        self.present()
-        if response!=0:
-            self.toast("Desktop capture was cancelled")
-            return
-        uri=results.get("uri") if isinstance(results,dict) else None
-        if uri:
-            self.preview_panel.canvas.set_desktop_capture(uri)
-            self.toast("Actual desktop captured for the live preview")
-        else:
-            self.toast("Desktop capture returned no image")
     def _mode_changed(self,*_):
         self._fill_nav()
         self._sync_preview_mode()
